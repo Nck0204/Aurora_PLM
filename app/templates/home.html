@@ -1,0 +1,48 @@
+{# ===========================================================================
+   Pagina iniziale.
+
+   In questa sessione dice solo chi e' entrato e cosa c'e' da vedere: la
+   struttura di navigazione vera e' della sessione 9.
+   =========================================================================== #}
+{% extends "base.html" %}
+
+{% block titolo %}Pagina iniziale{% endblock %}
+
+{% block contenuto %}
+
+{% if password_cambiata %}
+<p class="avviso ok" role="status">
+    Password cambiata. Le altre sessioni aperte con il tuo nome sono state
+    chiuse.
+</p>
+{% endif %}
+
+<h1>{{ app_name }}</h1>
+
+<p>Sei entrato come <strong>{{ utente.full_name }}</strong>
+   ({{ utente.username }}), ruolo {{ utente.global_role.value }}.</p>
+
+<p>Sessioni aperte con il tuo nome, questa compresa: {{ sessioni_attive }}.</p>
+
+<h2>Cosa si puo' fare</h2>
+<ul>
+    <li><a href="/cambio-password">Cambiare la propria password</a></li>
+    {% if utente.is_creatore %}
+    <li><a href="/utenti">Gestire gli utenti</a></li>
+    {% endif %}
+    <li><a href="/salute">Stato del programma</a></li>
+</ul>
+
+<h2>Uscita</h2>
+<form method="post" action="/esci-ovunque">
+    <input type="hidden" name="csrf" value="{{ token_csrf(request) }}">
+    <button type="submit">Esci da tutti i dispositivi</button>
+    <br>
+    <small>
+        Chiude tutte le sessioni aperte con il tuo nome, anche quelle su altri
+        calcolatori. Da usare se hai lasciato {{ app_name }} aperto da qualche
+        parte, o se temi che qualcuno conosca la tua password.
+    </small>
+</form>
+
+{% endblock %}

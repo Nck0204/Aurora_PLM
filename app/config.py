@@ -53,6 +53,29 @@ class Settings(BaseSettings):
     # Chiave segreta per la firma dei cookie di sessione.
     SECRET_KEY: str
 
+    # Se vero, i cookie vengono consegnati al browser con l'attributo "Secure",
+    # che vuol dire "rimandameli solo su una connessione cifrata". In sviluppo
+    # deve stare falso, altrimenti il browser non li rimanda mai su http e non
+    # si riesce a entrare; in produzione, dove Aurora sta dietro a https, deve
+    # stare vero. Vedi docs/DECISIONI.md, D-023.
+    COOKIE_SECURE: bool = False
+
+    # Durata di una sessione normale, quella senza "ricordami". Il cookie
+    # muore comunque alla chiusura del browser: questo e' il limite che vale
+    # dalla parte del server, e serve a non lasciare aperte per sempre le
+    # sessioni di un browser rimasto acceso.
+    SESSION_HOURS: int = 12
+
+    # Durata della sessione lunga emessa dalla casella "Ricordami".
+    REMEMBER_ME_DAYS: int = 30
+
+    # Blocco dei tentativi di accesso: dopo LOGIN_MAX_ATTEMPTS tentativi
+    # falliti sullo stesso nome utente nell'arco di LOGIN_WINDOW_MINUTES
+    # minuti, quel nome utente non viene piu' accettato finche' la finestra
+    # non si e' svuotata.
+    LOGIN_MAX_ATTEMPTS: int = 5
+    LOGIN_WINDOW_MINUTES: int = 15
+
     # Nome mostrato nell'interfaccia.
     APP_NAME: str = "Aurora"
 

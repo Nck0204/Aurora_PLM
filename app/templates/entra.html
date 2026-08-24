@@ -1,0 +1,72 @@
+{# ===========================================================================
+   Pagina di accesso.
+
+   Gli attributi autocomplete sui due campi non sono un dettaglio: sono quello
+   che permette ai gestori di password dei browser di riconoscere il modulo,
+   proporre le credenziali salvate e offrirsi di salvarle. Senza di essi le
+   persone si scrivono le password su un foglietto, che e' molto peggio.
+
+     autocomplete="username"          sul campo del nome utente
+     autocomplete="current-password"  sul campo della password
+
+   "current-password" e non "new-password": dice al browser che qui si scrive
+   una password che si ha gia', non che si sta scegliendo adesso.
+
+   La password non torna mai indietro dal server: se l'accesso fallisce si
+   ripropone il nome utente scritto, mai la password.
+   =========================================================================== #}
+{% extends "base.html" %}
+
+{% block titolo %}Entra{% endblock %}
+
+{% block contenuto %}
+<h1>Entra in {{ app_name }}</h1>
+
+<form method="post" action="/entra">
+    <input type="hidden" name="csrf" value="{{ token_csrf(request) }}">
+
+    {# Dove tornare dopo l'accesso. Viaggia nel modulo e non nell'indirizzo,
+       ed e' comunque verificato dal server: vedi percorso_di_ritorno_sicuro
+       in app/dependencies.py. #}
+    <input type="hidden" name="dopo" value="{{ dopo|default('', true) }}">
+
+    <p>
+        <label for="username">Nome utente</label><br>
+        <input type="text"
+               id="username"
+               name="username"
+               value="{{ username|default('', true) }}"
+               autocomplete="username"
+               autocapitalize="none"
+               spellcheck="false"
+               required
+               autofocus>
+    </p>
+
+    <p>
+        <label for="password">Password</label><br>
+        <input type="password"
+               id="password"
+               name="password"
+               autocomplete="current-password"
+               required>
+    </p>
+
+    <p>
+        <label>
+            <input type="checkbox" name="ricordami" value="si">
+            Ricordami su questo dispositivo
+        </label>
+        <br>
+        <small>
+            Da spuntare solo su un calcolatore personale. Aurora non conserva
+            la password: emette un gettone che dura trenta giorni e che viene
+            sostituito a ogni utilizzo.
+        </small>
+    </p>
+
+    <p>
+        <button type="submit">Entra</button>
+    </p>
+</form>
+{% endblock %}

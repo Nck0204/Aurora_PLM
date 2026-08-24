@@ -1,6 +1,6 @@
 # Stato di avanzamento
 
-Ultimo aggiornamento: **24 agosto 2026**, fine della sessione 2.
+Ultimo aggiornamento: **24 agosto 2026**, fine della sessione 3.
 
 Il progetto e' diviso in 13 sessioni di lavoro. Questa tabella dice a che
 punto siamo. Va aggiornata **alla fine di ogni sessione**, prima del commit.
@@ -15,8 +15,8 @@ Stati possibili: `da fare` · `in corso` · `completata`
 |---|---|---|---|
 | 1 | Fondamenta | **completata** | Struttura del progetto, ambiente virtuale, configurazione da `.env`, collegamento a PostgreSQL, Alembic, avvio del server, registro su file, gestione errori, rotta `/salute`, primi test, file di governo. Dettaglio sotto. |
 | 2 | Modello dati R1 | **completata** | Diciannove tabelle come modelli SQLAlchemy, una migrazione Alembic, dati iniziali idempotenti, test del modello, `docs/MODELLO_DATI.md`. Dettaglio sotto. |
-| 3 | Accesso e sessioni | da fare | Verifica della password con argon2, pagina di entrata in italiano, cookie di sessione e "ricordami", blocco dopo troppi tentativi falliti, cambio password obbligatorio al primo accesso, scrittura nel registro di audit. |
-| 4 | Amministrazione e anagrafiche | da fare | Gestione di utenti, clienti, contatti e classificazioni; matrice dei permessi modificabile dall'interfaccia. Nessuna cancellazione, solo disattivazione. |
+| 3 | Accesso e gestione utenti | **completata** | Password con argon2id, accesso con sessione e "ricordami" rotante, blocco dopo cinque tentativi, cambio password obbligatorio al primo accesso, protezione CSRF, gestione utenti riservata al creatore, registro di audit. Dettaglio sotto. |
+| 4 | Interfaccia e anagrafiche | da fare | Grafica delle pagine (quelle della sessione 3 sono grezze di proposito); clienti, contatti e classificazioni; matrice dei permessi modificabile dall'interfaccia. Nessuna cancellazione, solo disattivazione. |
 | 5 | Prodotti e versioni | da fare | Anagrafica dei prodotti, scomposizione del codice parlante in `code_parts`, versioni e catena delle derivazioni, stati del ciclo di vita. |
 | 6 | Progetti, assegnazioni e fasi | da fare | Apertura di un progetto su una versione, squadra e ruoli, scelta del modello di fasi, passaggi di fase con richiesta e approvazione. |
 | 7 | Archivio documenti | da fare | Caricamento file, calcolo dell'impronta SHA-256, deposito per impronta, versioni successive, presa in carico, permessi effettivi calcolati sulla matrice. |
@@ -34,6 +34,178 @@ Stati possibili: `da fare` · `in corso` · `completata`
 > comportamento. Resta una **domanda aperta**: le tabelle di distinta base e
 > articoli sono del rilascio R3 e in questo piano non compaiono; va chiarito se
 > le 13 sessioni coprono il solo R1 o arrivano anche a R2 e R3.
+
+---
+
+## Sessione 3 — Accesso e gestione utenti · completata (24 agosto 2026)
+
+L'interfaccia di questa sessione e' **volutamente grezza**: HTML minimo, quel
+tanto di CSS che serve perche' le pagine si leggano. La grafica e' della
+sessione 4, e quando arrivera' il blocco in fondo ad `app/static/css/aurora.css`
+andra' riscritto per intero.
+
+### Realizzato
+
+**Servizi** (`app/services/`, logica richiamabile anche fuori dalle rotte):
+
+| File | A che cosa serve |
+|---|---|
+| `passwords.py` | Impronte argon2id, verifica, generazione delle password leggibili, rimozione degli accenti. E' l'unico posto in cui si tratta una password. |
+| `parole.txt` | 415 parole italiane, da 4 a 8 lettere, senza accenti: l'elenco da cui si compongono le password assegnate. |
+| `auth.py` | Sessioni (creazione, ricerca, revoca), tentativi di accesso e blocco, `esegui_accesso()`, `cambia_password()`. |
+| `users.py` | Nome utente proposto, creazione, riassegnazione della password, disattivazione e riattivazione, elenco. |
+| `audit.py` | La funzione che scrive nel registro delle operazioni, e i nomi delle azioni come costanti. Era il pezzo che mancava dalla sessione 2. |
+| `cookies.py` | I nomi dei tre cookie, i loro attributi di sicurezza, la lista d'attesa (D-027). |
+| `csrf.py` | Gettone a doppio invio e sua verifica. |
+
+**Collegamento con FastAPI**:
+
+- `app/dependencies.py` — le tre dipendenze `utente_corrente`,
+  `richiedi_login`, `richiedi_creatore`, le due eccezioni di dirottamento e la
+  rotazione del "ricordami" (D-022, D-023).
+- `app/templating.py` — il motore Jinja2 e la funzione `pagina()`.
+- `app/main.py` — dipendenza globale CSRF, middleware che consegna i cookie,
+  gestori dei due dirottamenti, registrazione dei tre router.
+
+**Pagine** (`app/routers/`, `app/templates/`):
+
+| Indirizzo | Che cosa fa |
+|---|---|
+| `GET/POST /entra` | Modulo di accesso con `autocomplete` corretti e casella "Ricordami". |
+| `POST /esci` · `POST /esci-ovunque` | Chiude questa sessione, oppure tutte. |
+| `GET/POST /cambio-password` | Cambio volontario e cambio obbligatorio del primo accesso. |
+| `GET /` | Pagina iniziale: chi sei, che ruolo hai, quante sessioni hai aperte. |
+| `GET /utenti` | Elenco con stato, ruolo e sessioni aperte. Solo creatore. |
+| `GET/POST /utenti/nuovo` | Creazione, con nome utente proposto e password mostrata una volta sola. |
+| `POST /utenti/{id}/reimposta` | Password nuova, `must_change_password`, tutte le sessioni revocate. |
+| `POST /utenti/{id}/disattiva` · `/riattiva` | Disattivazione e riattivazione. **Nessuna cancellazione, da nessuna parte.** |
+
+**Configurazione** — cinque parametri nuovi in `.env` e `.env.example`:
+`COOKIE_SECURE`, `SESSION_HOURS`, `REMEMBER_ME_DAYS`, `LOGIN_MAX_ATTEMPTS`,
+`LOGIN_WINDOW_MINUTES`.
+
+**Procedure** — `scripts/reimposta_password.py`, la via di soccorso per quando
+nessuno riesce piu' a entrare come creatore. Riassegna la password di un utente
+dalla riga di comando e, se serve, lo riattiva. Chiude il sospeso della
+sessione 2. `scripts/seed.py` e' stato fatto passare dal servizio password,
+come previsto dalla nota nel suo stesso file.
+
+**Nessuna migrazione.** Le tabelle `users`, `user_sessions`, `login_attempts` e
+`audit_logs` erano gia' complete dalla sessione 2 e non e' stato necessario
+toccarle: questa sessione ci ha costruito sopra soltanto comportamento, che e'
+esattamente quello che D-021 si aspettava.
+
+### Verificato
+
+**Test automatici: 51, tutti superati** (erano 5 alla fine della sessione 2).
+
+| Criterio di accettazione | Test | Esito |
+|---|---|---|
+| Login corretto | `test_login_riuscito_apre_una_sessione` | superato |
+| Login errato, messaggio generico | `test_login_sbagliato_da_un_messaggio_generico`, `..._utente_inesistente_dice_la_stessa_cosa` | superato |
+| Blocco dopo 5 tentativi | `test_blocco_dopo_cinque_tentativi_falliti` | superato |
+| Cambio password obbligatorio al primo accesso | `test_primo_accesso_obbliga_a_cambiare_la_password` | superato |
+| Revoca sessioni al cambio password | `test_il_cambio_password_revoca_le_altre_sessioni` | superato |
+| Accesso negato a un non creatore | `test_un_utente_normale_non_apre_la_gestione_utenti`, `..._non_puo_nemmeno_agire` | superato |
+| Funzionamento del "ricordami" | `test_ricordami_fa_rientrare_dopo_la_chiusura_del_browser`, `test_il_gettone_ricordami_usato_non_vale_piu` | superato |
+| Giro completo: creo, ricevo la password, entro, sono obbligato a cambiarla, poi entro normalmente | `test_giro_completo_dalla_creazione_al_primo_accesso` | superato |
+
+**Prova a mano nel browser**, con il server avviato e il database di sviluppo:
+
+| Passo | Esito |
+|---|---|
+| `scripts/reimposta_password.py admin` assegna una password nuova | superato |
+| Entrata come `admin` con quella password | superato: dirottato al cambio password |
+| Cambio password e arrivo alla pagina iniziale | superato |
+| Creazione di "Nicolò D'Angelo" dall'interfaccia | superato: nome utente proposto `nicolo.dangelo`, accento e apostrofo tolti |
+| Password mostrata una volta sola, con pulsante copia | superato: quattro parole italiane unite da trattini, copia riuscita |
+| Entrata con l'utente nuovo | superato: dirottato al cambio password |
+| Dopo il cambio, navigazione normale | superato |
+| `/utenti` con un utente non creatore | superato: 403 con messaggio in italiano |
+| La barra in cima non mostra "Utenti" a chi non e' creatore | superato |
+| `document.cookie` letto dal browser | superato: vuoto, i cookie sono HttpOnly |
+| `autocomplete` sui campi del modulo di accesso | superato: `username` e `current-password` |
+| Registro di audit dopo il giro | superato: `user.login`, `user.logout`, `user.created`, `user.password_changed`, `user.password_reset`, ciascuna con autore e indirizzo IP |
+| `user_sessions` dopo il giro | superato: solo impronte, nessun gettone in chiaro |
+| Nessun errore nella consolle del browser e in `logs/aurora.log` | superato |
+
+**Una cosa scoperta proprio da questa prova a mano.** L'utente
+"Nicolò D'Angelo" creato dall'interfaccia e' rimasto sul database di sviluppo,
+e ha fatto diventare rosso un test che si aspettava di ottenere
+`nicolo.dangelo` dal generatore dei nomi utente: trovandolo occupato, il
+programma proponeva giustamente `nicolo.dangelo2`.
+
+Il difetto era nel test, non nel programma, ma e' un difetto che sarebbe
+tornato a ogni verifica a mano delle sessioni future. E' stato tolto alla
+radice con due convenzioni, scritte in `tests/conftest.py`:
+
+- i test che **si scelgono** il nome utente usano nomi con **due punti**
+  (`prova.mario.rossi`); `proponi_username()` ne produce al massimo uno, quindi
+  quello spazio di nomi il programma non lo raggiunge e non ci puo' essere
+  collisione;
+- i test che verificano il nome utente **proposto dal programma** usano
+  `cognome_irripetibile()`, un cognome inventato con un pezzo casuale in coda,
+  che nel database non puo' gia' esserci.
+
+L'utente "Nicolò D'Angelo" e' stato lasciato dov'e': fa comodo avere sul
+database di sviluppo un profilo non creatore con cui provare gli accessi
+negati, e cancellarlo sarebbe comunque contro la regola 5.
+
+### Scelte prese durante la sessione
+
+Undici decisioni nuove in `docs/DECISIONI.md`, dalla D-022 alla D-032. Le
+quattro da rileggere prima di scrivere una pagina nuova:
+
+- **D-028**, la protezione CSRF e' una dipendenza globale: ogni modulo POST
+  nuovo deve contenere il campo nascosto, altrimenti riceve un 400;
+- **D-032**, lo stato dell'utente si rilegge dal database a ogni richiesta: nel
+  cookie non c'e' nient'altro che il gettone;
+- **D-027**, i cookie si mettono in lista d'attesa e li consegna un middleware:
+  chi ne aggiunge uno deve passare da `programma_cookie()`;
+- **D-029**, il blocco dei tentativi e' una finestra che scorre, e chi martella
+  tiene chiuso il proprio blocco da solo.
+
+### Rimasto in sospeso per le sessioni successive
+
+- **La grafica.** Le pagine sono grezze di proposito. Il blocco in fondo ad
+  `app/static/css/aurora.css` e' un provvisorio dichiarato, da riscrivere nella
+  sessione 4.
+
+- **Il registro di audit non si puo' ancora leggere dall'interfaccia.** Le
+  righe si scrivono, ma per rileggerle bisogna interrogare il database. Una
+  pagina di consultazione, con filtri per persona e per oggetto, e' materiale
+  della sessione 9 o della 12.
+
+- **Le sessioni scadute non vengono mai ripulite.** Restano in tabella,
+  revocate o scadute: non fanno danno e non si cancellano (D-006), ma la
+  tabella cresce. Se un giorno desse fastidio, e' un lavoro pianificato da
+  sessione 11 - e sara' comunque un archiviare, non un cancellare.
+
+- **Un utente non puo' vedere le proprie sessioni aperte una per una.** La
+  pagina iniziale ne dice il numero e c'e' "Esci da tutti i dispositivi", ma
+  l'elenco con dispositivo, indirizzo e data - che le colonne `ip` e
+  `user_agent` gia' consentirebbero - non c'e'. Da valutare nella sessione 9.
+
+- **Il cambio di ruolo non si fa dall'interfaccia.** La sessione 3 chiedeva
+  elenco, creazione, riassegnazione della password, disattivazione e
+  riattivazione, e c'e' tutto; il ruolo si sceglie alla creazione e poi non si
+  cambia piu'. Il codice e' pronto (D-032: il ruolo si rilegge a ogni
+  richiesta), manca solo la pagina. Sessione 4, insieme alla matrice dei
+  permessi.
+
+- **`COOKIE_SECURE` va acceso in produzione.** In sviluppo vale `false` per
+  forza. Nella sessione 13 va verificato che valga `true` e che davanti ci sia
+  davvero https, altrimenti la sessione viaggia in chiaro sulla rete aziendale.
+
+- **La password di sviluppo di `admin`.** Durante la verifica di questa sessione
+  e' stata riassegnata e poi cambiata. Non e' scritta qui e non va scritta da
+  nessuna parte nel repository: una password in git e' una password che resta
+  in git per sempre, anche dopo essere stata cambiata. Chi riprende il lavoro
+  e non ce l'ha se ne assegna una nuova in dieci secondi:
+
+  ```powershell
+  python scripts/reimposta_password.py admin
+  ```
 
 ---
 

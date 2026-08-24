@@ -1,0 +1,81 @@
+{# ===========================================================================
+   Elenco degli utenti. Riservato al creatore.
+
+   Qui i disattivati si vedono, a differenza di quasi tutte le altre pagine di
+   Aurora: e' proprio la pagina in cui si va per riattivarne uno. La colonna
+   "stato" li distingue.
+
+   Non c'e' nessun pulsante per cancellare un utente, e non va aggiunto:
+   regola 5 di CLAUDE.md.
+   =========================================================================== #}
+{% extends "base.html" %}
+
+{% block titolo %}Utenti{% endblock %}
+
+{% block contenuto %}
+<h1>Utenti</h1>
+
+<p><a href="/utenti/nuovo">Crea un utente</a></p>
+
+<table>
+    <thead>
+        <tr>
+            <th>Cognome e nome</th>
+            <th>Nome utente</th>
+            <th>Posta</th>
+            <th>Ruolo</th>
+            <th>Stato</th>
+            <th>Sessioni</th>
+            <th>Operazioni</th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for u in utenti %}
+        <tr>
+            <td>{{ u.last_name }} {{ u.first_name }}</td>
+            <td>{{ u.username }}</td>
+            <td>{{ u.email }}</td>
+            <td>{{ u.global_role.value }}</td>
+            <td>
+                {% if u.is_active %}
+                    attivo{% if u.must_change_password %}, deve cambiare la password{% endif %}
+                {% else %}
+                    disattivato
+                {% endif %}
+            </td>
+            <td>{{ sessioni.get(u.id, 0) }}</td>
+            <td>
+                {# Tre moduli distinti, tutti POST: cambiano lo stato del
+                   programma e devono passare dalla verifica del gettone. #}
+                <form method="post" action="/utenti/{{ u.id }}/reimposta" class="in-linea">
+                    <input type="hidden" name="csrf" value="{{ token_csrf(request) }}">
+                    <button type="submit">Nuova password</button>
+                </form>
+
+                {% if u.is_active %}
+                <form method="post" action="/utenti/{{ u.id }}/disattiva" class="in-linea">
+                    <input type="hidden" name="csrf" value="{{ token_csrf(request) }}">
+                    <button type="submit">Disattiva</button>
+                </form>
+                {% else %}
+                <form method="post" action="/utenti/{{ u.id }}/riattiva" class="in-linea">
+                    <input type="hidden" name="csrf" value="{{ token_csrf(request) }}">
+                    <button type="submit">Riattiva</button>
+                </form>
+                {% endif %}
+            </td>
+        </tr>
+    {% else %}
+        <tr><td colspan="7">Nessun utente. Non dovrebbe succedere mai.</td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+
+<p><small>
+    Gli utenti non si cancellano: si disattivano. Le loro firme sui documenti e
+    le loro righe nel registro delle operazioni devono restare leggibili anche
+    a distanza di anni. Chi viene disattivato perde subito tutte le sessioni
+    aperte.
+</small></p>
+
+{% endblock %}

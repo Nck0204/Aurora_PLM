@@ -1,0 +1,70 @@
+{# ===========================================================================
+   Impalcatura comune a tutte le pagine di Aurora.
+
+   In questa sessione l'aspetto e' volutamente grezzo: la grafica arriva con
+   la sessione 4. Qui c'e' solo la struttura, il foglio di stile gia'
+   esistente e la barra in cima che dice chi e' entrato.
+
+   Le pagine figlie riempiono due blocchi:
+     titolo     il testo della finestra del browser
+     contenuto  il corpo della pagina
+
+   REGOLA DA RISPETTARE IN OGNI PAGINA CON UN MODULO. Dentro ogni
+   <form method="post"> va messa questa riga, e va messa per prima:
+
+       <input type="hidden" name="csrf" value="{{ '{{ token_csrf(request) }}' }}">
+
+   E' il gettone che protegge dalla falsificazione delle richieste. Se manca,
+   il modulo viene rifiutato con un 400 e la spiegazione compare nel registro:
+   il controllo dalla parte del server e' una dipendenza globale e non si puo'
+   dimenticare. Vedi app/services/csrf.py.
+
+   Nessun collegamento a risorse esterne, mai: regola 1 di CLAUDE.md.
+   =========================================================================== #}
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block titolo %}{{ app_name }}{% endblock %} - {{ app_name }}</title>
+    <link rel="stylesheet" href="/static/css/aurora.css">
+</head>
+<body>
+
+{% if utente %}
+{# La barra in cima esiste solo per chi e' entrato. Il nome e il ruolo si
+   leggono dall'oggetto utente, che pagina() prende da request.state: e' quello
+   riletto dal database in questa richiesta, non un dato vecchio del cookie. #}
+<header class="barra">
+    <a href="/"><strong>{{ app_name }}</strong></a>
+
+    <nav>
+        {% if utente.is_creatore %}
+        <a href="/utenti">Utenti</a>
+        {% endif %}
+        <a href="/cambio-password">Cambia password</a>
+    </nav>
+
+    <span class="chi-sono">
+        {{ utente.full_name }} ({{ utente.username }}) &middot; {{ utente.global_role.value }}
+    </span>
+
+    {# Uscire e' un POST, non un collegamento: vedi la spiegazione in cima a
+       app/routers/auth.py. #}
+    <form method="post" action="/esci" class="in-linea">
+        <input type="hidden" name="csrf" value="{{ token_csrf(request) }}">
+        <button type="submit">Esci</button>
+    </form>
+</header>
+{% endif %}
+
+<main class="contenuto">
+    {% if errore %}
+    <p class="avviso errore" role="alert">{{ errore }}</p>
+    {% endif %}
+
+    {% block contenuto %}{% endblock %}
+</main>
+
+</body>
+</html>

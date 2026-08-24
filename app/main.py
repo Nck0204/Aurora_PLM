@@ -15,22 +15,35 @@ Avvio in sviluppo:
     uvicorn app.main:app --reload
 """
 
+import http
 import logging
 import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime
 from logging.handlers import RotatingFileHandler
 
-from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse, Response
+from fastapi import Depends, FastAPI, Request
+from fastapi.responses import JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
 from sqlalchemy import text
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app import VERSION
 from app.config import PROJECT_ROOT, settings
 from app.db import engine
+from app.dependencies import (
+    PARAMETRO_RITORNO,
+    PERCORSO_ACCESSO,
+    PERCORSO_CAMBIO_PASSWORD,
+    CambioPasswordObbligatorio,
+    RichiedeAutenticazione,
+)
+from app.routers import auth as router_auth
+from app.routers import home as router_home
+from app.routers import users as router_users
+from app.services.cookies import applica_cookie
+from app.services.csrf import verifica_csrf
+from app.templating import templates
 
 # ---------------------------------------------------------------------------
 #  Registro (logging)
@@ -131,6 +144,14 @@ app = FastAPI(
     description="Gestione progetti e documentazione tecnica",
     version=VERSION,
     lifespan=lifespan,
+    # Dipendenza globale: vale per **tutte** le rotte, comprese quelle che
+    # verranno aggiunte in futuro. Prepara il gettone contro la falsificazione
+    # delle richieste e, sui POST, lo verifica. Dichiararla qui invece che
+    # rotta per rotta e' l'unico modo per essere certi che nessuno se la
+    # dimentichi: una rotta senza protezione CSRF funziona benissimo, e la
+    # mancanza si nota solo il giorno in cui qualcuno ne approfitta.
+    # Vedi app/services/csrf.py.
+    dependencies=[Depends(verifica_csrf)],
 )
 
 # Fogli di stile, script e immagini: tutti serviti da noi, nessuna CDN.
@@ -140,8 +161,29 @@ app.mount(
     name="static",
 )
 
-# Motore dei template: le pagine HTML vengono composte dal server.
-templates = Jinja2Templates(directory=PROJECT_ROOT / "app" / "templates")
+
+# ---------------------------------------------------------------------------
+#  Consegna dei cookie
+# ---------------------------------------------------------------------------
+
+
+@app.middleware("http")
+async def consegna_cookie(request: Request, call_next):
+    """Scrive nella risposta i cookie che le dipendenze hanno programmato.
+
+    Perche' non li impostino direttamente loro e' spiegato per esteso in
+    app/services/cookies.py. In due righe: le dipendenze girano prima della
+    rotta, e se la rotta finisce con un errore la risposta che parte e' quella
+    del gestore degli errori, che dei cookie impostati altrove non sa niente.
+    Il rinnovo del gettone "ricordami" andrebbe perso proprio mentre il gettone
+    vecchio e' gia' stato revocato, e l'utente si ritroverebbe fuori.
+
+    Applicandoli qui, in fondo a tutto, i cookie finiscono su qualunque
+    risposta esca: pagina normale, rimando o pagina di errore.
+    """
+    response = await call_next(request)
+    applica_cookie(request, response)
+    return response
 
 
 # ---------------------------------------------------------------------------
@@ -191,16 +233,43 @@ def wants_html(request: Request) -> bool:
     return "text/html" in accept_header
 
 
+def messaggio_specifico(exc: StarletteHTTPException) -> str | None:
+    """Estrae il messaggio scritto da noi, se ce n'e' uno.
+
+    Quando una rotta solleva HTTPException senza indicare "detail", Starlette
+    ci mette la frase standard del protocollo ("Not Found", "Forbidden"): e'
+    in inglese e non dice niente all'utente, quindi si preferisce il testo
+    generico in italiano di ERROR_MESSAGES. Quando invece il detail e' stato
+    scritto da noi - "Questa sezione e' riservata a chi ha il ruolo di
+    creatore" - e' piu' utile di qualunque frase generica e va mostrato.
+    """
+    if not isinstance(exc.detail, str) or not exc.detail:
+        return None
+
+    try:
+        frase_standard = http.HTTPStatus(exc.status_code).phrase
+    except ValueError:
+        # Un codice di stato che non sta nell'elenco standard: qualunque cosa
+        # ci sia scritta nel detail, l'abbiamo scritta noi.
+        return exc.detail
+
+    return None if exc.detail == frase_standard else exc.detail
+
+
 def build_error_response(
     request: Request,
     status_code: int,
     reference: str | None = None,
+    message_override: str | None = None,
 ) -> Response:
     """Compone la risposta di errore, in HTML per il browser o in JSON."""
     title, message = ERROR_MESSAGES.get(
         status_code,
         ("Errore", "Si e' verificato un problema durante l'operazione."),
     )
+
+    if message_override is not None:
+        message = message_override
 
     if wants_html(request):
         return templates.TemplateResponse(
@@ -243,7 +312,11 @@ async def http_exception_handler(
         request.url.path,
         exc.detail,
     )
-    return build_error_response(request, exc.status_code)
+    return build_error_response(
+        request,
+        exc.status_code,
+        message_override=messaggio_specifico(exc),
+    )
 
 
 @app.exception_handler(Exception)
@@ -267,8 +340,50 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> Respo
 
 
 # ---------------------------------------------------------------------------
+#  I due dirottamenti dell'accesso
+# ---------------------------------------------------------------------------
+
+# Le dipendenze in app/dependencies.py non possono restituire una pagina al
+# posto della rotta: possono solo interrompere sollevando un'eccezione. Questi
+# due gestori trasformano quelle interruzioni nei rimandi corrispondenti.
+
+
+@app.exception_handler(RichiedeAutenticazione)
+async def richiede_autenticazione_handler(
+    request: Request, exc: RichiedeAutenticazione
+) -> Response:
+    """Chi non e' entrato viene mandato alla pagina di accesso.
+
+    L'indirizzo che stava cercando di aprire viaggia nel parametro "dopo",
+    cosi' dopo l'accesso ci torna invece di ritrovarsi sulla pagina iniziale.
+    Nell'indirizzo finisce solo un percorso interno, gia' verificato da
+    percorso_di_ritorno_sicuro: mai nessun dato dell'utente.
+    """
+    destinazione = f"{PERCORSO_ACCESSO}?{PARAMETRO_RITORNO}={exc.destinazione}"
+    return RedirectResponse(url=destinazione, status_code=303)
+
+
+@app.exception_handler(CambioPasswordObbligatorio)
+async def cambio_password_handler(
+    request: Request, exc: CambioPasswordObbligatorio
+) -> Response:
+    """Chi deve cambiare la password viene dirottato li' da qualunque pagina.
+
+    Qui non si tiene da parte nessun indirizzo di ritorno: chi ha appena
+    ricevuto la password non stava andando da nessuna parte, stava entrando.
+    """
+    return RedirectResponse(url=PERCORSO_CAMBIO_PASSWORD, status_code=303)
+
+
+# ---------------------------------------------------------------------------
 #  Rotte
 # ---------------------------------------------------------------------------
+
+# Le pagine, raggruppate per argomento. L'ordine non conta: i percorsi non si
+# sovrappongono.
+app.include_router(router_home.router)
+app.include_router(router_auth.router)
+app.include_router(router_users.router)
 
 
 @app.get("/salute", tags=["servizio"])

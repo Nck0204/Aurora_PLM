@@ -19,13 +19,13 @@ nome utente, il nome della classificazione, la coppia ruolo/classificazione,
 la coppia nome/versione del modello di fasi). Al secondo giro non scrive nulla
 e lo dice.
 
-Nota sulla password. L'impronta viene calcolata qui dentro con argon2 invece
-che con una funzione di servizio: la funzione di servizio arrivera' insieme
-alla pagina di accesso, e in questa sessione non c'e' ancora nessuna logica
-applicativa. Quando ci sara', questo script andra' fatto passare di li'.
+Nota sulla password. Dalla sessione 3 la password viene generata e cifrata
+dalle funzioni di app/services/passwords.py, le stesse che usa la gestione
+utenti: quattro parole italiane unite da trattini, impronta argon2id. Cosi' la
+password dei dati iniziali si detta al telefono come tutte le altre, e non
+esiste un secondo modo di trattare le password sparso per il programma.
 """
 
-import secrets
 import sys
 from pathlib import Path
 
@@ -35,7 +35,6 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from argon2 import PasswordHasher  # noqa: E402
 from sqlalchemy import select  # noqa: E402
 from sqlalchemy.orm import Session  # noqa: E402
 
@@ -49,6 +48,7 @@ from app.models import (  # noqa: E402
     ProjectRole,
     User,
 )
+from app.services import passwords  # noqa: E402
 
 # --- Costanti dei dati iniziali ---------------------------------------------
 
@@ -59,12 +59,6 @@ ADMIN_LAST_NAME = "Aurora"
 # Indirizzo di comodo: va corretto con quello vero al primo accesso, altrimenti
 # le notifiche destinate all'amministratore non arriveranno a nessuno.
 ADMIN_EMAIL = "admin@aurora.local"
-
-# Caratteri usati per la password generata. Mancano di proposito le coppie che
-# si confondono a leggerle su un foglio: O e 0, l e 1 e I. Questa password
-# qualcuno la deve ribattere a mano, una volta.
-PASSWORD_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789"
-PASSWORD_LENGTH = 16
 
 # Le quattro classificazioni, nell'ordine in cui devono comparire.
 CLASSIFICATIONS = [
@@ -132,15 +126,6 @@ PHASES = [
 # --- Creazione dei singoli pezzi --------------------------------------------
 
 
-def generate_password() -> str:
-    """Genera una password casuale con il generatore crittografico.
-
-    Si usa "secrets" e non "random": il secondo produce numeri prevedibili se
-    si conosce lo stato del generatore, e per una password non va bene.
-    """
-    return "".join(secrets.choice(PASSWORD_ALPHABET) for _ in range(PASSWORD_LENGTH))
-
-
 def ensure_admin_user(db: Session) -> str | None:
     """Crea l'utente creatore "admin" se non c'e' gia'.
 
@@ -152,14 +137,14 @@ def ensure_admin_user(db: Session) -> str | None:
     if existing is not None:
         return None
 
-    password = generate_password()
+    password = passwords.generate_password()
 
     admin = User(
         username=ADMIN_USERNAME,
         first_name=ADMIN_FIRST_NAME,
         last_name=ADMIN_LAST_NAME,
         email=ADMIN_EMAIL,
-        password_hash=PasswordHasher().hash(password),
+        password_hash=passwords.hash_password(password),
         must_change_password=True,
         is_active=True,
         global_role=GlobalRole.CREATORE,

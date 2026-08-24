@@ -55,5 +55,20 @@ class User(Base, UuidPrimaryKeyMixin, TimestampMixin):
         """Nome e cognome, come vanno mostrati nell'interfaccia."""
         return f"{self.first_name} {self.last_name}"
 
+    @property
+    def is_creatore(self) -> bool:
+        """Vero se l'utente ha il ruolo globale di creatore.
+
+        Esiste perche' i template devono poter nascondere le voci di menu
+        riservate, e "utente.is_creatore" non si puo' sbagliare mentre
+        "utente.global_role.value == 'creatore'" scritto a mano in dieci
+        template prima o poi diventa 'Creatore' in uno di quei dieci.
+
+        Il controllo che conta davvero non e' questo: e' la dipendenza
+        richiedi_creatore in app/dependencies.py. Nascondere un collegamento
+        non protegge niente, impedisce solo di andare a sbattere.
+        """
+        return self.global_role is GlobalRole.CREATORE
+
     def __repr__(self) -> str:
         return f"<User {self.username}>"

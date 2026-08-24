@@ -1,6 +1,7 @@
 # Modello dati — rilascio R1
 
-Ultimo aggiornamento: **24 agosto 2026**, fine della sessione 2.
+Ultimo aggiornamento: **24 agosto 2026**, sessione 3 (nessuna tabella
+cambiata: aggiornata solo la sezione 7 con i sospesi ora chiusi).
 
 Questo file descrive le diciannove tabelle create dalla migrazione
 `897359b06e69_modello_dati_r1.py`. Una tabella per file in `app/models/`, una
@@ -474,8 +475,21 @@ in R1: se in R2 servira' un elenco controllato, diventera' una tabella.
   interrogazione a escludere le righe con `deleted_at` valorizzato o
   `is_active` falso. Serve un modo semplice per non dimenticarsene; va deciso
   insieme alle prime interrogazioni vere, non prima (vedi D-006).
-- **La scrittura nel registro di audit.** La tabella c'e', la funzione che ci
-  scrive dentro arrivera' con la logica applicativa.
-- **Il ripristino della password di `admin`.** `scripts/seed.py` la stampa una
-  volta sola e non e' recuperabile; una procedura di riassegnazione va scritta
-  insieme alla pagina di accesso.
+
+  Aggiornamento della sessione 3: per gli utenti il problema e' risolto in un
+  punto solo, e vale la pena di sapere come. `auth.trova_sessione()` verifica
+  `users.is_active` **dentro la stessa interrogazione** che cerca la sessione,
+  e siccome ogni pagina protetta passa di li', un utente disattivato smette di
+  funzionare ovunque senza che nessuna altra interrogazione debba ricordarsene
+  (D-032). Non e' una soluzione generale - vale perche' c'e' un solo ingresso -
+  ma e' il modello a cui guardare: **un controllo solo, sulla strada obbligata**,
+  invece di un filtro ripetuto in venti punti.
+
+  Fa eccezione l'elenco degli utenti in `/utenti`, che i disattivati li mostra
+  apposta: e' la pagina da cui si riattivano.
+
+- ~~**La scrittura nel registro di audit.**~~ Fatta nella sessione 3:
+  `app/services/audit.py`, funzione `record()`. E' l'unica che scrive in
+  `audit_logs`, come vuole D-018.
+- ~~**Il ripristino della password di `admin`.**~~ Fatto nella sessione 3:
+  `scripts/reimposta_password.py`.

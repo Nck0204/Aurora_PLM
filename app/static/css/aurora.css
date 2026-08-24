@@ -93,3 +93,92 @@ a {
     font-family: Consolas, "Courier New", monospace;
     color: var(--colore-testo);
 }
+
+/* --- Pagine dell'accesso e della gestione utenti (sessione 3) -----------
+   Il minimo perche' le pagine si leggano: la barra in cima non deve andare
+   a capo a ogni elemento, i moduli affiancati devono restare affiancati e i
+   messaggi di errore devono vedersi. L'aspetto vero e' della sessione 4, e
+   quando arrivera' questo blocco andra' riscritto per intero.
+   ---------------------------------------------------------------------- */
+
+.barra {
+    display: flex;
+    align-items: center;
+    gap: var(--spazio);
+    flex-wrap: wrap;
+    padding: 10px var(--spazio);
+    background-color: var(--colore-superficie);
+    border-bottom: 1px solid var(--colore-bordo);
+}
+
+.barra nav {
+    display: flex;
+    gap: var(--spazio);
+}
+
+/* Spinge a destra il nome di chi e' entrato e il pulsante per uscire. */
+.barra .chi-sono {
+    margin-left: auto;
+    font-size: 13px;
+    color: var(--colore-testo-tenue);
+}
+
+/* Un modulo che deve stare in fila con il testo invece che andare a capo:
+   il pulsante "Esci" nella barra, i pulsanti nelle righe dell'elenco. */
+.in-linea {
+    display: inline;
+}
+
+.contenuto {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: calc(var(--spazio) * 1.5) var(--spazio);
+}
+
+/* Riquadro dei messaggi. Il colore lo danno le classi aggiunte: "errore"
+   quando qualcosa non e' andato, "ok" quando e' andato. */
+.avviso {
+    padding: 10px var(--spazio);
+    border-left: 3px solid var(--colore-accento);
+    background-color: var(--colore-superficie);
+    border-radius: var(--raggio);
+}
+
+.avviso.errore {
+    border-left-color: var(--colore-errore);
+}
+
+.avviso.ok {
+    border-left-color: var(--colore-ok);
+}
+
+/* La password assegnata, mostrata una volta sola. Grande e distanziata:
+   qualcuno la deve leggere da lontano e ribattere a mano. */
+.password-mostrata {
+    display: inline-block;
+    padding: 8px 12px;
+    background-color: var(--colore-sfondo);
+    border: 1px solid var(--colore-bordo);
+    border-radius: var(--raggio);
+    font-family: Consolas, "Courier New", monospace;
+    font-size: 18px;
+    letter-spacing: 0.5px;
+    user-select: all;
+}
+
+table {
+    border-collapse: collapse;
+    width: 100%;
+}
+
+th, td {
+    padding: 8px;
+    text-align: left;
+    border-bottom: 1px solid var(--colore-bordo);
+    vertical-align: top;
+}
+
+th {
+    color: var(--colore-testo-tenue);
+    font-weight: 600;
+}

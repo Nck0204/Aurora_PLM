@@ -1,0 +1,82 @@
+{# ===========================================================================
+   Creazione di un utente. Riservata al creatore.
+
+   Il nome utente non si scrive: lo compone il programma da nome e cognome
+   (nome.cognome, minuscolo, senza accenti, con un numero progressivo in caso
+   di omonimia). Nemmeno la password si scrive: la genera il programma e la
+   mostra una volta sola nella pagina successiva.
+   =========================================================================== #}
+{% extends "base.html" %}
+
+{% block titolo %}Nuovo utente{% endblock %}
+
+{% block contenuto %}
+<h1>Crea un utente</h1>
+
+<form method="post" action="/utenti/nuovo">
+    <input type="hidden" name="csrf" value="{{ token_csrf(request) }}">
+
+    <p>
+        <label for="first_name">Nome</label><br>
+        <input type="text"
+               id="first_name"
+               name="first_name"
+               value="{{ first_name|default('', true) }}"
+               maxlength="80"
+               required
+               autofocus>
+    </p>
+
+    <p>
+        <label for="last_name">Cognome</label><br>
+        <input type="text"
+               id="last_name"
+               name="last_name"
+               value="{{ last_name|default('', true) }}"
+               maxlength="80"
+               required>
+    </p>
+
+    <p>
+        <label for="email">Posta elettronica</label><br>
+        <input type="email"
+               id="email"
+               name="email"
+               value="{{ email|default('', true) }}"
+               maxlength="255"
+               autocomplete="off"
+               required>
+    </p>
+
+    <p>
+        <label for="ruolo">Ruolo</label><br>
+        <select id="ruolo" name="ruolo">
+            {% for r in ruoli %}
+            <option value="{{ r.value }}"
+                    {% if ruolo|default('utente', true) == r.value %}selected{% endif %}>
+                {{ r.value }}
+            </option>
+            {% endfor %}
+        </select>
+        <br>
+        <small>
+            "creatore" puo' gestire gli utenti e le anagrafiche. "utente" puo'
+            fare quello che i suoi ruoli nei singoli progetti gli consentono.
+        </small>
+    </p>
+
+    <p>
+        <button type="submit">Crea l'utente</button>
+        <a href="/utenti">Annulla</a>
+    </p>
+</form>
+
+<p><small>
+    Il nome utente viene proposto dal programma nella forma
+    <code>nome.cognome</code>, tutto minuscolo e senza accenti; se e' gia' di
+    qualcun altro viene aggiunto un numero. La password viene generata e
+    mostrata <strong>una volta sola</strong> nella pagina successiva: annotala
+    prima di chiuderla. Chi la riceve dovra' cambiarla al primo accesso.
+</small></p>
+
+{% endblock %}

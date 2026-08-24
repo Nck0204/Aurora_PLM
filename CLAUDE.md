@@ -113,6 +113,8 @@ aurora/
 │   ├── main.py            avvio, registro, gestione errori, rotta /salute
 │   ├── config.py          lettura del file .env
 │   ├── db.py              engine, sessione, Base, get_db
+│   ├── dependencies.py    utente_corrente, richiedi_login, richiedi_creatore
+│   ├── templating.py      motore Jinja2 e funzione pagina()
 │   ├── models/            tabelle del database (una classe per tabella)
 │   ├── routers/           rotte HTTP, raggruppate per argomento
 │   ├── services/          logica applicativa, riusabile fuori dalle rotte
@@ -142,7 +144,14 @@ Dove mettere una cosa nuova:
 - un calcolo, un invio, una regola di business → una funzione in
   `app/services/`, cosi' e' richiamabile anche da un lavoro pianificato o da
   un test;
-- una procedura che esegue una persona → un file `.md` in `scripts/`.
+- una procedura che esegue una persona → un file `.md` in `scripts/`;
+- **una pagina protetta** → una rotta che dichiara `Depends(richiedi_login)`
+  oppure `Depends(richiedi_creatore)` (vedi `app/dependencies.py`). Non
+  scrivere controlli di permesso dentro il corpo della rotta: nascosti li',
+  prima o poi ne manca uno;
+- **un modulo che invia con POST** → dentro il `<form>` va la riga
+  `<input type="hidden" name="csrf" value="{{ token_csrf(request) }}">`,
+  altrimenti la richiesta viene rifiutata con un 400 (vedi D-028).
 
 ## 5. Convenzioni di codice
 
