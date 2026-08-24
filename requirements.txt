@@ -1,0 +1,30 @@
+# Dipendenze di Aurora, con versione bloccata.
+# Installazione:  .venv\Scripts\python.exe -m pip install -r requirements.txt
+#
+# Qui compaiono solo le dipendenze diritte, quelle che il nostro codice importa.
+# Le librerie che queste tirano dietro (starlette, pydantic, anyio...) le
+# installa pip da solo alla versione compatibile.
+
+# --- Server web ------------------------------------------------------------
+fastapi==0.141.1
+uvicorn[standard]==0.52.4
+
+# --- Database --------------------------------------------------------------
+SQLAlchemy==2.0.52
+alembic==1.19.1
+psycopg[binary]==3.3.4
+
+# --- Interfaccia (pagine generate dal server) ------------------------------
+Jinja2==3.1.6
+python-multipart==0.0.32
+
+# --- Configurazione e sicurezza -------------------------------------------
+pydantic-settings==2.15.0
+argon2-cffi==25.1.0
+
+# --- Lavori pianificati ----------------------------------------------------
+APScheduler==3.11.3
+
+# --- Test ------------------------------------------------------------------
+pytest==9.1.1
+httpx==0.28.1

@@ -1,0 +1,95 @@
+/* ==========================================================================
+   Aurora - foglio di stile principale (tema scuro)
+
+   Questo file sta nel repository e viene servito dal nostro server: nessun
+   collegamento a risorse esterne, nessuna CDN. L'applicazione deve funzionare
+   su una rete aziendale senza accesso a internet.
+
+   I colori sono dichiarati una volta sola qui sotto come variabili CSS e
+   richiamati con var(--nome) nel resto del file: per cambiare la tinta di
+   tutta l'applicazione basta modificare queste righe.
+   ========================================================================== */
+
+:root {
+    /* Sfondi, dal piu' scuro al piu' chiaro */
+    --colore-sfondo: #14171c;
+    --colore-superficie: #1c2027;
+    --colore-bordo: #2b313b;
+
+    /* Testo */
+    --colore-testo: #e4e7ec;
+    --colore-testo-tenue: #9aa3b1;
+
+    /* Tinte di servizio */
+    --colore-accento: #4a9eff;
+    --colore-errore: #ff6b6b;
+    --colore-ok: #4ade80;
+
+    /* Misure ricorrenti */
+    --raggio: 6px;
+    --spazio: 16px;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    padding: 0;
+    background-color: var(--colore-sfondo);
+    color: var(--colore-testo);
+    /* Caratteri gia' presenti nel sistema operativo: niente da scaricare. */
+    font-family: "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-size: 16px;
+    line-height: 1.55;
+}
+
+a {
+    color: var(--colore-accento);
+}
+
+/* --- Pagina di errore --------------------------------------------------- */
+
+.pagina-errore {
+    max-width: 640px;
+    margin: 12vh auto;
+    padding: calc(var(--spazio) * 2);
+    background-color: var(--colore-superficie);
+    border: 1px solid var(--colore-bordo);
+    border-top: 3px solid var(--colore-errore);
+    border-radius: var(--raggio);
+}
+
+.pagina-errore .codice {
+    margin: 0;
+    font-size: 48px;
+    font-weight: 600;
+    line-height: 1;
+    color: var(--colore-errore);
+}
+
+.pagina-errore h1 {
+    margin: 8px 0 var(--spazio) 0;
+    font-size: 22px;
+    font-weight: 600;
+}
+
+.pagina-errore p {
+    margin: 0 0 var(--spazio) 0;
+    color: var(--colore-testo-tenue);
+}
+
+.pagina-errore .riferimento {
+    display: block;
+    margin-top: calc(var(--spazio) * 1.5);
+    padding-top: var(--spazio);
+    border-top: 1px solid var(--colore-bordo);
+    font-size: 13px;
+    color: var(--colore-testo-tenue);
+}
+
+.pagina-errore code {
+    font-family: Consolas, "Courier New", monospace;
+    color: var(--colore-testo);
+}

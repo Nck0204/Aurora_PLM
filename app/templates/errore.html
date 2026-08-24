@@ -1,0 +1,38 @@
+{# ===========================================================================
+   Pagina di errore.
+
+   E' l'unica pagina HTML che esiste in questa prima sessione. Viene mostrata
+   dal gestore globale delle eccezioni definito in app/main.py, sia per gli
+   errori previsti (404 pagina inesistente) sia per quelli imprevisti (500).
+
+   Al visitatore non viene mai mostrato il dettaglio tecnico dell'errore:
+   quello finisce nel registro, in logs/aurora.log. Qui compare solo un codice
+   di riferimento, che l'utente puo' comunicare a chi assiste.
+   =========================================================================== #}
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ status_code }} - {{ app_name }}</title>
+    <link rel="stylesheet" href="/static/css/aurora.css">
+</head>
+<body>
+    <main class="pagina-errore">
+        <p class="codice">{{ status_code }}</p>
+        <h1>{{ title }}</h1>
+        <p>{{ message }}</p>
+
+        {# Dalla sessione 2, quando esistera' una pagina iniziale, qui va il
+           collegamento per tornare indietro. #}
+
+        {% if reference %}
+        <span class="riferimento">
+            Codice di riferimento: <code>{{ reference }}</code><br>
+            Comunicalo a chi si occupa dell'assistenza: serve a ritrovare
+            l'errore nel registro del server.
+        </span>
+        {% endif %}
+    </main>
+</body>
+</html>

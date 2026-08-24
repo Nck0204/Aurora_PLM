@@ -1,0 +1,29 @@
+# Ambiente virtuale Python
+.venv/
+venv/
+env/
+
+# File compilati e cache di Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# Configurazione locale: contiene segreti, non deve mai finire in git.
+# In repository resta solo .env.example.
+.env
+
+# Archivio dei file caricati: sono dati aziendali, non codice.
+# La cartella resta in git (grazie a .gitkeep), il contenuto no.
+storage/*
+!storage/.gitkeep
+
+# Registri applicativi
+logs/
+*.log
+
+# File di editor e di sistema
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini
