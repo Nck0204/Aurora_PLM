@@ -1,14 +1,85 @@
 """Modelli dei dati, cioe' le tabelle del database.
 
-Al momento vuoto: nessuna tabella e' ancora stata definita.
+**Ogni modello nuovo va importato qui sotto.** Non e' una formalita': Alembic,
+per generare le migrazioni, legge Base.metadata, e una classe che nessuno
+importa non risulta registrata in Base.metadata. Alembic la ignorerebbe in
+silenzio e la tabella non verrebbe mai creata.
 
-Quando nelle prossime sessioni verranno aggiunti dei modelli, ogni file dovra'
-essere importato qui sotto. Il motivo e' che Alembic, per generare le
-migrazioni, legge Base.metadata: una classe che nessuno importa non risulta
-registrata in Base.metadata e Alembic la ignorerebbe in silenzio.
+Un file per tabella, come dice CLAUDE.md. Le classi sono al singolare
+(Product), le tabelle al plurale (products).
 
-Esempio di come sara':
+Le tabelle del rilascio R1, raggruppate per argomento:
 
-    from app.models.user import User          # noqa: F401
-    from app.models.project import Project    # noqa: F401
+  Persone e accessi     users, user_sessions, login_attempts
+  Anagrafiche           customers, contacts
+  Prodotti              products, product_versions
+  Progetti              projects, assignments
+  Permessi              classifications, permission_rules
+  Documenti             documents, document_versions
+  Fasi                  phase_templates, phases, phase_transitions
+  Posta                 email_messages, email_attachments
+  Tracciabilita'        audit_logs
+
+Le tabelle di distinta base e articoli arriveranno con il rilascio R3.
 """
+
+from app.models.assignment import Assignment
+from app.models.audit_log import AuditLog
+from app.models.classification import Classification
+from app.models.contact import Contact
+from app.models.customer import Customer
+from app.models.document import Document
+from app.models.document_version import DocumentVersion
+from app.models.email_attachment import EmailAttachment
+from app.models.email_message import EmailMessage
+from app.models.enums import (
+    DocumentState,
+    EmailAssignmentState,
+    GlobalRole,
+    LifecycleState,
+    ProjectRole,
+    SessionKind,
+)
+from app.models.login_attempt import LoginAttempt
+from app.models.permission_rule import PermissionRule
+from app.models.phase import Phase
+from app.models.phase_template import PhaseTemplate
+from app.models.phase_transition import PhaseTransition
+from app.models.product import Product
+from app.models.product_version import ProductVersion
+from app.models.project import Project
+from app.models.user import User
+from app.models.user_session import UserSession
+
+# Elenco di quello che questo pacchetto mette a disposizione. Serve anche a
+# rendere esplicito agli strumenti di analisi che gli import qui sopra non
+# sono inutilizzati: sono importati apposta, per registrarli in Base.metadata.
+__all__ = [
+    # Elenchi di valori ammessi
+    "DocumentState",
+    "EmailAssignmentState",
+    "GlobalRole",
+    "LifecycleState",
+    "ProjectRole",
+    "SessionKind",
+    # Tabelle
+    "Assignment",
+    "AuditLog",
+    "Classification",
+    "Contact",
+    "Customer",
+    "Document",
+    "DocumentVersion",
+    "EmailAttachment",
+    "EmailMessage",
+    "LoginAttempt",
+    "PermissionRule",
+    "Phase",
+    "PhaseTemplate",
+    "PhaseTransition",
+    "Product",
+    "ProductVersion",
+    "Project",
+    "User",
+    "UserSession",
+]

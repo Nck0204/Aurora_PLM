@@ -8,6 +8,11 @@ Gli altri due file di governo sono:
 - `docs/STATO.md` — a che punto siamo, sessione per sessione;
 - `docs/DECISIONI.md` — le decisioni tecniche gia' prese e il perche'.
 
+Accanto a loro, da leggere prima di toccare una tabella:
+
+- `docs/MODELLO_DATI.md` — le tabelle del database, una riga di spiegazione
+  ciascuna, il dettaglio delle colonne e i principi che le tengono insieme.
+
 ---
 
 ## 1. Che cosa e' Aurora
@@ -118,7 +123,7 @@ aurora/
 │   ├── env.py             collegato a Base.metadata e al file .env
 │   └── versions/          una migrazione per file
 │
-├── docs/                  STATO.md, DECISIONI.md e documentazione
+├── docs/                  STATO.md, DECISIONI.md, MODELLO_DATI.md
 ├── scripts/               procedure operative (installazione, manutenzione)
 ├── tests/                 test pytest
 ├── storage/               archivio dei file caricati (NON in git)
@@ -128,7 +133,10 @@ aurora/
 Dove mettere una cosa nuova:
 
 - una tabella → un file in `app/models/`, importato in `app/models/__init__.py`
-  (se non lo si importa, Alembic non la vede);
+  (se non lo si importa, Alembic non la vede), documentato in
+  `docs/MODELLO_DATI.md`;
+- uno stato nuovo → un `Enum` in `app/models/enums.py` **e** una migrazione:
+  il tipo enumerato vive nel database (vedi D-014 e D-019);
 - una pagina o una chiamata HTMX → un `APIRouter` in `app/routers/`,
   registrato in `app/main.py` con `app.include_router(...)`;
 - un calcolo, un invio, una regola di business → una funzione in

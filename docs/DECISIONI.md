@@ -259,3 +259,208 @@ futuro ed e' quello consigliato da SQLAlchemy 2.x.
 
 **Conseguenza.** In un'eventuale installazione su Linux si valutera'
 `psycopg[c]`, che e' piu' veloce ma richiede la compilazione.
+
+---
+
+## D-013 — Chiave primaria UUID, codici parlanti come attributi
+
+**Data:** 24 agosto 2026 · **Stato:** attiva
+
+**Decisione.** Ogni tabella ha come chiave primaria una colonna `id` di tipo
+UUID, generata da Python e mai mostrata all'utente. I codici che le persone
+leggono e scrivono - codice prodotto, codice cliente, nome utente - sono
+attributi normali, con un vincolo di unicita' dove serve, e **non compaiono
+mai come chiave esterna**.
+
+**Motivazione.** Un codice parlante prima o poi cambia: l'azienda rivede il
+modo di comporre i codici, un cliente viene incorporato, una persona cambia
+cognome. Se quel codice e' la chiave, cambiarlo significa rincorrere i
+collegamenti in venti tabelle e sperare di non dimenticarne uno; se e' un
+attributo, si aggiorna una casella di testo e non succede niente.
+
+UUID invece di un numero progressivo per tre ragioni pratiche: l'oggetto ha il
+suo identificatore appena viene costruito, quindi si possono collegare fra loro
+righe nuove prima ancora di scriverle; un identificatore che compare in un
+indirizzo web non lascia indovinare quante righe ci sono in tabella ne'
+permette di sfogliarle cambiando un numero; e un'eventuale unione di due
+database non produce collisioni.
+
+**Conseguenza.** Gli indirizzi delle pagine conterranno UUID, che sono lunghi e
+brutti da leggere. E' un prezzo accettabile: un indirizzo non lo legge nessuno.
+
+---
+
+## D-014 — Gli stati sono tipi enumerati di PostgreSQL, con valori in italiano
+
+**Data:** 24 agosto 2026 · **Stato:** attiva
+
+**Decisione.** Gli stati (ciclo di vita di una versione, stato di un documento,
+ruolo, tipo di sessione, esito dello smistamento della posta) sono classi
+`Enum` di Python mappate su veri tipi enumerati di PostgreSQL. Il **nome della
+classe** e' in inglese come tutti gli identificatori; il **valore** e' in
+italiano: `in_sviluppo`, `bozza`, `ingegnere`, `quarantena`.
+
+**Motivazione.** Il tipo enumerato del database rifiuta un valore sbagliato al
+momento in cui qualcuno prova a scriverlo. Con una colonna di testo libero uno
+stato scritto male entra e si scopre sei mesi dopo, in un elenco filtrato che
+non torna e che nessuno sa spiegare.
+
+I valori sono in italiano perche' non sono identificatori: sono dati, finiscono
+scritti nel database e mostrati all'utente, e sono il vocabolario che in azienda
+si usa gia' a voce. La regola 4 di CLAUDE.md riguarda i nomi delle cose, non il
+loro contenuto - come le chiavi dei JSON dell'interfaccia, che sono in italiano
+per lo stesso motivo (D-011).
+
+**Conseguenza.** Aggiungere o togliere un valore richiede una migrazione, non
+la sola modifica di `app/models/enums.py`: il tipo vive nel database.
+
+---
+
+## D-015 — Un file per tabella, tabelle al plurale
+
+**Data:** 24 agosto 2026 · **Stato:** attiva
+
+**Decisione.** Ogni tabella ha il suo file in `app/models/`, con il nome della
+tabella al singolare (`product_version.py`). Le classi sono al singolare
+(`ProductVersion`), i nomi delle tabelle al plurale (`product_versions`). I
+pezzi comuni - chiave primaria, date di servizio, costruzione dei tipi
+enumerati - stanno in `app/models/base.py`; gli elenchi di stati in
+`app/models/enums.py`.
+
+**Motivazione.** E' la regola gia' scritta in CLAUDE.md, sezione 4. Diciannove
+file corti sono piu' facili da attraversare di tre file lunghi: si cerca il
+nome della tabella e si apre quel file. Il plurale per le tabelle risolve anche
+un problema pratico: `user` e' una parola riservata di PostgreSQL, `users` no.
+
+**Conseguenza.** Ogni modello nuovo va importato in `app/models/__init__.py`,
+altrimenti non risulta in `Base.metadata` e Alembic lo ignora in silenzio.
+
+---
+
+## D-016 — I modelli di fasi sono immutabili e versionati
+
+**Data:** 24 agosto 2026 · **Stato:** attiva
+
+**Decisione.** Un `phase_template` non si modifica mai. Una correzione produce
+una riga nuova con lo stesso nome e `version` aumentato di uno; il modello
+vecchio resta, disattivato con `is_active`, e i progetti che lo usano
+continuano a puntargli. Le fasi appartengono a un modello e a uno solo: due
+modelli con una fase chiamata "Concept" hanno due righe distinte.
+
+**Motivazione.** Un progetto aperto due anni fa e' passato per le fasi che
+esistevano allora. Se il modello si potesse correggere a posteriori, la storia
+di quel progetto racconterebbe fasi mai esistite e le approvazioni registrate
+in `phase_transitions` risulterebbero riferite a passaggi mai avvenuti. In un
+archivio di documentazione tecnica una storia che si riscrive da sola non e' un
+archivio.
+
+**Conseguenza.** Le fasi si duplicano fra le versioni del modello. E' voluto e
+costa niente: si parla di poche righe.
+
+---
+
+## D-017 — La posta si attacca alla versione di prodotto, non al progetto
+
+**Data:** 24 agosto 2026 · **Stato:** attiva
+
+**Decisione.** `email_messages` ha una chiave esterna verso `product_versions`,
+non verso `projects`.
+
+**Motivazione.** Un progetto si chiude, la corrispondenza con il cliente no:
+continua quando il prodotto e' gia' in produzione, e sono spesso proprio quei
+messaggi a contenere le richieste di modifica e le deroghe. Attaccare i
+messaggi al progetto avrebbe voluto dire non sapere piu' dove metterli il
+giorno della chiusura.
+
+**Conseguenza.** Per risalire dal messaggio al progetto si passa dalla versione
+di prodotto. E' un salto in piu' in lettura, ed e' quello giusto.
+
+---
+
+## D-018 — `audit_logs.entity_id` non ha chiave esterna
+
+**Data:** 24 agosto 2026 · **Stato:** attiva
+
+**Decisione.** Nel registro delle operazioni, `entity_id` e' un UUID senza
+vincolo di chiave esterna, accompagnato da `entity_type` che dice a quale
+tabella si riferisce. Anche `user_id` puo' essere nullo.
+
+**Motivazione.** Una chiave esterna punta a una tabella sola, e questa colonna
+deve poter puntare a tutte. In piu' una chiave esterna impedirebbe di
+registrare un'operazione su una riga che al momento della scrittura non esiste
+ancora - o che non esiste piu' - e la traccia di quelle e' proprio quella che
+serve. `user_id` nullo perche' alcune operazioni le fa il programma da solo, in
+un lavoro pianificato di notte: meglio nessuna persona che una persona finta.
+
+**Conseguenza.** L'integrita' di questa colonna non la garantisce il database:
+la deve garantire il codice che scrive nel registro, e sara' uno solo.
+
+---
+
+## D-019 — Nelle migrazioni i tipi enumerati si creano e si cancellano a mano
+
+**Data:** 24 agosto 2026 · **Stato:** attiva
+
+**Decisione.** Nella migrazione, i tipi enumerati vengono creati esplicitamente
+in cima a `upgrade()` e cancellati esplicitamente in fondo a `downgrade()`. Le
+colonne li dichiarano con `create_type=False`. La migrazione
+`897359b06e69_modello_dati_r1.py` porta il modello e due commenti che segnalano
+i punti corretti a mano.
+
+**Motivazione.** Due difetti dell'autogenerazione, entrambi silenziosi finche'
+non fanno danno. Il primo: `project_role` e' usato da due tabelle e Alembic
+genera il tipo dentro tutte e due le `create_table`, cosi' la seconda fallisce
+perche' il tipo esiste gia'. Il secondo: `DROP TABLE` non cancella i tipi
+enumerati, che restano nel database dopo un `downgrade` e fanno fallire il
+successivo `upgrade` con "il tipo esiste gia'".
+
+**Conseguenza.** Ogni migrazione che introduce o toglie un tipo enumerato va
+riletta e corretta a mano dopo l'autogenerazione. Va verificata provando il
+giro completo: `upgrade head`, `downgrade base`, di nuovo `upgrade head`.
+
+---
+
+## D-020 — Le assegnazioni si revocano, non si cancellano
+
+**Data:** 24 agosto 2026 · **Stato:** attiva
+
+**Decisione.** `assignments` ha `revoked_at` e `revoked_by_id`, che l'elenco
+delle colonne della sessione 2 non prevedeva. L'unicita' di "una persona, un
+ruolo per progetto" e' imposta da un indice unico **parziale**, limitato alle
+righe non revocate.
+
+**Motivazione.** Senza quelle due colonne un'assegnazione non si potrebbe
+togliere in nessun modo compatibile con D-006 (niente cancellazione fisica), e
+"chi aveva accesso a quel progetto a marzo" e' una domanda a cui bisogna poter
+rispondere. L'indice parziale invece di un vincolo di unicita' normale perche'
+altrimenti una persona non potrebbe mai essere riassegnata a un progetto da cui
+era stata tolta.
+
+**Conseguenza.** Ogni interrogazione sulle assegnazioni deve filtrare
+`revoked_at IS NULL`. E' lo stesso problema gia' aperto da D-006.
+
+---
+
+## D-021 — La sessione 2 realizza tutto il modello dati, non solo gli utenti
+
+**Data:** 24 agosto 2026 · **Stato:** attiva
+
+**Decisione.** Il piano abbozzato alla fine della sessione 1 assegnava alla
+sessione 2 "utenti, accesso e audit trail" e distribuiva le altre tabelle sulle
+sessioni 3, 4, 5, 6 e 7. La sessione 2 ha invece realizzato **tutto** il modello
+dati del rilascio R1: diciannove tabelle, una sola migrazione, nessuna
+interfaccia e nessuna logica applicativa. Le tabelle di distinta base e articoli
+restano fuori, sono di R3.
+
+**Motivazione.** Uno schema di database si progetta tutto insieme o non si
+progetta. Aggiungere le tabelle una sessione per volta avrebbe prodotto una
+catena di migrazioni che si correggono a vicenda - una chiave esterna aggiunta
+qui, una colonna resa obbligatoria la', un vincolo che si scopre solo quando
+arriva la tabella dopo - e nessuna occasione di vedere l'insieme prima di
+scriverlo. Il costo di questa scelta e' una sessione densa; il ricavo e' che le
+sessioni successive trovano il terreno gia' pronto e possono occuparsi solo di
+comportamento.
+
+**Conseguenza.** Il piano delle sessioni da 3 a 13 in `docs/STATO.md` va
+riscritto di conseguenza: quelle sessioni non creano piu' tabelle, ci
+costruiscono sopra.
