@@ -1,38 +1,59 @@
 {# ===========================================================================
    Pagina di errore.
 
-   E' l'unica pagina HTML che esiste in questa prima sessione. Viene mostrata
-   dal gestore globale delle eccezioni definito in app/main.py, sia per gli
-   errori previsti (404 pagina inesistente) sia per quelli imprevisti (500).
+   Una sola pagina per tutti i casi, con tre presentazioni diverse:
+
+     404  indirizzo che non esiste - non e' colpa di nessuno, numero in tinta
+          tenue;
+     401 e 403  accesso richiesto o negato - numero giallo, e il pulsante
+          porta dove serve (alla pagina di accesso oppure indietro);
+     500 e gli altri  un guasto vero - numero rosso e codice di riferimento.
+
+   Si e' preferita una pagina sola a tre pagine quasi identiche: tre file che
+   dicono la stessa cosa si allontanano l'uno dall'altro alla prima modifica,
+   e dopo sei mesi il 404 e' bello e il 403 e' rimasto indietro.
+
+   La compone build_error_response() in app/main.py, che passa: status_code,
+   title, message e - solo per gli errori imprevisti - reference.
 
    Al visitatore non viene mai mostrato il dettaglio tecnico dell'errore:
-   quello finisce nel registro, in logs/aurora.log. Qui compare solo un codice
+   quello finisce nel registro, in logs/aurora.log. Qui compare solo il codice
    di riferimento, che l'utente puo' comunicare a chi assiste.
    =========================================================================== #}
-<!DOCTYPE html>
-<html lang="it">
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{{ status_code }} - {{ app_name }}</title>
-    <link rel="stylesheet" href="/static/css/aurora.css">
-</head>
-<body>
-    <main class="pagina-errore">
-        <p class="codice">{{ status_code }}</p>
-        <h1>{{ title }}</h1>
-        <p>{{ message }}</p>
+{% extends "base_nudo.html" %}
+{% from "components/pulsanti.html" import pulsante_collegamento %}
 
-        {# Dalla sessione 2, quando esistera' una pagina iniziale, qui va il
-           collegamento per tornare indietro. #}
+{% block titolo %}{{ status_code }} {{ title }}{% endblock %}
 
-        {% if reference %}
-        <span class="riferimento">
-            Codice di riferimento: <code>{{ reference }}</code><br>
-            Comunicalo a chi si occupa dell'assistenza: serve a ritrovare
-            l'errore nel registro del server.
-        </span>
+{% block contenuto %}
+{% set guasto = status_code >= 500 %}
+{% set negato = status_code in (401, 403) %}
+
+<div class="pagina-errore
+            {%- if guasto %} pagina-errore--guasto
+            {%- elif negato %} pagina-errore--negato{% endif %}">
+
+    <p class="numero">{{ status_code }}</p>
+
+    <h1>{{ title }}</h1>
+    <p class="spiegazione">{{ message }}</p>
+
+    <div class="fila-pulsanti">
+        {% if status_code == 401 %}
+            {{ pulsante_collegamento("Vai all'accesso", "/entra",
+                                     variante="primario") }}
+        {% else %}
+            {{ pulsante_collegamento("Torna alla pagina iniziale", "/",
+                                     variante="primario") }}
         {% endif %}
-    </main>
-</body>
-</html>
+    </div>
+
+    {% if reference %}
+    <span class="riferimento">
+        Codice di riferimento: <code class="codice">{{ reference }}</code><br>
+        Comunicalo a chi si occupa dell'assistenza: serve a ritrovare l'errore
+        nel registro del server.
+    </span>
+    {% endif %}
+</div>
+{% endblock %}

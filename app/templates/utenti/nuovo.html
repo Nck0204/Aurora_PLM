@@ -5,78 +5,92 @@
    (nome.cognome, minuscolo, senza accenti, con un numero progressivo in caso
    di omonimia). Nemmeno la password si scrive: la genera il programma e la
    mostra una volta sola nella pagina successiva.
+
+   Sono due scelte prese apposta, D-030 e D-031: se il nome utente lo
+   scrivesse chi crea l'utente, dopo sei mesi ci sarebbero tre convenzioni
+   diverse nella stessa tabella.
    =========================================================================== #}
 {% extends "base.html" %}
 
+{% from "components/campi.html" import campo, tendina, csrf %}
+{% from "components/pulsanti.html" import pulsante, pulsante_collegamento %}
+{% from "components/riquadro.html" import riquadro %}
+
 {% block titolo %}Nuovo utente{% endblock %}
+{% block sezione %}Utenti &middot; nuovo{% endblock %}
 
 {% block contenuto %}
-<h1>Crea un utente</h1>
 
-<form method="post" action="/utenti/nuovo">
-    <input type="hidden" name="csrf" value="{{ token_csrf(request) }}">
+<div class="colonna-stretta">
 
-    <p>
-        <label for="first_name">Nome</label><br>
-        <input type="text"
-               id="first_name"
-               name="first_name"
-               value="{{ first_name|default('', true) }}"
-               maxlength="80"
-               required
-               autofocus>
+    <div class="testata">
+        <div>
+            <h1>Crea un utente</h1>
+            <p class="sottotitolo">
+                Nome utente e password li compone {{ app_name }}.
+            </p>
+        </div>
+    </div>
+
+    {% call riquadro() %}
+    <form method="post" action="/utenti/nuovo" class="modulo">
+        {{ csrf(request) }}
+
+        <div class="modulo-riga">
+            {{ campo("Nome", "first_name",
+                     valore=first_name,
+                     obbligatorio=true,
+                     autofocus=true,
+                     lunghezza_massima=80) }}
+
+            {{ campo("Cognome", "last_name",
+                     valore=last_name,
+                     obbligatorio=true,
+                     lunghezza_massima=80) }}
+        </div>
+
+        {{ campo("Posta elettronica", "email",
+                 tipo="email",
+                 valore=email,
+                 obbligatorio=true,
+                 lunghezza_massima=255,
+                 attributi='autocomplete="off"',
+                 aiuto="Serve per le notifiche. Deve essere di questa persona "
+                       "sola: non si possono avere due utenti con lo stesso "
+                       "indirizzo.") }}
+
+        {#- Le opzioni del menu sono coppie (valore, testo). Qui le due meta'
+            coincidono: il valore dell'elenco GlobalRole e' gia' la parola
+            italiana che si mostra (vedi la convenzione in
+            app/models/enums.py). -#}
+        {%- set opzioni_ruolo = [] -%}
+        {%- for r in ruoli -%}
+            {%- set _ = opzioni_ruolo.append((r.value, r.value)) -%}
+        {%- endfor %}
+
+        {{ tendina("Ruolo", "ruolo",
+                opzioni=opzioni_ruolo,
+                scelto=ruolo|default("utente", true),
+                aiuto="\"creatore\" puo' gestire gli utenti e le anagrafiche. "
+                      "\"utente\" puo' fare quello che i suoi ruoli nei "
+                      "singoli progetti gli consentono.") }}
+
+        <div class="modulo-azioni">
+            {{ pulsante("Crea l'utente", variante="primario", icona_nome="piu") }}
+            {{ pulsante_collegamento("Annulla", "/utenti") }}
+        </div>
+    </form>
+    {% endcall %}
+
+    <p class="testo-tenue testo-piccolo margine-sopra">
+        Il nome utente viene proposto dal programma nella forma
+        <span class="codice">nome.cognome</span>, tutto minuscolo e senza
+        accenti; se e' gia' di qualcun altro viene aggiunto un numero. La
+        password viene generata e mostrata <strong>una volta sola</strong>
+        nella pagina successiva: annotala prima di chiuderla. Chi la riceve
+        dovra' cambiarla al primo accesso.
     </p>
 
-    <p>
-        <label for="last_name">Cognome</label><br>
-        <input type="text"
-               id="last_name"
-               name="last_name"
-               value="{{ last_name|default('', true) }}"
-               maxlength="80"
-               required>
-    </p>
-
-    <p>
-        <label for="email">Posta elettronica</label><br>
-        <input type="email"
-               id="email"
-               name="email"
-               value="{{ email|default('', true) }}"
-               maxlength="255"
-               autocomplete="off"
-               required>
-    </p>
-
-    <p>
-        <label for="ruolo">Ruolo</label><br>
-        <select id="ruolo" name="ruolo">
-            {% for r in ruoli %}
-            <option value="{{ r.value }}"
-                    {% if ruolo|default('utente', true) == r.value %}selected{% endif %}>
-                {{ r.value }}
-            </option>
-            {% endfor %}
-        </select>
-        <br>
-        <small>
-            "creatore" puo' gestire gli utenti e le anagrafiche. "utente" puo'
-            fare quello che i suoi ruoli nei singoli progetti gli consentono.
-        </small>
-    </p>
-
-    <p>
-        <button type="submit">Crea l'utente</button>
-        <a href="/utenti">Annulla</a>
-    </p>
-</form>
-
-<p><small>
-    Il nome utente viene proposto dal programma nella forma
-    <code>nome.cognome</code>, tutto minuscolo e senza accenti; se e' gia' di
-    qualcun altro viene aggiunto un numero. La password viene generata e
-    mostrata <strong>una volta sola</strong> nella pagina successiva: annotala
-    prima di chiuderla. Chi la riceve dovra' cambiarla al primo accesso.
-</small></p>
+</div>
 
 {% endblock %}

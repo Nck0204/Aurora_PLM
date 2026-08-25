@@ -1,0 +1,92 @@
+{# ===========================================================================
+   AVVISI IN LINEA E NOTIFICHE TEMPORANEE
+
+   Sono due cose diverse e la differenza conta.
+
+   AVVISO IN LINEA (macro "avviso"). Sta dentro la pagina, in cima al
+   contenuto o accanto al campo che riguarda, e NON se ne va. Si usa per tutto
+   quello che deve essere letto per forza:
+
+     - l'errore di un modulo appena rifiutato;
+     - la spiegazione del cambio password obbligatorio;
+     - un avvertimento che riguarda quello che si sta per fare.
+
+   NOTIFICA TEMPORANEA (macro "notifica"). Compare in basso a destra e sparisce
+   da sola dopo qualche secondo. Si usa solo per confermare che qualcosa e'
+   andato a buon fine: "Utente creato", "Password riassegnata".
+
+   REGOLA. Se il messaggio serve a capire che cosa fare adesso, e' un avviso in
+   linea. Se e' soltanto la conferma di qualcosa che l'utente ha appena fatto e
+   ha gia' visto succedere, e' una notifica.
+
+   Non si mette mai in una notifica un errore su cui si deve agire: le
+   notifiche spariscono, e chi si e' girato dall'altra parte non le rivede
+   piu'.
+
+   LE VARIANTI: informazione (di partenza), successo, attenzione, errore.
+
+   PER I LETTORI DI SCHERMO. Gli errori hanno role="alert" e vengono letti
+   subito, interrompendo quello che si sta facendo; le conferme hanno
+   role="status" e vengono lette alla prima pausa. E' la differenza fra "ti
+   devo fermare" e "per tua informazione".
+
+   COME SI USA:
+
+       {% raw %}{% from "components/avvisi.html" import avviso, notifica %}
+
+       {{ avviso("La password attuale non e' corretta.", variante="errore") }}
+       {{ avviso("Password cambiata.", variante="successo",
+                 titolo="Fatto") }}{% endraw %}
+   =========================================================================== #}
+
+
+{% from "components/icone.html" import icona %}
+
+
+{# L'icona giusta per ciascuna variante. Ripete quello che dice il colore,
+   per chi il colore non lo distingue. #}
+{% set ICONE_AVVISO = {
+    "informazione": "informazione",
+    "successo": "spunta",
+    "attenzione": "attenzione",
+    "errore": "errore",
+} %}
+
+
+{% macro avviso(messaggio, variante="informazione", titolo=none) -%}
+<div class="avviso{% if variante != 'informazione' %} avviso--{{ variante }}{% endif %}"
+     role="{{ 'alert' if variante == 'errore' else 'status' }}">
+    {{ icona(ICONE_AVVISO.get(variante, "informazione"), 18) }}
+    <div>
+        {%- if titolo %}<p><strong>{{ titolo }}</strong></p>{% endif %}
+        {%- if caller is defined and caller %}
+        {{ caller() }}
+        {%- else %}
+        <p>{{ messaggio }}</p>
+        {%- endif %}
+    </div>
+</div>
+{%- endmacro %}
+
+
+{# Una notifica temporanea.
+
+   Va messa dentro il contenitore #notifiche, che sta in base.html ed esiste
+   in ogni pagina. Lo script /static/js/aurora.js la fa sparire dopo qualche
+   secondo; senza JavaScript resta li' con la sua crocetta, che e' un modo
+   ragionevole di sbagliare.
+
+   La durata e' in millisecondi. Con durata=0 la notifica non sparisce da
+   sola: si usa quando il messaggio e' lungo da leggere. #}
+{% macro notifica(messaggio, variante="successo", titolo=none, durata=5000) -%}
+<div class="notifica{% if variante != 'informazione' %} notifica--{{ variante }}{% endif %}"
+     role="{{ 'alert' if variante == 'errore' else 'status' }}"
+     data-durata="{{ durata }}">
+    {{ icona(ICONE_AVVISO.get(variante, "informazione"), 18) }}
+    <div class="testo">
+        {%- if titolo %}<div class="titolo">{{ titolo }}</div>{% endif %}
+        <div class="dettaglio">{{ messaggio }}</div>
+    </div>
+    <button type="button" class="chiudi" aria-label="Chiudi la notifica">&times;</button>
+</div>
+{%- endmacro %}

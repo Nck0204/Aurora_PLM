@@ -1,0 +1,92 @@
+{# ===========================================================================
+   BARRA DI RICERCA
+
+   QUANDO SI USA. In cima a ogni elenco che possa arrivare a piu' di una
+   schermata di righe: prodotti, documenti, progetti, messaggi, utenti.
+
+   E' SEMPRE UN MODULO GET. Mai POST. La ragione e' pratica: con GET la
+   ricerca fatta finisce nell'indirizzo, e un indirizzo si mette nei
+   preferiti, si manda a un collega, si ritrova nella cronologia, si ricarica
+   senza che il browser chieda se rispedire i dati. Una ricerca e' una domanda,
+   non un cambiamento: le domande si fanno in GET.
+
+   Nell'indirizzo non finisce mai niente di riservato, e per una casella di
+   ricerca vale la stessa regola: cercare va bene, mandare in chiaro una
+   password o un dato personale no.
+
+   FUNZIONA SENZA JAVASCRIPT. E' un modulo con il suo pulsante: si scrive, si
+   preme Invio, la pagina si ricarica filtrata. Chi vuole la ricerca che si
+   aggiorna mentre si scrive puo' aggiungere gli attributi HTMX passando
+   "htmx", e chi ha JavaScript spento continua a usare il pulsante.
+
+   COME SI USA:
+
+       {% raw %}{% from "components/ricerca.html" import ricerca %}
+
+       {{ ricerca("/prodotti", valore=q,
+                  segnaposto="Codice o descrizione",
+                  filtri=[
+                      {"nome": "stato", "etichetta": "Stato",
+                       "opzioni": [("rilasciato", "rilasciato")],
+                       "scelto": stato, "vuoto": "Qualunque stato"},
+                  ]) }}{% endraw %}
+
+   Ogni filtro e' un menu a tendina che viaggia insieme alla ricerca. I filtri
+   si applicano premendo "Cerca": non si applicano da soli al cambio del menu,
+   perche' senza JavaScript non funzionerebbe e con JavaScript sarebbe una
+   sorpresa (si sceglie il primo filtro e la pagina si ricarica prima che si
+   sia scelto il secondo).
+   =========================================================================== #}
+
+
+{% from "components/icone.html" import icona %}
+{% from "components/pulsanti.html" import pulsante %}
+
+
+{% macro ricerca(indirizzo, valore="", nome="q", segnaposto="Cerca",
+                 etichetta="Cerca", filtri=none, nascosti=none, htmx="") -%}
+<form class="ricerca" method="get" action="{{ indirizzo }}" role="search">
+
+    {#- I parametri da tenere insieme alla ricerca: l'ordinamento della
+        tabella, per esempio. Senza, ogni ricerca lo azzererebbe. -#}
+    {%- if nascosti %}
+        {%- for campo_nome, campo_valore in nascosti.items() %}
+    <input type="hidden" name="{{ campo_nome }}" value="{{ campo_valore }}">
+        {%- endfor %}
+    {%- endif %}
+
+    <div class="ricerca-campo">
+        {#- L'etichetta c'e' sempre, anche quando non si vede: chi usa un
+            lettore di schermo deve sentire che cosa e' quella casella. Il
+            segnaposto non basta, perche' sparisce appena si scrive. -#}
+        <label class="solo-lettura-vocale" for="{{ nome }}">{{ etichetta }}</label>
+        {{ icona("cerca", 16) }}
+        <input type="search"
+               id="{{ nome }}"
+               name="{{ nome }}"
+               class="campo-controllo"
+               value="{{ valore|default('', true) }}"
+               placeholder="{{ segnaposto }}"
+               autocomplete="off"
+               {{ htmx|safe }}>
+    </div>
+
+    {%- if filtri %}
+    <div class="ricerca-filtri">
+        {%- for filtro in filtri %}
+        <label class="solo-lettura-vocale" for="{{ filtro.nome }}">{{ filtro.etichetta }}</label>
+        <select id="{{ filtro.nome }}" name="{{ filtro.nome }}" class="campo-controllo">
+            {%- if filtro.vuoto %}
+            <option value="">{{ filtro.vuoto }}</option>
+            {%- endif %}
+            {%- for opzione_valore, opzione_testo in filtro.opzioni %}
+            <option value="{{ opzione_valore }}"{% if filtro.scelto is not none and filtro.scelto|string == opzione_valore|string %} selected{% endif %}>{{ opzione_testo }}</option>
+            {%- endfor %}
+        </select>
+        {%- endfor %}
+    </div>
+    {%- endif %}
+
+    {{ pulsante("Cerca", tipo="submit") }}
+</form>
+{%- endmacro %}

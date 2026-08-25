@@ -18,6 +18,12 @@ from fastapi.responses import Response
 from fastapi.templating import Jinja2Templates
 
 from app.config import PROJECT_ROOT, settings
+from app.navigation import (
+    MENU_PRINCIPALE,
+    MENU_SERVIZIO,
+    sezione_corrente,
+    voci_visibili,
+)
 from app.services.csrf import token_csrf
 
 templates = Jinja2Templates(directory=PROJECT_ROOT / "app" / "templates")
@@ -38,12 +44,19 @@ def pagina(
 ) -> Response:
     """Compone una pagina HTML aggiungendo il contesto comune a tutte.
 
-    Il contesto comune e' di due voci sole:
+    Il contesto comune e' di cinque voci:
 
-      app_name   il nome del programma, che compare nel titolo della finestra;
-      utente     chi sta guardando la pagina, oppure None se non e' entrato.
-                 Serve alla barra in cima, che mostra il nome e il collegamento
-                 per uscire.
+      app_name          il nome del programma, che compare nel titolo della
+                        finestra e nella barra laterale;
+      utente            chi sta guardando la pagina, oppure None se non e'
+                        entrato. Serve alla barra in cima, che mostra il nome
+                        e il collegamento per uscire;
+      voci_menu, voci_menu_servizio
+                        le voci della barra laterale gia' filtrate per ruolo
+                        (vedi app/navigation.py). Il template le disegna e
+                        basta: non decide chi puo' vedere che cosa;
+      sezione           il percorso della voce di menu da segnare come
+                        corrente.
 
     L'utente viene preso da request.state, dove lo ha lasciato la dipendenza
     utente_corrente (vedi app/dependencies.py). Cosi' i template non devono
@@ -51,8 +64,15 @@ def pagina(
     barra in cima dice "non sei entrato" perche' qualcuno ha dimenticato di
     passarlo.
     """
+    utente = getattr(request.state, "utente", None)
+
     contesto.setdefault("app_name", settings.APP_NAME)
-    contesto.setdefault("utente", getattr(request.state, "utente", None))
+    contesto.setdefault("utente", utente)
+    contesto.setdefault("voci_menu", voci_visibili(MENU_PRINCIPALE, utente))
+    contesto.setdefault(
+        "voci_menu_servizio", voci_visibili(MENU_SERVIZIO, utente)
+    )
+    contesto.setdefault("sezione", sezione_corrente(request.url.path))
 
     return templates.TemplateResponse(
         request=request,

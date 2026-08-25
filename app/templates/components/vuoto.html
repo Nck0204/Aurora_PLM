@@ -1,0 +1,54 @@
+{# ===========================================================================
+   RIQUADRO VUOTO
+
+   QUANDO SI USA. Ogni volta che una pagina o un riquadro non ha niente da
+   mostrare: un elenco senza righe, una ricerca senza risultati, una sezione
+   in cui non e' ancora stato caricato niente.
+
+   PERCHE' NON BASTA LASCIARE VUOTO. Una pagina vuota senza spiegazione sembra
+   un guasto, e chi la vede chiama chi assiste. Un riquadro vuoto fatto bene
+   dice due cose, sempre tutte e due:
+
+     1. perche' non c'e' niente ("nessun documento con questi filtri" e'
+        diverso da "nessun documento e' ancora stato caricato");
+     2. che cosa si puo' fare adesso - e se c'e' qualcosa da fare, il pulsante
+        per farla sta li' dentro.
+
+   Se non c'e' niente da fare (per esempio l'utente non ha i permessi per
+   caricare), l'azione si omette e resta la spiegazione: proporre un pulsante
+   che poi risponde "accesso negato" e' peggio che non proporlo.
+
+   COME SI USA:
+
+       {% raw %}{% from "components/vuoto.html" import vuoto %}
+
+       {{ vuoto("Nessun prodotto",
+                "Non e' ancora stato creato nessun prodotto. Il primo si crea "
+                "dal pulsante qui sotto.",
+                azione=pulsante_collegamento("Crea un prodotto", "/prodotti/nuovo",
+                                             variante="primario"),
+                icona_nome="prodotti") }}{% endraw %}
+
+   Per il caso "la ricerca non ha trovato niente" si usa invece la riga vuota
+   della tabella (vedi components/tabella.html): li' l'elenco esiste, e'
+   soltanto filtrato, e togliere la tabella farebbe sparire anche i filtri.
+   =========================================================================== #}
+
+
+{% from "components/icone.html" import icona %}
+
+
+{% macro vuoto(titolo, spiegazione=none, azione=none, icona_nome="cartella-vuota") -%}
+<div class="vuoto">
+    {%- if icona_nome %}
+    {{ icona(icona_nome, 40) }}
+    {%- endif %}
+    <h3>{{ titolo }}</h3>
+    {%- if spiegazione %}
+    <p>{{ spiegazione }}</p>
+    {%- endif %}
+    {%- if azione %}
+    <div class="fila-pulsanti">{{ azione }}</div>
+    {%- endif %}
+</div>
+{%- endmacro %}

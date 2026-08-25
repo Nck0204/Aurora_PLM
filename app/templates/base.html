@@ -1,26 +1,46 @@
 {# ===========================================================================
    Impalcatura comune a tutte le pagine di Aurora.
 
-   In questa sessione l'aspetto e' volutamente grezzo: la grafica arriva con
-   la sessione 4. Qui c'e' solo la struttura, il foglio di stile gia'
-   esistente e la barra in cima che dice chi e' entrato.
+   Tre zone, sempre le stesse:
 
-   Le pagine figlie riempiono due blocchi:
-     titolo     il testo della finestra del browser
-     contenuto  il corpo della pagina
+     - la barra laterale a sinistra, con le sezioni del programma. Le voci
+       arrivano gia' filtrate per ruolo da app/navigation.py: il template le
+       disegna e basta, non decide chi puo' vedere che cosa;
+     - la barra superiore, con il nome di chi e' entrato e l'uscita;
+     - l'area del contenuto, che e' quello che riempiono le pagine figlie.
+
+   In fondo c'e' il contenitore delle notifiche temporanee, che esiste in ogni
+   pagina anche quando e' vuoto: cosi' una risposta HTMX puo' aggiungerci
+   dentro una notifica senza dover creare niente.
+
+   I BLOCCHI CHE UNA PAGINA FIGLIA RIEMPIE
+
+     titolo      il testo della finestra del browser (obbligatorio)
+     sezione     il titolo che compare nella barra superiore
+     contenuto   il corpo della pagina
+     script      eventuali script della singola pagina, in fondo
 
    REGOLA DA RISPETTARE IN OGNI PAGINA CON UN MODULO. Dentro ogni
    <form method="post"> va messa questa riga, e va messa per prima:
 
        <input type="hidden" name="csrf" value="{{ '{{ token_csrf(request) }}' }}">
 
-   E' il gettone che protegge dalla falsificazione delle richieste. Se manca,
-   il modulo viene rifiutato con un 400 e la spiegazione compare nel registro:
-   il controllo dalla parte del server e' una dipendenza globale e non si puo'
-   dimenticare. Vedi app/services/csrf.py.
+   oppure, che e' la stessa cosa scritta meglio:
 
-   Nessun collegamento a risorse esterne, mai: regola 1 di CLAUDE.md.
+       {{ '{{ csrf(request) }}' }}    (macro in components/campi.html)
+
+   E' il gettone che protegge dalla falsificazione delle richieste. Se manca,
+   il modulo viene rifiutato con un 400: il controllo dalla parte del server e'
+   una dipendenza globale e non si puo' dimenticare. Vedi app/services/csrf.py
+   e la decisione D-028.
+
+   Nessun collegamento a risorse esterne, mai: regola 1 di CLAUDE.md. HTMX e i
+   nostri script stanno in app/static/ e li serve questo stesso programma.
    =========================================================================== #}
+{% from "components/icone.html" import icona %}
+{% from "components/campi.html" import csrf %}
+{% from "components/pulsanti.html" import pulsante %}
+{% from "components/avvisi.html" import avviso %}
 <!DOCTYPE html>
 <html lang="it">
 <head>
@@ -28,43 +48,118 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{% block titolo %}{{ app_name }}{% endblock %} - {{ app_name }}</title>
     <link rel="stylesheet" href="/static/css/aurora.css">
+
+    {# HTMX, servito da noi. Sta in "defer" perche' non c'e' nessuna pagina che
+       ne abbia bisogno per disegnarsi: se non arrivasse, i moduli e i
+       collegamenti funzionerebbero comunque. #}
+    <script src="/static/vendor/htmx.min.js" defer></script>
+    <script src="/static/js/aurora.js" defer></script>
 </head>
 <body>
 
-{% if utente %}
-{# La barra in cima esiste solo per chi e' entrato. Il nome e il ruolo si
-   leggono dall'oggetto utente, che pagina() prende da request.state: e' quello
-   riletto dal database in questa richiesta, non un dato vecchio del cookie. #}
-<header class="barra">
-    <a href="/"><strong>{{ app_name }}</strong></a>
+<a class="salta-al-contenuto" href="#contenuto">Salta al contenuto</a>
 
-    <nav>
-        {% if utente.is_creatore %}
-        <a href="/utenti">Utenti</a>
-        {% endif %}
-        <a href="/cambio-password">Cambia password</a>
-    </nav>
+<div class="guscio">
 
-    <span class="chi-sono">
-        {{ utente.full_name }} ({{ utente.username }}) &middot; {{ utente.global_role.value }}
-    </span>
+    {# ---------------------------------------------------------------------
+       Barra laterale
+       --------------------------------------------------------------------- #}
+    <aside class="barra-laterale">
+        <a class="marchio" href="/">
+            <span class="segno">{{ icona("prodotti", 22) }}</span>
+            <span class="nome-programma">{{ app_name }}</span>
+        </a>
 
-    {# Uscire e' un POST, non un collegamento: vedi la spiegazione in cima a
-       app/routers/auth.py. #}
-    <form method="post" action="/esci" class="in-linea">
-        <input type="hidden" name="csrf" value="{{ token_csrf(request) }}">
-        <button type="submit">Esci</button>
-    </form>
-</header>
-{% endif %}
+        <nav class="menu" aria-label="Sezioni del programma">
+            {% for voce in voci_menu %}
+                {% if voce.attiva %}
+            <a class="menu-voce{% if sezione == voce.percorso %} menu-voce--corrente{% endif %}"
+               href="{{ voce.percorso }}"
+               title="{{ voce.etichetta }}"
+               {% if sezione == voce.percorso %}aria-current="page"{% endif %}>
+                {{ icona(voce.icona) }}
+                <span class="nome-voce">{{ voce.etichetta }}</span>
+            </a>
+                {% else %}
+            {# Sezione non ancora realizzata. E' uno <span> e non un <a>: la
+               tastiera non ci si ferma, perche' non c'e' niente da aprire.
+               aria-disabled lo dice anche ai lettori di schermo. #}
+            <span class="menu-voce menu-voce--spenta"
+                  aria-disabled="true"
+                  title="{{ voce.etichetta }} - non ancora disponibile{% if voce.nota %} ({{ voce.nota }}){% endif %}">
+                {{ icona(voce.icona) }}
+                <span class="nome-voce">{{ voce.etichetta }}</span>
+                {% if voce.nota %}<span class="in-arrivo">{{ voce.nota }}</span>{% endif %}
+            </span>
+                {% endif %}
+            {% endfor %}
 
-<main class="contenuto">
-    {% if errore %}
-    <p class="avviso errore" role="alert">{{ errore }}</p>
-    {% endif %}
+            {% if voci_menu_servizio %}
+            <div class="menu-gruppo">Servizio</div>
+                {% for voce in voci_menu_servizio %}
+            <a class="menu-voce{% if sezione == voce.percorso %} menu-voce--corrente{% endif %}"
+               href="{{ voce.percorso }}"
+               title="{{ voce.etichetta }}"
+               {% if sezione == voce.percorso %}aria-current="page"{% endif %}>
+                {{ icona(voce.icona) }}
+                <span class="nome-voce">{{ voce.etichetta }}</span>
+            </a>
+                {% endfor %}
+            {% endif %}
+        </nav>
 
-    {% block contenuto %}{% endblock %}
-</main>
+        <div class="piede">{{ app_name }} &middot; rete locale</div>
+    </aside>
+
+    {# ---------------------------------------------------------------------
+       Barra superiore e contenuto
+       --------------------------------------------------------------------- #}
+    <div class="area-principale">
+
+        <header class="barra-superiore">
+            <span class="titolo-sezione">{% block sezione %}{% endblock %}</span>
+
+            {% if utente %}
+            {# Il nome e il ruolo si leggono dall'oggetto utente, che pagina()
+               prende da request.state: e' quello riletto dal database in
+               questa richiesta, non un dato vecchio del cookie (D-032). #}
+            <div class="chi-sono">
+                <span>
+                    <span class="nome">{{ utente.full_name }}</span>
+                    <span class="ruolo">{{ utente.username }} &middot; {{ utente.global_role.value }}</span>
+                </span>
+
+                {# Uscire e' un POST, non un collegamento: vedi la spiegazione
+                   in cima ad app/routers/auth.py. #}
+                <form method="post" action="/esci" class="modulo-in-linea">
+                    {{ csrf(request) }}
+                    {{ pulsante("Esci", misura="piccolo", icona_nome="esci") }}
+                </form>
+            </div>
+            {% endif %}
+        </header>
+
+        <main class="contenuto" id="contenuto">
+            {# Il messaggio di errore che una rotta passa a pagina() con
+               errore="...". Sta qui e non in ogni pagina perche' e' il caso
+               piu' frequente di tutti: un modulo rifiutato che si rimostra.
+               Una pagina che voglia metterlo altrove semplicemente non usa
+               questo nome. #}
+            {% if errore %}{{ avviso(errore, variante="errore") }}{% endif %}
+
+            {% block contenuto %}{% endblock %}
+        </main>
+    </div>
+</div>
+
+{# Il contenitore delle notifiche temporanee. C'e' sempre, anche vuoto: le
+   notifiche possono arrivare dopo, dentro una risposta HTMX, e devono trovare
+   dove mettersi. Vedi components/avvisi.html. #}
+<div class="notifiche" id="notifiche" aria-live="polite" aria-atomic="false">
+    {% block notifiche %}{% endblock %}
+</div>
+
+{% block script %}{% endblock %}
 
 </body>
 </html>

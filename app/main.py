@@ -40,6 +40,7 @@ from app.dependencies import (
 )
 from app.routers import auth as router_auth
 from app.routers import home as router_home
+from app.routers import style as router_style
 from app.routers import users as router_users
 from app.services.cookies import applica_cookie
 from app.services.csrf import verifica_csrf
@@ -384,6 +385,7 @@ async def cambio_password_handler(
 app.include_router(router_home.router)
 app.include_router(router_auth.router)
 app.include_router(router_users.router)
+app.include_router(router_style.router)
 
 
 @app.get("/salute", tags=["servizio"])

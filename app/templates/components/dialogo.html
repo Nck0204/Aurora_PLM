@@ -1,0 +1,80 @@
+{# ===========================================================================
+   FINESTRA DI DIALOGO MODALE
+
+   QUANDO SI USA. Per una conferma che merita di essere letta ("Stai per
+   disattivare Mario Rossi: perdera' subito tutte le sessioni aperte") o per un
+   modulo cortissimo che non vale una pagina propria.
+
+   QUANDO NON SI USA - ed e' il caso piu' frequente. Per qualunque cosa sia
+   indispensabile. Una finestra modale ha bisogno di JavaScript per aprirsi:
+   se in quel browser JavaScript e' spento, o se lo script non e' arrivato,
+   quella cosa non si puo' fare piu'. Le operazioni che devono funzionare
+   sempre - entrare, cambiare la password, creare un utente - restano moduli
+   normali su una pagina propria.
+
+   La regola pratica: se la finestra non si aprisse, l'utente rimarrebbe
+   bloccato? Allora non e' una finestra, e' una pagina.
+
+   COME E' FATTA. E' l'elemento <dialog> del browser. Aperto con showModal(),
+   porta il fuoco dentro la finestra, ce lo tiene finche' e' aperta, chiude con
+   Esc e restituisce il fuoco a chi l'aveva aperta. Tutto questo, rifatto a
+   mano con dei <div>, sono duecento righe di JavaScript scritte male.
+
+   COME SI USA. La finestra si dichiara con il suo identificatore e si apre da
+   un pulsante che lo nomina in data-apre:
+
+       {% raw %}{% from "components/dialogo.html" import dialogo, pulsante_apri %}
+
+       {{ pulsante_apri("Disattiva", "conferma-disattiva", variante="pericolo") }}
+
+       {% call dialogo("conferma-disattiva", "Disattivare l'utente?",
+                       piede=...) %}
+           <p>Mario Rossi perdera' subito tutte le sessioni aperte.</p>
+       {% endcall %}{% endraw %}
+
+   Il piede contiene di solito due cose: il pulsante che annulla (con
+   l'attributo data-chiude) e il modulo POST che esegue davvero l'operazione.
+   =========================================================================== #}
+
+
+{% from "components/pulsanti.html" import pulsante %}
+
+
+{% macro dialogo(id, titolo, piede=none) -%}
+<dialog class="dialogo" id="{{ id }}" aria-labelledby="{{ id }}-titolo">
+    <header class="dialogo-testata">
+        <h2 id="{{ id }}-titolo">{{ titolo }}</h2>
+        <button type="button" class="dialogo-chiudi" data-chiude
+                aria-label="Chiudi la finestra">&times;</button>
+    </header>
+
+    <div class="dialogo-corpo">
+        {{ caller() }}
+    </div>
+
+    {%- if piede %}
+    <footer class="dialogo-piede">{{ piede }}</footer>
+    {%- endif %}
+</dialog>
+{%- endmacro %}
+
+
+{# Il pulsante che apre una finestra. L'aggancio e' l'attributo data-apre, che
+   contiene l'identificatore della finestra; il resto lo fa
+   /static/js/aurora.js.
+
+   type="button" e non "submit": se questo pulsante si trovasse dentro un
+   modulo, senza quell'indicazione lo invierebbe invece di aprire la
+   finestra. #}
+{% macro pulsante_apri(etichetta, id_dialogo, variante="secondario",
+                       misura="normale", icona_nome=none) -%}
+{{ pulsante(etichetta, tipo="button", variante=variante, misura=misura,
+            icona_nome=icona_nome,
+            attributi='data-apre="' ~ id_dialogo ~ '"') }}
+{%- endmacro %}
+
+
+{# Il pulsante che chiude la finestra in cui si trova, senza fare niente. #}
+{% macro pulsante_chiudi(etichetta="Annulla") -%}
+{{ pulsante(etichetta, tipo="button", attributi="data-chiude") }}
+{%- endmacro %}

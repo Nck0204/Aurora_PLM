@@ -1,0 +1,37 @@
+{# ===========================================================================
+   Un pezzo di pagina, non una pagina.
+
+   Non estende base.html e non ha ne' <html> ne' <body>: e' quello che HTMX va
+   a prendere e infila dentro l'elemento indicato da hx-target. E' la forma che
+   avranno tutte le risposte HTMX di Aurora.
+
+   Vale la stessa regola dei componenti: qui dentro non si scrive HTML a mano
+   se esiste il macro che lo fa.
+   =========================================================================== #}
+{% from "components/tabella.html" import tabella %}
+{% from "components/stato.html" import etichetta_ciclo_vita %}
+
+{% set colonne = [
+    {"etichetta": "Codice", "classe": "colonna-codice"},
+    {"etichetta": "Descrizione"},
+    {"etichetta": "Cliente"},
+    {"etichetta": "Versione", "classe": "colonna-numero"},
+    {"etichetta": "Stato"},
+] %}
+
+{% call tabella(colonne,
+                vuota=(righe|length == 0),
+                messaggio_vuoto="Nessun prodotto contiene \"" ~ q ~ "\". "
+                                "Prova con una parte del codice.",
+                riepilogo=(righe|length ~ " riga trovata" if righe|length == 1
+                           else righe|length ~ " righe trovate")) %}
+    {% for riga in righe %}
+    <tr>
+        <td class="colonna-codice">{{ riga.codice }}</td>
+        <td>{{ riga.descrizione }}</td>
+        <td>{{ riga.cliente }}</td>
+        <td class="colonna-numero">{{ riga.versione }}</td>
+        <td>{{ etichetta_ciclo_vita(riga.stato) }}</td>
+    </tr>
+    {% endfor %}
+{% endcall %}

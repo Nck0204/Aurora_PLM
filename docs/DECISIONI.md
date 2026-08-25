@@ -772,3 +772,179 @@ perche' la pagina dovra' comunque leggere qualcos'altro. Se un giorno il
 programma dovesse servire numeri diversi, questa e' la decisione da rivedere per
 prima - ed e' anche quella che non va rivista senza sostituirla con qualcosa che
 garantisca la stessa immediatezza.
+
+---
+
+## D-033 — Un foglio di stile solo, con tutti i valori dichiarati in :root
+
+**Data:** 25 agosto 2026 · **Stato:** attiva
+
+**Decisione.** L'intera grafica di Aurora sta in `app/static/css/aurora.css`:
+un file solo, scritto a mano, diviso in sezioni numerate con un indice in cima.
+Colori, spaziature, raggi e ombre sono dichiarati come variabili CSS nel blocco
+`:root` e richiamati con `var(--nome)`. **Dentro una regola non si scrive mai un
+valore esadecimale.**
+
+**Motivazione.** Sul file unico: chi manterra' questo programma non conosce i
+bundler e non deve conoscerli (regola 2 di CLAUDE.md). Con un file solo,
+"dov'e' definito questo pulsante" ha una risposta sola e si trova con una
+ricerca di testo. Diviso in file, servirebbe una regola su quale file importa
+quale, e quella regola nessuno la scrive mai.
+
+Sulle variabili: e' quello che rende possibile cambiare la tinta di tutto il
+programma modificando una riga. Ed e' anche quello che rende verificabile il
+contrasto: si controllano dieci combinazioni una volta, invece di ricontrollarle
+a ogni pagina nuova.
+
+**Conseguenza.** Il file cresce - e' gia' oltre le millecinquecento righe e
+crescera' ancora. E' un prezzo accettabile finche' l'indice in cima resta
+aggiornato: una sezione nuova va aggiunta anche li'.
+
+Due test lo tengono in piedi: `test_i_colori_stanno_tutti_nelle_variabili`
+fallisce se un colore compare fuori da `:root`, e
+`test_nessun_colore_scritto_dentro_i_template` se ne compare uno dentro un
+template. E' una regola che si viola per distrazione, copiando una riga, non
+per scelta: per questo va verificata da un programma e non dalla buona volonta'.
+
+---
+
+## D-034 — I componenti sono macro Jinja2, e la vetrina /stile e' il contratto
+
+**Data:** 25 agosto 2026 · **Stato:** attiva
+
+**Decisione.** Ogni pezzo ricorrente di interfaccia - pulsante, campo, tabella,
+etichetta di stato, riquadro, finestra, notifica, ricerca, impaginazione,
+schede, avanzamento, elenco descrittivo, area file, riquadro vuoto - e' un macro
+Jinja2 in `app/templates/components/`. In cima a ogni file e' scritto **quando
+si usa e quando non si usa**. Tutti insieme si vedono all'indirizzo `/stile`,
+riservato al creatore.
+
+Le pagine non riscrivono l'HTML di un componente a mano, nemmeno la vetrina.
+
+**Motivazione.** Le sessioni da 5 a 13 costruiranno decine di pagine. Senza un
+posto in cui i pezzi esistono gia', ogni sessione si porta dietro il proprio
+pulsante e la propria tabella, e dopo tredici sessioni ce ne sono tredici
+versioni leggermente diverse - nessuna delle quali si puo' correggere in un
+punto solo.
+
+Il commento "quando NON si usa" conta quanto l'altro. Sapere che esiste una
+finestra modale porta a usarla; sapere che non ci si mette dentro niente di
+indispensabile e' l'informazione che evita il guaio.
+
+Sulla vetrina: e' l'unico modo perche' la documentazione non menta. Un elenco
+scritto di componenti invecchia in tre settimane; una pagina che li disegna
+passando dai macro veri non puo' invecchiare, perche' se un macro cambia la
+pagina cambia con lui. Per questo la vetrina non riscrive l'HTML a mano: se lo
+facesse, mostrerebbe una cosa che non esiste piu' - il modo peggiore possibile
+di sbagliare, per una pagina il cui unico mestiere e' dire come stanno le cose.
+
+**Conseguenza.** Aggiungere un componente vuol dire cinque passi, elencati in
+`docs/GUIDA_STILE.md`, sezione 10. Uno di questi e' l'esempio in vetrina, e non
+e' facoltativo: un componente che non e' in vetrina non lo trova nessuno e viene
+riscritto da capo alla sessione successiva.
+
+Un secondo effetto, scoperto scrivendoli: **i nomi dei macro devono essere
+specifici.** I macro importati da una pagina finiscono nello stesso spazio delle
+variabili con cui viene disegnato anche `base.html`, e un macro chiamato `menu`
+copriva le voci della barra laterale. La pagina si apriva con un errore che non
+diceva niente (`'Macro' object is not iterable`). Il menu a tendina si chiama
+`tendina`.
+
+---
+
+## D-035 — Le voci della barra laterale stanno in Python, non nel template
+
+**Data:** 25 agosto 2026 · **Stato:** attiva
+
+**Decisione.** Il menu di Aurora e' dichiarato in `app/navigation.py` come un
+elenco di `VoceMenu`, ciascuna con etichetta, percorso, icona, se e' attiva e se
+e' riservata al creatore. La funzione `pagina()` lo passa ai template gia'
+filtrato per ruolo; il template lo disegna e basta.
+
+Le sezioni non ancora realizzate compaiono nel menu **spente**, con la scritta
+che dice in quale sessione arriveranno.
+
+**Motivazione.** Il filtro per ruolo dentro l'HTML diventa illeggibile alla
+terza condizione, e quali sezioni esistono e' un fatto del programma, non della
+grafica. Quando la sessione 5 realizzera' i prodotti, bastera' togliere
+`attiva=False` da una riga e la barra laterale si aggiornera' in tutte le pagine
+insieme.
+
+Sulle voci spente: mostrarle e' piu' onesto che nasconderle. Chi apre Aurora
+oggi vede subito che cosa ci sara' e non si chiede se lo stia cercando nel posto
+sbagliato. Sono `<span>` e non `<a>`: la tastiera non ci si ferma, perche' non
+c'e' niente da aprire.
+
+**Conseguenza da non fraintendere.** **Nascondere una voce non protegge
+niente.** Il controllo che conta e' la dipendenza dichiarata sulla rotta
+(`richiedi_login`, `richiedi_creatore`): quello e' il lucchetto. Il menu si
+limita a non mostrare le porte che non si aprirebbero comunque, cosi' nessuno ci
+va a sbattere.
+
+---
+
+## D-036 — HTMX e' un miglioramento, mai una condizione
+
+**Data:** 25 agosto 2026 · **Stato:** attiva
+
+**Decisione.** HTMX 2.0.10 e' stato scaricato in
+`app/static/vendor/htmx.min.js` e viene servito dal nostro programma. Ogni
+pagina lo carica, ma **nessuna funzione di Aurora puo' dipendere da lui**: ogni
+modulo e' un `<form>` normale che funziona da solo, e gli attributi `hx-` si
+limitano a sostituire un pezzo di pagina invece di ricaricarla tutta.
+
+Lo stesso vale per `app/static/js/aurora.js`: notifiche, finestre di dialogo e
+trascinamento dei file sono tutti di piu' che spariscono senza far danni.
+
+**Motivazione.** Tre ragioni, in ordine di importanza.
+
+1. Un programma che custodisce il patrimonio documentale di un'azienda non deve
+   smettere di funzionare perche' un file JavaScript non e' arrivato o perche'
+   una politica aziendale lo blocca. Entrare e caricare un documento sono
+   operazioni che devono riuscire sempre.
+2. Un modulo GET che funziona da solo ha un indirizzo: la ricerca fatta si mette
+   nei preferiti, si manda a un collega, si ritrova nella cronologia. E' una
+   proprieta' che si perde nel momento in cui la ricerca esiste solo dentro
+   JavaScript, e non si recupera piu'.
+3. La verifica costa poco: il finto browser dei test non esegue JavaScript,
+   quindi ogni test che passa e' anche la prova che quella pagina funziona senza.
+
+**Conseguenza.** Ogni volta che si aggiunge un attributo `hx-`, va risposta una
+domanda sola: che cosa succede se lo script non arriva? Se la risposta e' "non
+funziona", quella non e' la strada. Il modello da copiare e' la barra di ricerca
+della vetrina: un modulo GET verso `/stile`, piu' un `hx-get` verso il
+frammento. Le due strade portano allo stesso posto.
+
+Le finestre modali sono l'unico componente che ha davvero bisogno di JavaScript
+per aprirsi. Per questo il commento in cima a `components/dialogo.html` dice di
+non metterci dentro niente di indispensabile: la regola pratica e' "se la
+finestra non si aprisse, l'utente resterebbe bloccato? Allora non e' una
+finestra, e' una pagina".
+
+---
+
+## D-037 — Una pagina di errore sola, con tre presentazioni
+
+**Data:** 25 agosto 2026 · **Stato:** attiva
+
+**Decisione.** `app/templates/errore.html` serve tutti i codici di errore.
+Cambia la presentazione a seconda del codice: numero in tinta tenue per il 404
+(un indirizzo sbagliato non e' colpa di nessuno), giallo per il 401 e il 403,
+rosso per i guasti veri; e cambia il pulsante, che per il 401 porta all'accesso
+e per tutti gli altri alla pagina iniziale.
+
+**Motivazione.** La sessione 4 chiedeva "pagina di errore, pagina 404 e pagina
+accesso negato coerenti con il tema". Tre file che dicono quasi la stessa cosa
+si allontanano l'uno dall'altro alla prima modifica: dopo sei mesi il 404 e'
+bello e il 403 e' rimasto indietro. Con un file solo, la coerenza non e' una
+cosa da mantenere: e' una cosa che non si puo' rompere.
+
+**Conseguenza.** Le pagine di errore usano `base_nudo.html`, senza barra
+laterale: o non si e' entrati, o non si e' arrivati da nessuna parte. Mostrare
+la navigazione a chi non e' entrato direbbe anche a un estraneo quali sezioni
+esistono.
+
+L'errore in HTML arriva solo a chi dichiara di accettare `text/html`; a un
+programma risponde un JSON. E' il comportamento che c'era gia' dalla sessione 1,
+e i test che guardano la pagina devono presentarsi come si presenta un browser -
+altrimenti ricevono il JSON e non capiscono perche'.

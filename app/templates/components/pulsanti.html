@@ -1,0 +1,119 @@
+{# ===========================================================================
+   PULSANTI
+
+   QUANDO SI USA. Per ogni azione. Se l'azione cambia qualcosa nel programma
+   (crea, salva, disattiva, esci) e' un <button> dentro un modulo POST; se
+   porta soltanto da un'altra parte e' un collegamento travestito da pulsante,
+   e per quello c'e' il macro "pulsante_collegamento".
+
+   La distinzione non e' formale. Un collegamento si apre in una scheda nuova,
+   si copia, lo seguono i programmi che scandagliano le pagine. Un'azione che
+   cambia i dati non deve poter succedere per una di queste ragioni: deve
+   essere un modulo POST, con il suo gettone CSRF.
+
+   LE VARIANTI
+
+     primario    l'azione principale della pagina. UNO SOLO per pagina: se ce
+                 ne sono tre, nessuno dei tre e' quello principale.
+     secondario  tutto il resto (e' quello di partenza).
+     pericolo    le azioni che tolgono: disattiva, revoca, chiudi le sessioni.
+                 In Aurora non esiste "cancella" (CLAUDE.md, regola 5).
+     piatto      azioni di contorno dentro una riga di tabella.
+
+   LE MISURE
+
+     normale     dappertutto.
+     piccolo     dentro le righe di una tabella, dove ce ne stanno tre in fila.
+
+   COME SI USA:
+
+       {% raw %}{% from "components/pulsanti.html" import pulsante, pulsante_collegamento %}
+
+       {{ pulsante("Crea l'utente", tipo="submit", variante="primario") }}
+       {{ pulsante_collegamento("Annulla", "/utenti") }}
+       {{ pulsante("Disattiva", variante="pericolo", misura="piccolo",
+                   icona_nome="esci") }}{% endraw %}
+   =========================================================================== #}
+
+{% from "components/icone.html" import icona %}
+
+
+{% macro pulsante(etichetta, tipo="submit", variante="secondario", misura="normale",
+                  icona_nome=none, disabilitato=false, largo=false,
+                  nome=none, valore=none, titolo=none, id=none, attributi="") -%}
+<button type="{{ tipo }}"
+        class="pulsante
+               {%- if variante != 'secondario' %} pulsante--{{ variante }}{% endif %}
+               {%- if misura == 'piccolo' %} pulsante--piccolo{% endif %}
+               {%- if largo %} pulsante--largo{% endif %}"
+        {%- if id %} id="{{ id }}"{% endif %}
+        {%- if nome %} name="{{ nome }}"{% endif %}
+        {%- if valore is not none %} value="{{ valore }}"{% endif %}
+        {%- if titolo %} title="{{ titolo }}"{% endif %}
+        {%- if disabilitato %} disabled{% endif %}
+        {{ attributi|safe }}>
+    {%- if icona_nome %}{{ icona(icona_nome, 16) }}{% endif %}
+    <span>{{ etichetta }}</span>
+</button>
+{%- endmacro %}
+
+
+{# Un collegamento che ha l'aspetto di un pulsante. Le varianti sono le stesse.
+
+   Non si usa MAI per un'azione che cambia i dati: per quelle c'e' il modulo
+   POST. Vedi la spiegazione in cima ad app/routers/auth.py, dove si racconta
+   perche' anche l'uscita e' un POST. #}
+{% macro pulsante_collegamento(etichetta, indirizzo, variante="secondario",
+                               misura="normale", icona_nome=none, largo=false,
+                               titolo=none, attributi="") -%}
+<a href="{{ indirizzo }}"
+   class="pulsante
+          {%- if variante != 'secondario' %} pulsante--{{ variante }}{% endif %}
+          {%- if misura == 'piccolo' %} pulsante--piccolo{% endif %}
+          {%- if largo %} pulsante--largo{% endif %}"
+   {%- if titolo %} title="{{ titolo }}"{% endif %}
+   {{ attributi|safe }}>
+    {%- if icona_nome %}{{ icona(icona_nome, 16) }}{% endif %}
+    <span>{{ etichetta }}</span>
+</a>
+{%- endmacro %}
+
+
+{# Un modulo POST con un pulsante solo dentro, che e' il caso piu' frequente
+   di tutti: "Disattiva", "Esci", "Riattiva". Mette da se' il campo nascosto
+   del gettone CSRF, cosi' non lo si puo' dimenticare (D-028).
+
+   Il parametro "request" va passato per forza: il gettone si legge dai cookie
+   di quella richiesta.
+
+       {% raw %}{{ modulo_pulsante(request, "/utenti/" ~ u.id ~ "/disattiva",
+                          "Disattiva", variante="pericolo",
+                          misura="piccolo") }}{% endraw %}
+
+   Per un'azione che merita una domanda prima di essere eseguita si passa
+   conferma="Testo della domanda": il browser chiede conferma da solo. Senza
+   JavaScript la domanda non compare e l'azione si esegue: e' voluto, perche'
+   nessuna delle azioni di Aurora e' irreparabile - non si cancella niente. #}
+{% macro modulo_pulsante(request, azione, etichetta, variante="secondario",
+                         misura="normale", icona_nome=none, conferma=none,
+                         titolo=none, in_linea=true) -%}
+<form method="post" action="{{ azione }}"{% if in_linea %} class="modulo-in-linea"{% endif %}>
+    <input type="hidden" name="csrf" value="{{ token_csrf(request) }}">
+    {{ pulsante(etichetta, tipo="submit", variante=variante, misura=misura,
+                icona_nome=icona_nome, titolo=titolo) }}
+    {%- if conferma %}
+    {# La domanda di conferma la fa il modulo, non il pulsante: cosi' scatta
+       anche quando si invia con Invio da tastiera. #}
+    <script>
+        (function () {
+            var modulo = document.currentScript.parentElement;
+            modulo.addEventListener("submit", function (evento) {
+                if (!window.confirm({{ conferma|tojson }})) {
+                    evento.preventDefault();
+                }
+            });
+        })();
+    </script>
+    {%- endif %}
+</form>
+{%- endmacro %}

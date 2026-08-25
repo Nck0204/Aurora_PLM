@@ -1,184 +1,2087 @@
 /* ==========================================================================
-   Aurora - foglio di stile principale (tema scuro)
+   Aurora - foglio di stile unico (tema scuro)
 
    Questo file sta nel repository e viene servito dal nostro server: nessun
-   collegamento a risorse esterne, nessuna CDN. L'applicazione deve funzionare
-   su una rete aziendale senza accesso a internet.
+   collegamento a risorse esterne, nessuna CDN, nessuna compilazione. E'
+   scritto a mano e va letto dall'alto verso il basso: le sezioni sono in
+   ordine, dalle variabili alle pagine particolari.
 
-   I colori sono dichiarati una volta sola qui sotto come variabili CSS e
-   richiamati con var(--nome) nel resto del file: per cambiare la tinta di
-   tutta l'applicazione basta modificare queste righe.
+   REGOLA DA NON VIOLARE MAI. Nessun colore, nessuna spaziatura, nessun raggio
+   e nessuna ombra vanno scritti dentro una regola: tutto sta nelle variabili
+   della sezione 1 e si richiama con var(--nome). Se serve una tinta nuova, si
+   aggiunge li' sopra e si documenta in docs/GUIDA_STILE.md.
+
+   CONVENZIONE DEI NOMI. Blocco e modificatore separati da due trattini:
+
+       .pulsante                il componente
+       .pulsante--primario      una sua variante
+       .pulsante--piccolo       un'altra sua variante, che si somma
+
+   I nomi delle classi sono in italiano perche' descrivono cose che si vedono,
+   come i testi dell'interfaccia; gli identificatori del codice restano in
+   inglese (CLAUDE.md, regola 4).
+
+   INDICE
+     1.  Variabili
+     2.  Azzeramento e basi
+     3.  Impalcatura della pagina
+     4.  Barra laterale
+     5.  Barra superiore
+     6.  Pulsanti
+     7.  Moduli
+     8.  Tabelle
+     9.  Etichette di stato
+     10. Riquadri
+     11. Finestre di dialogo
+     12. Notifiche temporanee
+     13. Barra di ricerca
+     14. Impaginazione
+     15. Schede
+     16. Barra di avanzamento delle fasi
+     17. Elenco descrittivo
+     18. Area di trascinamento file
+     19. Riquadro vuoto
+     20. Avvisi in linea
+     21. Utilita'
+     22. Pagine senza impalcatura (accesso, errore)
+     23. La vetrina /stile
+     24. Adattamento alla larghezza dello schermo
+   ========================================================================== */
+
+
+/* ==========================================================================
+   1. VARIABILI
+   Tutto quello che si ripete sta qui. Cambiando una riga cambia tutto il
+   programma: e' l'unico posto in cui un valore va scritto per esteso.
    ========================================================================== */
 
 :root {
-    /* Sfondi, dal piu' scuro al piu' chiaro */
-    --colore-sfondo: #14171c;
-    --colore-superficie: #1c2027;
-    --colore-bordo: #2b313b;
 
-    /* Testo */
-    --colore-testo: #e4e7ec;
-    --colore-testo-tenue: #9aa3b1;
+    /* --- Superfici, dalla piu' profonda alla piu' vicina all'occhio ------
+       sfondo      la tela su cui poggia tutto
+       superficie  riquadri, barre, tabelle
+       sollevata   quello che sta sopra un riquadro: pulsanti, righe scelte
+       passaggio   la stessa superficie quando il mouse ci passa sopra      */
+    --colore-sfondo: #0B0E14;
+    --colore-superficie: #141821;
+    --colore-superficie-sollevata: #1B2130;
+    --colore-superficie-passaggio: #212939;
+    --colore-riga-alterna: #171C26;
 
-    /* Tinte di servizio */
-    --colore-accento: #4a9eff;
-    --colore-errore: #ff6b6b;
-    --colore-ok: #4ade80;
+    /* --- Bordi ---------------------------------------------------------- */
+    --colore-bordo: #262D3D;
+    --colore-bordo-tenue: #1E2432;   /* separatori dentro un riquadro */
+    --colore-bordo-marcato: #38415A; /* campo sotto il mouse, riga scelta */
 
-    /* Misure ricorrenti */
-    --raggio: 6px;
-    --spazio: 16px;
+    /* --- Testo ----------------------------------------------------------
+       Il contrasto di ciascuno di questi colori sulle tre superfici e' stato
+       verificato: nessuna combinazione scende sotto 4.5:1. La tabella delle
+       misure sta in docs/GUIDA_STILE.md.                                   */
+    --colore-testo: #E6EAF2;
+    --colore-testo-tenue: #8B94A7;
+    --colore-testo-su-accento: #0B0E14;  /* testo scuro sopra una tinta piena */
+
+    /* --- Tinte di servizio ---------------------------------------------- */
+    --colore-accento: #5B9DFF;
+    --colore-accento-scuro: #3D7FE0;     /* accento premuto */
+    --colore-successo: #3FB950;
+    --colore-attenzione: #D29922;
+    --colore-errore: #F85149;
+
+    /* Fondi appena tinti, per le etichette e gli avvisi. Sono calcolati: la
+       tinta al 12% sopra --colore-superficie. Stanno qui gia' pronti perche'
+       un colore va scritto per esteso una volta sola. */
+    --fondo-accento: #1C283C;
+    --fondo-successo: #192B27;
+    --fondo-attenzione: #2B2721;
+    --fondo-errore: #2F1F26;
+    --fondo-neutro: #222731;
+
+    /* --- Stati del ciclo di vita di una versione di prodotto -------------
+       Sono i cinque valori dell'elenco LifecycleState (app/models/enums.py).
+       Ogni stato ha la sua tinta e il suo fondo, e si usano insieme: la tinta
+       sul testo e sul bordo, il fondo dietro.                              */
+    --stato-in-sviluppo: #5B9DFF;
+    --stato-in-sviluppo-fondo: #1C283C;
+    --stato-rilasciato: #3FB950;
+    --stato-rilasciato-fondo: #192B27;
+    --stato-in-produzione: #2EA043;
+    --stato-in-produzione-fondo: #162524;
+    --stato-superato: #D29922;
+    --stato-superato-fondo: #2B2721;
+    --stato-obsoleto: #8B94A7;
+    --stato-obsoleto-fondo: #222731;
+
+    /* --- Spaziature: scala basata su 4 pixel ----------------------------
+       Non si usano misure fuori da questa scala. Avere nove valori invece di
+       trenta e' quello che tiene allineate le pagine scritte in giorni
+       diversi da persone diverse.                                          */
+    --spazio-1: 4px;
+    --spazio-2: 8px;
+    --spazio-3: 12px;
+    --spazio-4: 16px;
+    --spazio-5: 20px;
+    --spazio-6: 24px;
+    --spazio-8: 32px;
+    --spazio-10: 40px;
+    --spazio-12: 48px;
+
+    /* --- Raggi ---------------------------------------------------------- */
+    --raggio-piccolo: 6px;   /* pulsanti, campi, etichette */
+    --raggio: 10px;          /* riquadri, finestre, tabelle */
+
+    /* --- Ombre ----------------------------------------------------------
+       Su fondo scuro le ombre si vedono poco: servono soprattutto a dire
+       "questa cosa sta sopra le altre".                                    */
+    --ombra-1: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --ombra-2: 0 8px 24px rgba(0, 0, 0, 0.55);
+
+    /* Il velo scuro dietro una finestra modale. E' l'unico nero puro del
+       programma, e sta qui come tutti gli altri colori. */
+    --velo-dialogo: rgba(0, 0, 0, 0.6);
+
+    /* --- Caratteri ------------------------------------------------------
+       Solo caratteri gia' presenti nel sistema operativo: niente da
+       scaricare, niente da servire, niente che manchi il primo giorno.
+
+       Il monospazio e' riservato a quello che si ribatte a mano o si
+       confronta carattere per carattere: codici prodotto, codici articolo,
+       nomi utente, impronte, password assegnate. Li' la differenza fra 0 e O
+       e fra 1 e l deve vedersi.                                            */
+    --carattere: system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial,
+                 sans-serif;
+    --carattere-mono: ui-monospace, "Cascadia Mono", "Segoe UI Mono",
+                      Consolas, "Courier New", monospace;
+
+    --testo-piccolo: 12px;
+    --testo-normale: 14px;
+    --testo-grande: 16px;
+    --testo-titolo: 20px;
+    --testo-titolo-grande: 26px;
+
+    /* --- Misure dell'impalcatura ---------------------------------------- */
+    --larghezza-barra-laterale: 232px;
+    --larghezza-barra-laterale-stretta: 60px;
+    --altezza-barra-superiore: 56px;
+    --larghezza-contenuto: 1360px;
+
+    /* --- Tempi ----------------------------------------------------------
+       Brevi di proposito: un programma che si usa tutto il giorno non deve
+       far aspettare nessuno per far vedere un'animazione.                  */
+    --durata-veloce: 90ms;
+    --durata: 160ms;
+
+    /* --- Sovrapposizioni ------------------------------------------------ */
+    --livello-barra: 10;
+    --livello-dialogo: 30;
+    --livello-notifiche: 40;
 }
 
-* {
+
+/* ==========================================================================
+   2. AZZERAMENTO E BASI
+   ========================================================================== */
+
+*,
+*::before,
+*::after {
     box-sizing: border-box;
+}
+
+html {
+    /* Le barre in cima sono fisse: senza questa riga un collegamento interno
+       porterebbe il punto di arrivo sotto la barra superiore. */
+    scroll-padding-top: calc(var(--altezza-barra-superiore) + var(--spazio-4));
 }
 
 body {
     margin: 0;
-    padding: 0;
     background-color: var(--colore-sfondo);
     color: var(--colore-testo);
-    /* Caratteri gia' presenti nel sistema operativo: niente da scaricare. */
-    font-family: "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-    font-size: 16px;
+    font-family: var(--carattere);
+    font-size: var(--testo-normale);
     line-height: 1.55;
+    /* Su Windows la resa dei caratteri chiari su fondo scuro migliora
+       sensibilmente con questa riga. */
+    -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, h4 {
+    margin: 0 0 var(--spazio-3) 0;
+    font-weight: 600;
+    line-height: 1.3;
+}
+
+h1 { font-size: var(--testo-titolo-grande); }
+h2 { font-size: var(--testo-titolo); margin-top: var(--spazio-8); }
+h3 { font-size: var(--testo-grande); margin-top: var(--spazio-6); }
+h4 { font-size: var(--testo-normale); color: var(--colore-testo-tenue); }
+
+p {
+    margin: 0 0 var(--spazio-4) 0;
 }
 
 a {
     color: var(--colore-accento);
+    text-decoration: none;
 }
 
-/* --- Pagina di errore --------------------------------------------------- */
+a:hover {
+    text-decoration: underline;
+}
 
-.pagina-errore {
-    max-width: 640px;
-    margin: 12vh auto;
-    padding: calc(var(--spazio) * 2);
+code, kbd, samp, pre {
+    font-family: var(--carattere-mono);
+    font-size: 0.95em;
+}
+
+hr {
+    height: 1px;
+    margin: var(--spazio-6) 0;
+    border: 0;
+    background-color: var(--colore-bordo);
+}
+
+/* Il fuoco della tastiera si vede SEMPRE, su qualunque cosa lo riceva. Non si
+   toglie e non si sostituisce con niente di piu' discreto: chi naviga da
+   tastiera senza questo anello non sa dove si trova. */
+:focus-visible {
+    outline: 2px solid var(--colore-accento);
+    outline-offset: 2px;
+    border-radius: var(--raggio-piccolo);
+}
+
+/* Chi ha chiesto al sistema operativo di ridurre le animazioni non ne vede
+   nessuna. */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        transition-duration: 0.01ms !important;
+        animation-duration: 0.01ms !important;
+    }
+}
+
+
+/* ==========================================================================
+   3. IMPALCATURA DELLA PAGINA
+   Tre zone: la barra laterale a sinistra, la barra superiore in cima e
+   l'area del contenuto. Le prime due restano ferme, scorre solo il
+   contenuto.
+   ========================================================================== */
+
+.guscio {
+    display: grid;
+    grid-template-columns: var(--larghezza-barra-laterale) 1fr;
+    min-height: 100vh;
+}
+
+.area-principale {
+    /* min-width: 0 impedisce a una tabella larga di allargare la colonna
+       della griglia e sfondare la pagina: senza, il contenuto spinge e la
+       barra laterale viene schiacciata. */
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.contenuto {
+    flex: 1;
+    width: 100%;
+    max-width: var(--larghezza-contenuto);
+    margin: 0 auto;
+    padding: var(--spazio-6);
+}
+
+/* Il primo collegamento della pagina, invisibile finche' non riceve il fuoco.
+   Serve a chi naviga da tastiera per saltare la barra laterale, che
+   altrimenti andrebbe attraversata da capo a ogni pagina. */
+.salta-al-contenuto {
+    position: absolute;
+    left: var(--spazio-2);
+    top: -100px;
+    z-index: var(--livello-notifiche);
+    padding: var(--spazio-2) var(--spazio-4);
+    background-color: var(--colore-accento);
+    color: var(--colore-testo-su-accento);
+    border-radius: var(--raggio-piccolo);
+    font-weight: 600;
+}
+
+.salta-al-contenuto:focus {
+    top: var(--spazio-2);
+}
+
+/* Intestazione di una pagina: titolo a sinistra, azioni a destra. */
+.testata {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--spazio-4);
+    flex-wrap: wrap;
+    margin-bottom: var(--spazio-6);
+}
+
+.testata h1 {
+    margin: 0;
+}
+
+.testata .sottotitolo {
+    margin: var(--spazio-1) 0 0 0;
+    color: var(--colore-testo-tenue);
+}
+
+.testata-azioni {
+    display: flex;
+    align-items: center;
+    gap: var(--spazio-2);
+    flex-wrap: wrap;
+}
+
+
+/* ==========================================================================
+   4. BARRA LATERALE
+   Icona piu' testo. Le voci non ancora realizzate ci sono ma sono spente:
+   dicono dove si sta andando senza far sbattere contro una pagina che non
+   esiste.
+   ========================================================================== */
+
+.barra-laterale {
+    position: sticky;
+    top: 0;
+    z-index: var(--livello-barra);
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
     background-color: var(--colore-superficie);
+    border-right: 1px solid var(--colore-bordo);
+    overflow: hidden;
+}
+
+.barra-laterale .marchio {
+    display: flex;
+    align-items: center;
+    gap: var(--spazio-3);
+    height: var(--altezza-barra-superiore);
+    flex: 0 0 var(--altezza-barra-superiore);
+    padding: 0 var(--spazio-4);
+    border-bottom: 1px solid var(--colore-bordo);
+    color: var(--colore-testo);
+    font-size: var(--testo-grande);
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+}
+
+.barra-laterale .marchio:hover {
+    text-decoration: none;
+}
+
+.barra-laterale .marchio .segno {
+    flex: 0 0 auto;
+    color: var(--colore-accento);
+}
+
+.menu {
+    flex: 1;
+    overflow-y: auto;
+    padding: var(--spazio-3) var(--spazio-2);
+}
+
+.menu-gruppo {
+    padding: var(--spazio-4) var(--spazio-3) var(--spazio-1);
+    color: var(--colore-testo-tenue);
+    font-size: var(--testo-piccolo);
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.menu-voce {
+    display: flex;
+    align-items: center;
+    gap: var(--spazio-3);
+    padding: var(--spazio-2) var(--spazio-3);
+    margin-bottom: var(--spazio-1);
+    border-radius: var(--raggio-piccolo);
+    color: var(--colore-testo);
+    white-space: nowrap;
+    transition: background-color var(--durata-veloce);
+}
+
+.menu-voce:hover {
+    background-color: var(--colore-superficie-sollevata);
+    text-decoration: none;
+}
+
+.menu-voce .icona {
+    flex: 0 0 20px;
+    color: var(--colore-testo-tenue);
+}
+
+/* La pagina in cui ci si trova adesso. Il segno non e' solo il colore: c'e'
+   anche la barretta a sinistra, perche' il colore da solo non basta a chi non
+   lo distingue. */
+.menu-voce--corrente {
+    background-color: var(--colore-superficie-sollevata);
+    box-shadow: inset 3px 0 0 var(--colore-accento);
+    font-weight: 600;
+}
+
+.menu-voce--corrente .icona {
+    color: var(--colore-accento);
+}
+
+/* Voce di una sezione non ancora realizzata. Nel template e' uno <span> e non
+   un <a>: non e' raggiungibile con la tastiera perche' non c'e' niente da
+   raggiungere. */
+.menu-voce--spenta {
+    color: var(--colore-testo-tenue);
+    cursor: not-allowed;
+}
+
+.menu-voce--spenta:hover {
+    background-color: transparent;
+}
+
+.menu-voce .in-arrivo {
+    margin-left: auto;
+    font-size: var(--testo-piccolo);
+    color: var(--colore-testo-tenue);
+}
+
+.barra-laterale .piede {
+    padding: var(--spazio-3) var(--spazio-4);
+    border-top: 1px solid var(--colore-bordo);
+    color: var(--colore-testo-tenue);
+    font-size: var(--testo-piccolo);
+    white-space: nowrap;
+}
+
+
+/* ==========================================================================
+   5. BARRA SUPERIORE
+   Chi sei, che ruolo hai, come si esce. Niente altro: la navigazione sta
+   tutta a sinistra.
+   ========================================================================== */
+
+.barra-superiore {
+    position: sticky;
+    top: 0;
+    z-index: var(--livello-barra);
+    display: flex;
+    align-items: center;
+    gap: var(--spazio-4);
+    height: var(--altezza-barra-superiore);
+    padding: 0 var(--spazio-6);
+    background-color: var(--colore-superficie);
+    border-bottom: 1px solid var(--colore-bordo);
+}
+
+.barra-superiore .titolo-sezione {
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.barra-superiore .chi-sono {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: var(--spazio-3);
+    min-width: 0;
+}
+
+.barra-superiore .nome {
+    display: block;
+    font-weight: 600;
+    line-height: 1.2;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.barra-superiore .ruolo {
+    display: block;
+    color: var(--colore-testo-tenue);
+    font-size: var(--testo-piccolo);
+    line-height: 1.2;
+}
+
+
+/* ==========================================================================
+   6. PULSANTI
+   Tre tinte e due misure. Primario uno solo per pagina: se ce ne sono tre,
+   nessuno dei tre e' l'azione principale.
+   ========================================================================== */
+
+.pulsante {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--spazio-2);
+    padding: var(--spazio-2) var(--spazio-4);
     border: 1px solid var(--colore-bordo);
-    border-top: 3px solid var(--colore-errore);
+    border-radius: var(--raggio-piccolo);
+    background-color: var(--colore-superficie-sollevata);
+    color: var(--colore-testo);
+    font-family: inherit;
+    font-size: var(--testo-normale);
+    font-weight: 600;
+    line-height: 1.4;
+    text-decoration: none;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: background-color var(--durata-veloce),
+                border-color var(--durata-veloce);
+}
+
+.pulsante:hover {
+    background-color: var(--colore-superficie-passaggio);
+    border-color: var(--colore-bordo-marcato);
+    text-decoration: none;
+}
+
+.pulsante:active {
+    /* Un pixel piu' in basso: e' il modo piu' economico di far sentire che il
+       pulsante e' stato premuto davvero. */
+    transform: translateY(1px);
+}
+
+.pulsante:disabled,
+.pulsante[aria-disabled="true"] {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+}
+
+/* L'azione principale della pagina: salva, entra, crea. */
+.pulsante--primario {
+    background-color: var(--colore-accento);
+    border-color: var(--colore-accento);
+    color: var(--colore-testo-su-accento);
+}
+
+.pulsante--primario:hover {
+    background-color: var(--colore-accento-scuro);
+    border-color: var(--colore-accento-scuro);
+}
+
+/* Le azioni che tolgono qualcosa: disattiva, revoca, chiudi le sessioni. In
+   Aurora non esiste "cancella" (CLAUDE.md, regola 5), ma esiste "disattiva",
+   e va guardata due volte prima di premerla. */
+.pulsante--pericolo {
+    background-color: var(--colore-errore);
+    border-color: var(--colore-errore);
+    color: var(--colore-testo-su-accento);
+}
+
+.pulsante--pericolo:hover {
+    background-color: var(--colore-errore);
+    border-color: var(--colore-testo-su-accento);
+}
+
+/* Un pulsante che non sembra un pulsante: per le azioni di contorno dentro
+   una riga di tabella o una barra di strumenti. */
+.pulsante--piatto {
+    background-color: transparent;
+    border-color: transparent;
+}
+
+.pulsante--piatto:hover {
+    background-color: var(--colore-superficie-sollevata);
+    border-color: var(--colore-bordo);
+}
+
+.pulsante--piccolo {
+    padding: var(--spazio-1) var(--spazio-3);
+    font-size: var(--testo-piccolo);
+}
+
+/* Occupa tutta la larghezza del contenitore: il pulsante "Entra" del modulo
+   di accesso, o quello in fondo a un riquadro stretto. */
+.pulsante--largo {
+    width: 100%;
+}
+
+/* Piu' pulsanti in fila, con lo stesso respiro fra l'uno e l'altro. */
+.fila-pulsanti {
+    display: flex;
+    align-items: center;
+    gap: var(--spazio-2);
+    flex-wrap: wrap;
+}
+
+/* Un modulo che deve stare in fila con altri invece di andare a capo: i
+   pulsanti dentro le righe di una tabella, l'uscita nella barra superiore. */
+.modulo-in-linea {
+    display: inline-flex;
+    margin: 0;
+}
+
+
+/* ==========================================================================
+   7. MODULI
+   Ogni campo ha la sua etichetta collegata con "for". Non si usano etichette
+   finte messe dentro il campo (il "placeholder" come etichetta): spariscono
+   appena si comincia a scrivere, e chi si distrae non sa piu' che cosa stava
+   compilando.
+   ========================================================================== */
+
+.modulo {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spazio-5);
+}
+
+/* Due campi affiancati quando c'e' spazio, uno sotto l'altro quando non ce
+   n'e': nome e cognome, citta' e provincia. */
+.modulo-riga {
+    display: flex;
+    gap: var(--spazio-4);
+    flex-wrap: wrap;
+}
+
+.modulo-riga > .campo {
+    flex: 1 1 220px;
+}
+
+.campo {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spazio-2);
+}
+
+.campo-etichetta {
+    font-weight: 600;
+    color: var(--colore-testo);
+}
+
+/* L'asterisco degli obbligatori. Il testo fra parentesi non e' decorativo: e'
+   quello che sentono i lettori di schermo, per i quali un asterisco da solo
+   non vuol dire niente. */
+.campo-etichetta .obbligatorio {
+    color: var(--colore-errore);
+    margin-left: var(--spazio-1);
+}
+
+.campo-controllo,
+input[type="text"],
+input[type="password"],
+input[type="email"],
+input[type="search"],
+input[type="number"],
+input[type="date"],
+textarea,
+select {
+    width: 100%;
+    padding: var(--spazio-2) var(--spazio-3);
+    background-color: var(--colore-sfondo);
+    border: 1px solid var(--colore-bordo);
+    border-radius: var(--raggio-piccolo);
+    color: var(--colore-testo);
+    font-family: inherit;
+    font-size: var(--testo-normale);
+    line-height: 1.5;
+    transition: border-color var(--durata-veloce);
+}
+
+.campo-controllo:hover,
+input:hover,
+textarea:hover,
+select:hover {
+    border-color: var(--colore-bordo-marcato);
+}
+
+.campo-controllo::placeholder,
+input::placeholder,
+textarea::placeholder {
+    color: var(--colore-testo-tenue);
+}
+
+textarea {
+    min-height: 96px;
+    resize: vertical;
+}
+
+/* La freccia del menu a tendina la disegna il sistema operativo: nessuna
+   immagine da servire, e resta quella che l'utente riconosce. */
+select {
+    cursor: pointer;
+}
+
+/* I campi che contengono un codice si leggono in monospazio.
+
+   La classe e' ripetuta due volte di proposito. Il carattere dei campi e'
+   dichiarato poco piu' sopra su un selettore che comprende input[type="text"],
+   e un selettore con un attributo pesa piu' di una classe sola: scritta una
+   volta, questa regola non vincerebbe e il campo resterebbe a carattere
+   normale. Con la classe ripetuta pesa di piu' e vince. */
+.campo-controllo.campo-controllo--codice {
+    font-family: var(--carattere-mono);
+    letter-spacing: 0.02em;
+}
+
+/* La riga sotto il campo: a che cosa serve, come va scritto. */
+.campo-aiuto {
+    color: var(--colore-testo-tenue);
+    font-size: var(--testo-piccolo);
+}
+
+/* L'errore di validazione. Il campo diventa rosso E compare la riga scritta:
+   il colore da solo non basta. */
+.campo-errore {
+    display: flex;
+    align-items: center;
+    gap: var(--spazio-2);
+    color: var(--colore-errore);
+    font-size: var(--testo-piccolo);
+    font-weight: 600;
+}
+
+.campo--con-errore .campo-controllo,
+.campo--con-errore input,
+.campo--con-errore textarea,
+.campo--con-errore select {
+    border-color: var(--colore-errore);
+}
+
+/* Casella di spunta e pallino di scelta: il quadratino resta quello del
+   sistema, tinto con l'accento. Ridisegnarlo a mano vorrebbe dire perdere il
+   comportamento da tastiera che ha gia'. */
+.campo-spunta {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--spazio-3);
+    cursor: pointer;
+}
+
+.campo-spunta input[type="checkbox"],
+.campo-spunta input[type="radio"] {
+    width: 16px;
+    height: 16px;
+    margin: 3px 0 0 0;
+    flex: 0 0 auto;
+    accent-color: var(--colore-accento);
+    cursor: pointer;
+}
+
+.campo-spunta .testo {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spazio-1);
+}
+
+.campo-spunta .campo-aiuto {
+    margin: 0;
+}
+
+/* Un riquadro di campi con il suo titolo: "Dati anagrafici", "Accesso". */
+fieldset.gruppo-campi {
+    margin: 0;
+    padding: var(--spazio-5);
+    border: 1px solid var(--colore-bordo);
     border-radius: var(--raggio);
 }
 
-.pagina-errore .codice {
-    margin: 0;
-    font-size: 48px;
+fieldset.gruppo-campi legend {
+    padding: 0 var(--spazio-2);
     font-weight: 600;
-    line-height: 1;
+}
+
+/* La riga in fondo al modulo, con l'azione principale e l'annulla. */
+.modulo-azioni {
+    display: flex;
+    align-items: center;
+    gap: var(--spazio-3);
+    flex-wrap: wrap;
+    padding-top: var(--spazio-2);
+}
+
+
+/* ==========================================================================
+   8. TABELLE
+   Sono il componente piu' importante del programma: gli elenchi di prodotti,
+   documenti e progetti si guardano tutto il giorno. Intestazione che resta
+   ferma mentre si scorre, righe alternate, e una riga sola quando non c'e'
+   niente da mostrare.
+   ========================================================================== */
+
+/* Il contenitore che scorre in orizzontale. Serve sempre: una tabella con
+   dodici colonne su uno schermo stretto deve scorrere per conto suo, non
+   allargare la pagina. */
+.tabella-contenitore {
+    width: 100%;
+    max-height: 70vh;
+    overflow: auto;
+    background-color: var(--colore-superficie);
+    border: 1px solid var(--colore-bordo);
+    border-radius: var(--raggio);
+}
+
+.tabella {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: var(--testo-normale);
+}
+
+.tabella thead th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    padding: var(--spazio-3) var(--spazio-4);
+    background-color: var(--colore-superficie-sollevata);
+    border-bottom: 1px solid var(--colore-bordo);
+    color: var(--colore-testo-tenue);
+    font-size: var(--testo-piccolo);
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    text-align: left;
+    white-space: nowrap;
+}
+
+.tabella tbody td {
+    padding: var(--spazio-3) var(--spazio-4);
+    border-bottom: 1px solid var(--colore-bordo-tenue);
+    vertical-align: middle;
+}
+
+.tabella tbody tr:nth-child(even) {
+    background-color: var(--colore-riga-alterna);
+}
+
+.tabella tbody tr:hover {
+    background-color: var(--colore-superficie-passaggio);
+}
+
+.tabella tbody tr:last-child td {
+    border-bottom: 0;
+}
+
+/* Colonne particolari, dichiarate sulla cella. */
+.tabella .colonna-numero {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+.tabella .colonna-codice {
+    font-family: var(--carattere-mono);
+    white-space: nowrap;
+}
+
+.tabella .colonna-azioni {
+    text-align: right;
+    white-space: nowrap;
+}
+
+/* L'intestazione su cui si puo' ordinare e' un collegamento: l'ordinamento lo
+   fa il server, cosi' funziona anche senza JavaScript e resta nell'indirizzo
+   (si puo' mandare a un collega). */
+.tabella .ordina {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spazio-1);
+    color: var(--colore-testo-tenue);
+}
+
+.tabella .ordina:hover {
+    color: var(--colore-testo);
+    text-decoration: none;
+}
+
+.tabella .ordina .freccia {
+    font-size: 10px;
+    /* La freccia della colonna non ordinata resta al suo posto ma non si
+       vede: cosi' l'intestazione non balla quando si cambia ordinamento. */
+    opacity: 0;
+}
+
+.tabella .ordina--attivo {
+    color: var(--colore-accento);
+}
+
+.tabella .ordina--attivo .freccia {
+    opacity: 1;
+}
+
+/* La riga che dice che non c'e' niente. Non e' un caso raro: un elenco appena
+   filtrato e' vuoto quasi sempre. */
+.tabella .riga-vuota td {
+    padding: var(--spazio-10) var(--spazio-4);
+    text-align: center;
+    color: var(--colore-testo-tenue);
+}
+
+/* Il conteggio sopra o sotto la tabella: "37 prodotti". */
+.tabella-riepilogo {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--spazio-4);
+    flex-wrap: wrap;
+    margin-top: var(--spazio-3);
+    color: var(--colore-testo-tenue);
+    font-size: var(--testo-piccolo);
+}
+
+
+/* ==========================================================================
+   9. ETICHETTE DI STATO
+   Una parola dentro una pillola tinta. Le tinte degli stati del ciclo di vita
+   sono fissate nelle variabili: lo stesso stato ha lo stesso colore in ogni
+   pagina, per sempre.
+   ========================================================================== */
+
+.etichetta {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spazio-2);
+    padding: 2px var(--spazio-3);
+    border: 1px solid transparent;
+    border-radius: 999px;
+    background-color: var(--fondo-neutro);
+    color: var(--colore-testo-tenue);
+    font-size: var(--testo-piccolo);
+    font-weight: 600;
+    line-height: 1.6;
+    white-space: nowrap;
+}
+
+/* Il pallino davanti al testo. Ripete il colore, ma il testo dell'etichetta
+   dice comunque tutto: chi non distingue le tinte legge la parola. */
+.etichetta::before {
+    content: "";
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background-color: currentColor;
+    flex: 0 0 auto;
+}
+
+/* Senza pallino: per le etichette che non sono stati (un conteggio, una sigla). */
+.etichetta--semplice::before {
+    display: none;
+}
+
+/* --- I cinque stati del ciclo di vita di una versione ------------------- */
+
+.etichetta--in-sviluppo {
+    background-color: var(--stato-in-sviluppo-fondo);
+    border-color: var(--stato-in-sviluppo);
+    color: var(--stato-in-sviluppo);
+}
+
+.etichetta--rilasciato {
+    background-color: var(--stato-rilasciato-fondo);
+    border-color: var(--stato-rilasciato);
+    color: var(--stato-rilasciato);
+}
+
+.etichetta--in-produzione {
+    background-color: var(--stato-in-produzione-fondo);
+    border-color: var(--stato-in-produzione);
+    color: var(--stato-in-produzione);
+}
+
+.etichetta--superato {
+    background-color: var(--stato-superato-fondo);
+    border-color: var(--stato-superato);
+    color: var(--stato-superato);
+}
+
+.etichetta--obsoleto {
+    background-color: var(--stato-obsoleto-fondo);
+    border-color: var(--stato-obsoleto);
+    color: var(--stato-obsoleto);
+}
+
+/* --- Le quattro tinte di servizio, per tutto il resto ------------------- */
+
+.etichetta--accento {
+    background-color: var(--fondo-accento);
+    border-color: var(--colore-accento);
+    color: var(--colore-accento);
+}
+
+.etichetta--successo {
+    background-color: var(--fondo-successo);
+    border-color: var(--colore-successo);
+    color: var(--colore-successo);
+}
+
+.etichetta--attenzione {
+    background-color: var(--fondo-attenzione);
+    border-color: var(--colore-attenzione);
+    color: var(--colore-attenzione);
+}
+
+.etichetta--errore {
+    background-color: var(--fondo-errore);
+    border-color: var(--colore-errore);
     color: var(--colore-errore);
 }
 
-.pagina-errore h1 {
-    margin: 8px 0 var(--spazio) 0;
-    font-size: 22px;
+
+/* ==========================================================================
+   10. RIQUADRI
+   Il contenitore di tutto: un riquadro raccoglie una cosa sola e la stacca
+   dal fondo.
+   ========================================================================== */
+
+.riquadro {
+    background-color: var(--colore-superficie);
+    border: 1px solid var(--colore-bordo);
+    border-radius: var(--raggio);
+    box-shadow: var(--ombra-1);
+}
+
+.riquadro-testata {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--spazio-4);
+    padding: var(--spazio-4) var(--spazio-5);
+    border-bottom: 1px solid var(--colore-bordo);
+}
+
+.riquadro-testata h2,
+.riquadro-testata h3 {
+    margin: 0;
+    font-size: var(--testo-grande);
+}
+
+.riquadro-corpo {
+    padding: var(--spazio-5);
+}
+
+/* Un riquadro che contiene solo una tabella non ha padding: il bordo della
+   tabella e' gia' quello del riquadro. */
+.riquadro-corpo--nudo {
+    padding: 0;
+}
+
+.riquadro-piede {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--spazio-2);
+    padding: var(--spazio-3) var(--spazio-5);
+    border-top: 1px solid var(--colore-bordo);
+    background-color: var(--colore-superficie-sollevata);
+    border-radius: 0 0 var(--raggio) var(--raggio);
+}
+
+/* Riquadri affiancati che vanno a capo da soli quando lo spazio finisce. */
+.griglia-riquadri {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: var(--spazio-4);
+}
+
+
+/* ==========================================================================
+   11. FINESTRE DI DIALOGO
+   Si usa l'elemento <dialog> del browser: porta gia' il fuoco dentro la
+   finestra, lo tiene li' finche' e' aperta, chiude con Esc e restituisce il
+   fuoco a chi l'aveva aperta. Rifarlo a mano vorrebbe dire rifare tutto
+   questo, peggio.
+
+   ATTENZIONE. Una finestra modale ha bisogno di JavaScript per aprirsi. Non
+   ci si mette dentro niente di indispensabile: le operazioni che devono
+   funzionare sempre restano moduli normali su una pagina propria.
+   ========================================================================== */
+
+.dialogo {
+    width: min(520px, calc(100vw - var(--spazio-8)));
+    padding: 0;
+    background-color: var(--colore-superficie);
+    border: 1px solid var(--colore-bordo);
+    border-radius: var(--raggio);
+    box-shadow: var(--ombra-2);
+    color: var(--colore-testo);
+}
+
+.dialogo::backdrop {
+    background-color: var(--velo-dialogo);
+}
+
+.dialogo-testata {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--spazio-4);
+    padding: var(--spazio-4) var(--spazio-5);
+    border-bottom: 1px solid var(--colore-bordo);
+}
+
+.dialogo-testata h2 {
+    margin: 0;
+    font-size: var(--testo-grande);
+}
+
+.dialogo-corpo {
+    padding: var(--spazio-5);
+}
+
+.dialogo-corpo p:last-child {
+    margin-bottom: 0;
+}
+
+.dialogo-piede {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--spazio-2);
+    padding: var(--spazio-3) var(--spazio-5);
+    border-top: 1px solid var(--colore-bordo);
+    background-color: var(--colore-superficie-sollevata);
+    border-radius: 0 0 var(--raggio) var(--raggio);
+}
+
+/* La crocetta in alto a destra. Ha un testo per i lettori di schermo. */
+.dialogo-chiudi {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: 0;
+    border-radius: var(--raggio-piccolo);
+    background-color: transparent;
+    color: var(--colore-testo-tenue);
+    font-size: var(--testo-grande);
+    line-height: 1;
+    cursor: pointer;
+}
+
+.dialogo-chiudi:hover {
+    background-color: var(--colore-superficie-passaggio);
+    color: var(--colore-testo);
+}
+
+
+/* ==========================================================================
+   12. NOTIFICHE TEMPORANEE
+   L'esito di un'operazione appena fatta: "Utente creato", "Password
+   riassegnata". Compaiono in basso a destra e se ne vanno da sole.
+
+   Non ci si mette dentro niente che serva davvero: se un messaggio deve
+   essere letto per forza, va scritto nella pagina, non in una nuvoletta che
+   sparisce.
+   ========================================================================== */
+
+.notifiche {
+    position: fixed;
+    right: var(--spazio-5);
+    bottom: var(--spazio-5);
+    z-index: var(--livello-notifiche);
+    display: flex;
+    flex-direction: column;
+    gap: var(--spazio-2);
+    width: min(380px, calc(100vw - var(--spazio-10)));
+    /* Il contenitore c'e' sempre ma non deve intercettare i clic quando e'
+       vuoto: se lo facesse, coprirebbe l'angolo della pagina per sempre. */
+    pointer-events: none;
+}
+
+.notifica {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--spazio-3);
+    padding: var(--spazio-3) var(--spazio-4);
+    background-color: var(--colore-superficie-sollevata);
+    border: 1px solid var(--colore-bordo);
+    border-left: 3px solid var(--colore-accento);
+    border-radius: var(--raggio-piccolo);
+    box-shadow: var(--ombra-2);
+    pointer-events: auto;
+    animation: notifica-entra var(--durata) ease-out;
+}
+
+@keyframes notifica-entra {
+    from { opacity: 0; transform: translateY(var(--spazio-3)); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+.notifica--successo { border-left-color: var(--colore-successo); }
+.notifica--attenzione { border-left-color: var(--colore-attenzione); }
+.notifica--errore { border-left-color: var(--colore-errore); }
+
+.notifica .testo {
+    flex: 1;
+    min-width: 0;
+}
+
+.notifica .titolo {
     font-weight: 600;
 }
 
-.pagina-errore p {
-    margin: 0 0 var(--spazio) 0;
+.notifica .dettaglio {
+    color: var(--colore-testo-tenue);
+    font-size: var(--testo-piccolo);
+}
+
+.notifica .chiudi {
+    flex: 0 0 auto;
+    padding: 0 var(--spazio-1);
+    border: 0;
+    background: transparent;
+    color: var(--colore-testo-tenue);
+    font-size: var(--testo-grande);
+    line-height: 1;
+    cursor: pointer;
+}
+
+.notifica .chiudi:hover {
+    color: var(--colore-testo);
+}
+
+/* La classe che aggiunge lo script prima di togliere la notifica dalla
+   pagina: senza, sparirebbe di scatto. */
+.notifica--in-uscita {
+    opacity: 0;
+    transform: translateY(var(--spazio-2));
+    transition: opacity var(--durata), transform var(--durata);
+}
+
+
+/* ==========================================================================
+   13. BARRA DI RICERCA
+   Un modulo GET, sempre. Cosi' la ricerca fatta resta nell'indirizzo: si
+   aggiunge ai preferiti, si manda a un collega, si ritrova nella cronologia.
+   ========================================================================== */
+
+.ricerca {
+    display: flex;
+    align-items: center;
+    gap: var(--spazio-2);
+    flex-wrap: wrap;
+}
+
+.ricerca-campo {
+    position: relative;
+    flex: 1 1 260px;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+}
+
+.ricerca-campo .icona {
+    position: absolute;
+    left: var(--spazio-3);
+    color: var(--colore-testo-tenue);
+    pointer-events: none;
+}
+
+.ricerca-campo input {
+    padding-left: var(--spazio-10);
+}
+
+.ricerca-filtri {
+    display: flex;
+    align-items: center;
+    gap: var(--spazio-2);
+    flex-wrap: wrap;
+}
+
+.ricerca-filtri select {
+    width: auto;
+    min-width: 150px;
+}
+
+
+/* ==========================================================================
+   14. IMPAGINAZIONE
+   Collegamenti veri, non pulsanti: si aprono in una scheda nuova, si copiano,
+   funzionano senza JavaScript.
+   ========================================================================== */
+
+.impaginazione {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--spazio-1);
+    flex-wrap: wrap;
+    margin-top: var(--spazio-5);
+}
+
+.impaginazione-voce {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 34px;
+    height: 34px;
+    padding: 0 var(--spazio-2);
+    border: 1px solid var(--colore-bordo);
+    border-radius: var(--raggio-piccolo);
+    background-color: var(--colore-superficie);
+    color: var(--colore-testo);
+    font-variant-numeric: tabular-nums;
+}
+
+.impaginazione-voce:hover {
+    background-color: var(--colore-superficie-passaggio);
+    text-decoration: none;
+}
+
+.impaginazione-voce--corrente {
+    background-color: var(--colore-accento);
+    border-color: var(--colore-accento);
+    color: var(--colore-testo-su-accento);
+    font-weight: 600;
+}
+
+.impaginazione-voce--corrente:hover {
+    background-color: var(--colore-accento);
+}
+
+/* Il "precedente" quando si e' sulla prima pagina: c'e' ma non si preme. E'
+   uno <span>, quindi la tastiera non ci passa nemmeno sopra. */
+.impaginazione-voce--spenta {
+    color: var(--colore-testo-tenue);
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.impaginazione-salto {
+    padding: 0 var(--spazio-1);
+    color: var(--colore-testo-tenue);
+}
+
+.impaginazione-conteggio {
+    margin-left: var(--spazio-3);
+    color: var(--colore-testo-tenue);
+    font-size: var(--testo-piccolo);
+}
+
+
+/* ==========================================================================
+   15. SCHEDE
+   Realizzate con pallini di scelta nascosti e le loro etichette: cosi'
+   funzionano senza JavaScript e la tastiera ci si muove gia' dentro con le
+   frecce, che e' esattamente il comportamento che ci si aspetta.
+
+   Per le schede che portano a pagine diverse si usano invece collegamenti
+   normali con la classe .schede-collegamenti.
+   ========================================================================== */
+
+.schede {
+    display: flex;
+    flex-wrap: wrap;
+}
+
+.schede > input[type="radio"] {
+    /* Nascosto alla vista ma non alla tastiera e ai lettori di schermo:
+       display:none lo toglierebbe anche a loro. */
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.schede > label {
+    order: -1;
+    padding: var(--spazio-3) var(--spazio-4);
+    border-bottom: 2px solid transparent;
+    color: var(--colore-testo-tenue);
+    font-weight: 600;
+    cursor: pointer;
+    transition: color var(--durata-veloce);
+}
+
+.schede > label:hover {
+    color: var(--colore-testo);
+}
+
+/* La riga sotto tutte le linguette. Si disegna sull'elenco, non su ciascuna:
+   cosi' e' continua anche dove non ci sono linguette. */
+.schede::before {
+    content: "";
+    order: -1;
+    width: 100%;
+    height: 0;
+    border-bottom: 1px solid var(--colore-bordo);
+    /* Si mette sotto le linguette spostandola su di un pixel: il bordo della
+       linguetta scelta la copre. */
+    margin-bottom: -1px;
+    align-self: flex-end;
+}
+
+.schede > .scheda-corpo {
+    display: none;
+    width: 100%;
+    padding-top: var(--spazio-5);
+}
+
+.schede > input[type="radio"]:checked + label {
+    color: var(--colore-testo);
+    border-bottom-color: var(--colore-accento);
+}
+
+.schede > input[type="radio"]:checked + label + .scheda-corpo {
+    display: block;
+}
+
+.schede > input[type="radio"]:focus-visible + label {
+    outline: 2px solid var(--colore-accento);
+    outline-offset: -2px;
+    border-radius: var(--raggio-piccolo);
+}
+
+/* Schede che sono collegamenti a pagine diverse. */
+.schede-collegamenti {
+    display: flex;
+    gap: var(--spazio-1);
+    flex-wrap: wrap;
+    border-bottom: 1px solid var(--colore-bordo);
+    margin-bottom: var(--spazio-5);
+}
+
+.schede-collegamenti a {
+    padding: var(--spazio-3) var(--spazio-4);
+    border-bottom: 2px solid transparent;
+    color: var(--colore-testo-tenue);
+    font-weight: 600;
+    margin-bottom: -1px;
+}
+
+.schede-collegamenti a:hover {
+    color: var(--colore-testo);
+    text-decoration: none;
+}
+
+.schede-collegamenti a[aria-current="page"] {
+    color: var(--colore-testo);
+    border-bottom-color: var(--colore-accento);
+}
+
+
+/* ==========================================================================
+   16. BARRA DI AVANZAMENTO DELLE FASI
+   Le fasi di un progetto in fila da sinistra a destra: quelle fatte, quella
+   in corso, quelle che devono venire. Serve a rispondere in un colpo d'occhio
+   alla domanda che tutti fanno: "a che punto siamo?".
+   ========================================================================== */
+
+.avanzamento {
+    display: flex;
+    align-items: flex-start;
+    gap: 0;
+    overflow-x: auto;
+    padding: var(--spazio-2) 0;
+    list-style: none;
+    margin: 0;
+}
+
+.avanzamento-fase {
+    position: relative;
+    flex: 1 1 0;
+    min-width: 120px;
+    padding: 0 var(--spazio-2);
+    text-align: center;
+}
+
+/* Il filo che unisce una fase alla successiva. Parte da meta' del pallino di
+   questa e arriva a meta' del pallino della prossima. */
+.avanzamento-fase::before {
+    content: "";
+    position: absolute;
+    top: 13px;
+    left: -50%;
+    width: 100%;
+    height: 2px;
+    background-color: var(--colore-bordo);
+}
+
+.avanzamento-fase:first-child::before {
+    display: none;
+}
+
+.avanzamento-pallino {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border: 2px solid var(--colore-bordo);
+    border-radius: 50%;
+    background-color: var(--colore-superficie);
+    color: var(--colore-testo-tenue);
+    font-size: var(--testo-piccolo);
+    font-weight: 600;
+}
+
+.avanzamento-nome {
+    display: block;
+    margin-top: var(--spazio-2);
+    color: var(--colore-testo-tenue);
+    font-size: var(--testo-piccolo);
+}
+
+.avanzamento-data {
+    display: block;
+    color: var(--colore-testo-tenue);
+    font-size: var(--testo-piccolo);
+    opacity: 0.8;
+}
+
+/* Fase conclusa: pallino pieno e filo acceso. */
+.avanzamento-fase--conclusa::before {
+    background-color: var(--colore-successo);
+}
+
+.avanzamento-fase--conclusa .avanzamento-pallino {
+    background-color: var(--colore-successo);
+    border-color: var(--colore-successo);
+    color: var(--colore-testo-su-accento);
+}
+
+.avanzamento-fase--conclusa .avanzamento-nome {
+    color: var(--colore-testo);
+}
+
+/* Fase in corso: pallino con l'accento e un alone, nome in evidenza. */
+.avanzamento-fase--corrente .avanzamento-pallino {
+    border-color: var(--colore-accento);
+    color: var(--colore-accento);
+    box-shadow: 0 0 0 4px var(--fondo-accento);
+}
+
+.avanzamento-fase--corrente .avanzamento-nome {
+    color: var(--colore-testo);
+    font-weight: 600;
+}
+
+/* Fase bloccata o respinta: si distingue dal colore e dal punto esclamativo
+   che il template mette dentro il pallino. */
+.avanzamento-fase--ferma .avanzamento-pallino {
+    border-color: var(--colore-attenzione);
+    color: var(--colore-attenzione);
+}
+
+
+/* ==========================================================================
+   17. ELENCO DESCRITTIVO
+   Etichetta a sinistra, valore a destra. E' la scheda di dettaglio di
+   qualunque cosa: un prodotto, un utente, un documento.
+   ========================================================================== */
+
+.descrizione {
+    display: grid;
+    /* La colonna delle etichette prende quello che le serve, ma non oltre 200
+       pixel: con un minimo fisso, dentro un riquadro stretto si mangerebbe
+       meta' dello spazio e i valori andrebbero a capo a ogni parola. */
+    grid-template-columns: fit-content(200px) 1fr;
+    gap: var(--spazio-3) var(--spazio-5);
+    margin: 0;
+}
+
+.descrizione dt {
+    color: var(--colore-testo-tenue);
+    font-size: var(--testo-piccolo);
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    padding-top: 2px;
+}
+
+.descrizione dd {
+    margin: 0;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+/* Una riga sotto ogni coppia: serve quando le voci sono tante e l'occhio si
+   perde fra una riga e l'altra. */
+.descrizione--righe dt,
+.descrizione--righe dd {
+    padding-bottom: var(--spazio-3);
+    border-bottom: 1px solid var(--colore-bordo-tenue);
+}
+
+/* Una sola colonna: dentro un riquadro stretto o una colonna laterale. */
+.descrizione--stretta {
+    grid-template-columns: 1fr;
+    gap: var(--spazio-1);
+}
+
+.descrizione--stretta dd {
+    margin-bottom: var(--spazio-3);
+}
+
+
+/* ==========================================================================
+   18. AREA DI TRASCINAMENTO FILE
+   Il campo file vero c'e' sempre e funziona da solo: il trascinamento e' un
+   di piu' che lo script aggiunge quando puo'. Senza JavaScript resta un
+   normale "Scegli file", e i documenti si caricano lo stesso.
+   ========================================================================== */
+
+.area-file {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--spazio-3);
+    padding: var(--spazio-8) var(--spazio-5);
+    border: 2px dashed var(--colore-bordo);
+    border-radius: var(--raggio);
+    background-color: var(--colore-superficie);
+    text-align: center;
+    transition: border-color var(--durata-veloce),
+                background-color var(--durata-veloce);
+}
+
+.area-file .icona {
+    color: var(--colore-testo-tenue);
+}
+
+.area-file .istruzione {
+    font-weight: 600;
+}
+
+.area-file .dettaglio {
+    color: var(--colore-testo-tenue);
+    font-size: var(--testo-piccolo);
+}
+
+/* Mentre si tiene un file sopra l'area. La classe la mette lo script. */
+.area-file--pronta {
+    border-color: var(--colore-accento);
+    background-color: var(--fondo-accento);
+}
+
+/* L'elenco dei file scelti, che compare sotto l'area. */
+.area-file-elenco {
+    margin: var(--spazio-3) 0 0 0;
+    padding: 0;
+    list-style: none;
+    width: 100%;
+    text-align: left;
+}
+
+.area-file-elenco li {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--spazio-3);
+    padding: var(--spazio-2) var(--spazio-3);
+    border: 1px solid var(--colore-bordo);
+    border-radius: var(--raggio-piccolo);
+    background-color: var(--colore-superficie-sollevata);
+    margin-bottom: var(--spazio-2);
+}
+
+.area-file-elenco .peso {
+    color: var(--colore-testo-tenue);
+    font-size: var(--testo-piccolo);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+
+/* ==========================================================================
+   19. RIQUADRO VUOTO
+   Quando non c'e' niente da mostrare. Dice sempre due cose: perche' e' vuoto
+   e che cosa si puo' fare adesso. Un elenco vuoto senza spiegazione sembra un
+   guasto.
+   ========================================================================== */
+
+.vuoto {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--spazio-3);
+    padding: var(--spazio-12) var(--spazio-6);
+    border: 1px dashed var(--colore-bordo);
+    border-radius: var(--raggio);
+    background-color: var(--colore-superficie);
+    text-align: center;
+}
+
+.vuoto .icona {
+    color: var(--colore-testo-tenue);
+    opacity: 0.7;
+}
+
+.vuoto h3 {
+    margin: 0;
+    font-size: var(--testo-grande);
+}
+
+.vuoto p {
+    margin: 0;
+    max-width: 46ch;
+    color: var(--colore-testo-tenue);
+}
+
+
+/* ==========================================================================
+   20. AVVISI IN LINEA
+   Il messaggio che riguarda tutta la pagina e deve restare li': l'errore di
+   un modulo, la spiegazione del cambio password obbligatorio, la conferma di
+   un'operazione appena fatta.
+
+   A differenza delle notifiche temporanee, questi non se ne vanno.
+   ========================================================================== */
+
+.avviso {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--spazio-3);
+    padding: var(--spazio-3) var(--spazio-4);
+    margin-bottom: var(--spazio-5);
+    background-color: var(--colore-superficie);
+    border: 1px solid var(--colore-bordo);
+    border-left: 3px solid var(--colore-accento);
+    border-radius: var(--raggio-piccolo);
+}
+
+.avviso p:last-child {
+    margin-bottom: 0;
+}
+
+.avviso .icona {
+    flex: 0 0 auto;
+    margin-top: 2px;
+    color: var(--colore-accento);
+}
+
+.avviso--successo {
+    background-color: var(--fondo-successo);
+    border-color: var(--colore-successo);
+}
+
+.avviso--successo .icona { color: var(--colore-successo); }
+
+.avviso--attenzione {
+    background-color: var(--fondo-attenzione);
+    border-color: var(--colore-attenzione);
+}
+
+.avviso--attenzione .icona { color: var(--colore-attenzione); }
+
+.avviso--errore {
+    background-color: var(--fondo-errore);
+    border-color: var(--colore-errore);
+}
+
+.avviso--errore .icona { color: var(--colore-errore); }
+
+
+/* ==========================================================================
+   21. UTILITA'
+   Poche e con un nome che dice a che servono. Non e' un sistema di classi
+   utilitarie: se serve la quinta variante di una spaziatura, quasi sempre
+   vuol dire che serve un componente.
+   ========================================================================== */
+
+/* Visibile ai lettori di schermo, invisibile agli occhi. Serve alle etichette
+   dei campi che sullo schermo si capiscono dal contesto (la casella di
+   ricerca) ma che ad alta voce vanno nominate. */
+.solo-lettura-vocale {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+}
+
+.testo-tenue {
+    color: var(--colore-testo-tenue);
+}
+
+.testo-piccolo {
+    font-size: var(--testo-piccolo);
+}
+
+/* Codici prodotto, codici articolo, nomi utente, impronte. */
+.mono {
+    font-family: var(--carattere-mono);
+    letter-spacing: 0.02em;
+}
+
+/* Il codice dentro una riga di testo: un po' di fondo per staccarlo. */
+.codice {
+    padding: 1px var(--spazio-2);
+    background-color: var(--colore-superficie-sollevata);
+    border: 1px solid var(--colore-bordo);
+    border-radius: var(--raggio-piccolo);
+    font-family: var(--carattere-mono);
+    color: var(--colore-testo);
+}
+
+.impila {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spazio-5);
+}
+
+.affianca {
+    display: flex;
+    align-items: center;
+    gap: var(--spazio-3);
+    flex-wrap: wrap;
+}
+
+.spinge-a-destra {
+    margin-left: auto;
+}
+
+/* Un po' di aria sopra: la riga di spiegazione sotto un pulsante, una nota in
+   fondo a un riquadro. Esiste per non dover scrivere uno style="" dentro un
+   template, che e' il primo passo verso i colori sparsi. */
+.margine-sopra {
+    margin-top: var(--spazio-4);
+}
+
+/* La larghezza giusta per un modulo: oltre i 640 pixel una riga di campi
+   diventa un tiro all'orizzonte e l'occhio si perde. */
+.colonna-stretta {
+    max-width: 640px;
+}
+
+
+/* ==========================================================================
+   22. PAGINE SENZA IMPALCATURA
+   Accesso ed errori: non hanno barra laterale ne' barra superiore, perche' o
+   non si e' ancora entrati o non si e' arrivati da nessuna parte.
+   ========================================================================== */
+
+.pagina-centrata {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    padding: var(--spazio-6);
+}
+
+.pagina-centrata .riquadro {
+    width: 100%;
+    max-width: 420px;
+}
+
+.pagina-centrata .marchio {
+    display: flex;
+    align-items: center;
+    gap: var(--spazio-3);
+    margin-bottom: var(--spazio-6);
+    color: var(--colore-testo);
+    font-size: var(--testo-titolo);
+    font-weight: 600;
+    letter-spacing: 0.02em;
+}
+
+.pagina-centrata .marchio .segno {
+    color: var(--colore-accento);
+}
+
+.pagina-centrata .piede-pagina {
+    margin-top: var(--spazio-6);
+    color: var(--colore-testo-tenue);
+    font-size: var(--testo-piccolo);
+    text-align: center;
+}
+
+/* --- Pagina di errore, 404 e accesso negato ---------------------------- */
+
+.pagina-errore {
+    width: 100%;
+    max-width: 560px;
+    padding: var(--spazio-8);
+    background-color: var(--colore-superficie);
+    border: 1px solid var(--colore-bordo);
+    border-radius: var(--raggio);
+    box-shadow: var(--ombra-1);
+}
+
+/* Il numero dell'errore, grande. Il colore lo da' la classe aggiunta dal
+   template: rosso per i guasti veri, giallo per i "non e' roba tua", tenue
+   per gli indirizzi sbagliati, che non sono colpa di nessuno. */
+.pagina-errore .numero {
+    margin: 0;
+    font-family: var(--carattere-mono);
+    font-size: 56px;
+    font-weight: 600;
+    line-height: 1;
+    color: var(--colore-testo-tenue);
+}
+
+.pagina-errore--guasto .numero { color: var(--colore-errore); }
+.pagina-errore--negato .numero { color: var(--colore-attenzione); }
+
+.pagina-errore h1 {
+    margin: var(--spazio-3) 0 var(--spazio-2) 0;
+    font-size: var(--testo-titolo);
+}
+
+.pagina-errore .spiegazione {
     color: var(--colore-testo-tenue);
 }
 
 .pagina-errore .riferimento {
     display: block;
-    margin-top: calc(var(--spazio) * 1.5);
-    padding-top: var(--spazio);
+    margin-top: var(--spazio-6);
+    padding-top: var(--spazio-4);
     border-top: 1px solid var(--colore-bordo);
-    font-size: 13px;
     color: var(--colore-testo-tenue);
+    font-size: var(--testo-piccolo);
 }
 
-.pagina-errore code {
-    font-family: Consolas, "Courier New", monospace;
-    color: var(--colore-testo);
-}
+/* --- La password assegnata, mostrata una volta sola --------------------- */
 
-/* --- Pagine dell'accesso e della gestione utenti (sessione 3) -----------
-   Il minimo perche' le pagine si leggano: la barra in cima non deve andare
-   a capo a ogni elemento, i moduli affiancati devono restare affiancati e i
-   messaggi di errore devono vedersi. L'aspetto vero e' della sessione 4, e
-   quando arrivera' questo blocco andra' riscritto per intero.
-   ---------------------------------------------------------------------- */
-
-.barra {
-    display: flex;
-    align-items: center;
-    gap: var(--spazio);
-    flex-wrap: wrap;
-    padding: 10px var(--spazio);
-    background-color: var(--colore-superficie);
-    border-bottom: 1px solid var(--colore-bordo);
-}
-
-.barra nav {
-    display: flex;
-    gap: var(--spazio);
-}
-
-/* Spinge a destra il nome di chi e' entrato e il pulsante per uscire. */
-.barra .chi-sono {
-    margin-left: auto;
-    font-size: 13px;
-    color: var(--colore-testo-tenue);
-}
-
-/* Un modulo che deve stare in fila con il testo invece che andare a capo:
-   il pulsante "Esci" nella barra, i pulsanti nelle righe dell'elenco. */
-.in-linea {
-    display: inline;
-}
-
-.contenuto {
-    max-width: 900px;
-    margin: 0 auto;
-    padding: calc(var(--spazio) * 1.5) var(--spazio);
-}
-
-/* Riquadro dei messaggi. Il colore lo danno le classi aggiunte: "errore"
-   quando qualcosa non e' andato, "ok" quando e' andato. */
-.avviso {
-    padding: 10px var(--spazio);
-    border-left: 3px solid var(--colore-accento);
-    background-color: var(--colore-superficie);
-    border-radius: var(--raggio);
-}
-
-.avviso.errore {
-    border-left-color: var(--colore-errore);
-}
-
-.avviso.ok {
-    border-left-color: var(--colore-ok);
-}
-
-/* La password assegnata, mostrata una volta sola. Grande e distanziata:
-   qualcuno la deve leggere da lontano e ribattere a mano. */
 .password-mostrata {
     display: inline-block;
-    padding: 8px 12px;
+    padding: var(--spazio-3) var(--spazio-4);
     background-color: var(--colore-sfondo);
-    border: 1px solid var(--colore-bordo);
-    border-radius: var(--raggio);
-    font-family: Consolas, "Courier New", monospace;
-    font-size: 18px;
-    letter-spacing: 0.5px;
+    border: 1px solid var(--colore-bordo-marcato);
+    border-radius: var(--raggio-piccolo);
+    font-family: var(--carattere-mono);
+    font-size: var(--testo-titolo);
+    letter-spacing: 0.03em;
+    /* Un clic solo seleziona tutto: chi la deve ribattere non deve prendere
+       la mira con il mouse. */
     user-select: all;
 }
 
-table {
-    border-collapse: collapse;
-    width: 100%;
+
+/* ==========================================================================
+   23. LA VETRINA /stile
+   Serve solo alla pagina che mostra tutti i componenti. E' l'unico pezzo di
+   questo foglio che non riguarda il programma vero, e sta in fondo apposta.
+
+   Non e' un file a parte perche' il foglio di stile di Aurora e' uno solo
+   (vedi docs/GUIDA_STILE.md): due file vorrebbero dire due posti in cui
+   cercare, e prima o poi due palette.
+   ========================================================================== */
+
+.campioni {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: var(--spazio-3);
+    margin-bottom: var(--spazio-6);
 }
 
-th, td {
-    padding: 8px;
-    text-align: left;
-    border-bottom: 1px solid var(--colore-bordo);
-    vertical-align: top;
+.campione {
+    display: flex;
+    align-items: center;
+    gap: var(--spazio-3);
+    padding: var(--spazio-2) var(--spazio-3);
+    background-color: var(--colore-superficie);
+    border: 1px solid var(--colore-bordo);
+    border-radius: var(--raggio-piccolo);
 }
 
-th {
+/* Il quadratino colorato. Il bordo c'e' sempre, altrimenti il campione del
+   colore di sfondo sarebbe invisibile - che e' proprio il campione che si va
+   a guardare quando qualcosa non torna. */
+.campione-tinta {
+    flex: 0 0 auto;
+    width: 32px;
+    height: 32px;
+    border: 1px solid var(--colore-bordo-marcato);
+    border-radius: var(--raggio-piccolo);
+}
+
+.campione-nome {
+    font-size: var(--testo-piccolo);
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.campione-uso {
+    margin-left: auto;
     color: var(--colore-testo-tenue);
-    font-weight: 600;
+    font-size: var(--testo-piccolo);
+    text-align: right;
+}
+
+.campione--icona {
+    flex-direction: column;
+    gap: var(--spazio-2);
+    padding: var(--spazio-4) var(--spazio-2);
+    text-align: center;
+}
+
+.campione--icona .campione-nome {
+    margin: 0;
+}
+
+/* La barretta che fa vedere quanto e' lunga una spaziatura. */
+.misura-barra {
+    display: inline-block;
+    height: 16px;
+    background-color: var(--colore-accento);
+    border-radius: 2px;
+}
+
+/* Le notifiche mostrate ferme dentro la pagina, per poterle guardare con
+   calma: quelle vere stanno nel contenitore fisso in basso a destra. */
+.esempi-notifiche .notifica {
+    animation: none;
+}
+
+
+/* ==========================================================================
+   24. ADATTAMENTO ALLA LARGHEZZA DELLO SCHERMO
+   Aurora si usa su schermi da scrivania. Sotto i 1280 pixel la barra laterale
+   si stringe alle sole icone; piu' sotto di cosi' non si scende, perche' non
+   e' un programma da telefono e fingere che lo sia costerebbe lavoro a ogni
+   pagina per un uso che non esiste.
+   ========================================================================== */
+
+@media (max-width: 1279px) {
+
+    .guscio {
+        grid-template-columns: var(--larghezza-barra-laterale-stretta) 1fr;
+    }
+
+    /* Restano le icone. Il testo sparisce alla vista ma non ai lettori di
+       schermo, e il titolo (attributo title) lo fa ricomparire come
+       suggerimento quando ci si passa sopra con il mouse. */
+    .barra-laterale .marchio .nome-programma,
+    .menu-voce .nome-voce,
+    .menu-voce .in-arrivo,
+    .menu-gruppo,
+    .barra-laterale .piede {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap;
+    }
+
+    .barra-laterale .marchio,
+    .menu-voce {
+        justify-content: center;
+        padding-left: 0;
+        padding-right: 0;
+    }
+
+    .menu {
+        padding-left: var(--spazio-1);
+        padding-right: var(--spazio-1);
+    }
+
+    .contenuto {
+        padding: var(--spazio-5) var(--spazio-4);
+    }
+
+    .barra-superiore {
+        padding: 0 var(--spazio-4);
+    }
 }

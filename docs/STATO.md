@@ -1,6 +1,6 @@
 # Stato di avanzamento
 
-Ultimo aggiornamento: **24 agosto 2026**, fine della sessione 3.
+Ultimo aggiornamento: **25 agosto 2026**, fine della sessione 4.
 
 Il progetto e' diviso in 13 sessioni di lavoro. Questa tabella dice a che
 punto siamo. Va aggiornata **alla fine di ogni sessione**, prima del commit.
@@ -16,7 +16,8 @@ Stati possibili: `da fare` · `in corso` · `completata`
 | 1 | Fondamenta | **completata** | Struttura del progetto, ambiente virtuale, configurazione da `.env`, collegamento a PostgreSQL, Alembic, avvio del server, registro su file, gestione errori, rotta `/salute`, primi test, file di governo. Dettaglio sotto. |
 | 2 | Modello dati R1 | **completata** | Diciannove tabelle come modelli SQLAlchemy, una migrazione Alembic, dati iniziali idempotenti, test del modello, `docs/MODELLO_DATI.md`. Dettaglio sotto. |
 | 3 | Accesso e gestione utenti | **completata** | Password con argon2id, accesso con sessione e "ricordami" rotante, blocco dopo cinque tentativi, cambio password obbligatorio al primo accesso, protezione CSRF, gestione utenti riservata al creatore, registro di audit. Dettaglio sotto. |
-| 4 | Interfaccia e anagrafiche | da fare | Grafica delle pagine (quelle della sessione 3 sono grezze di proposito); clienti, contatti e classificazioni; matrice dei permessi modificabile dall'interfaccia. Nessuna cancellazione, solo disattivazione. |
+| 4 | Sistema grafico | **completata** | Foglio di stile unico con tutti i valori in variabili, quindici componenti come macro Jinja2, barra laterale filtrata per ruolo, vetrina `/stile`, pagine di accesso e gestione utenti ristilate, pagine di errore. Dettaglio sotto. |
+| 4b | Anagrafiche | da fare | Clienti, contatti e classificazioni; matrice dei permessi modificabile dall'interfaccia; cambio di ruolo di un utente. Nessuna cancellazione, solo disattivazione. Le tabelle esistono dalla sessione 2: mancano comportamento e pagine. |
 | 5 | Prodotti e versioni | da fare | Anagrafica dei prodotti, scomposizione del codice parlante in `code_parts`, versioni e catena delle derivazioni, stati del ciclo di vita. |
 | 6 | Progetti, assegnazioni e fasi | da fare | Apertura di un progetto su una versione, squadra e ruoli, scelta del modello di fasi, passaggi di fase con richiesta e approvazione. |
 | 7 | Archivio documenti | da fare | Caricamento file, calcolo dell'impronta SHA-256, deposito per impronta, versioni successive, presa in carico, permessi effettivi calcolati sulla matrice. |
@@ -34,6 +35,180 @@ Stati possibili: `da fare` · `in corso` · `completata`
 > comportamento. Resta una **domanda aperta**: le tabelle di distinta base e
 > articoli sono del rilascio R3 e in questo piano non compaiono; va chiarito se
 > le 13 sessioni coprono il solo R1 o arrivano anche a R2 e R3.
+
+---
+
+## Sessione 4 — Sistema grafico · completata (25 agosto 2026)
+
+La sessione ha costruito il sistema grafico completo e lo ha applicato alle
+pagine che c'erano. **Da qui in avanti le pagine non si disegnano piu': si
+compongono** con i componenti di `app/templates/components/`, che si vedono
+tutti insieme all'indirizzo `/stile`.
+
+Il riferimento da tenere aperto e' `docs/GUIDA_STILE.md`.
+
+> **Nota sull'ambito.** La sessione 4 nel piano comprendeva anche clienti,
+> contatti, classificazioni e matrice dei permessi. Questa sessione ha
+> realizzato la sola parte grafica, che era gia' un lavoro intero. Le
+> anagrafiche restano da fare: vedi la riga della tabella qui sopra.
+
+### Realizzato
+
+**Il foglio di stile** — `app/static/css/aurora.css`, riscritto da capo: 24
+sezioni numerate con l'indice in cima, oltre millecinquecento righe. Tutti i
+colori, le spaziature, i raggi e le ombre sono variabili dichiarate in `:root`.
+Il blocco provvisorio della sessione 3 non c'e' piu' (D-033).
+
+**Quindici componenti**, ciascuno un file in `app/templates/components/` con in
+cima **quando si usa e quando non si usa**:
+
+| File | A che serve |
+|---|---|
+| `icone.html` | venti icone SVG disegnate a mano, che prendono il colore del testo |
+| `pulsanti.html` | pulsante (primario, secondario, pericolo, piatto; normale e piccolo), collegamento travestito da pulsante, modulo POST con un pulsante solo e gettone CSRF gia' dentro |
+| `campi.html` | testo, area di testo, menu a tendina, casella di spunta, pallini di scelta, campo del gettone. Etichetta collegata ed errore di validazione compresi |
+| `tabella.html` | tabella con intestazione ferma, righe alternate, ordinamento fatto dal server e riga "nessun risultato" |
+| `stato.html` | etichette dei cinque stati del ciclo di vita, etichette di servizio, stato di un utente |
+| `riquadro.html` | il contenitore, con testata, azioni e piede |
+| `dialogo.html` | finestra modale su `<dialog>`, con apri e chiudi |
+| `avvisi.html` | avviso in linea (resta) e notifica temporanea (sparisce) |
+| `ricerca.html` | barra di ricerca GET con i filtri |
+| `impaginazione.html` | le pagine di un elenco lungo, con i puntini oltre le sette |
+| `schede.html` | schede senza JavaScript, e schede che sono pagine diverse |
+| `avanzamento.html` | le fasi di un progetto in fila |
+| `descrizione.html` | elenco etichetta/valore, in tre varianti |
+| `area_file.html` | area di trascinamento, con il campo file vero sotto |
+| `vuoto.html` | riquadro vuoto con spiegazione e azione suggerita |
+
+**Le due impalcature** — `base.html` (barra laterale a icone piu' testo, barra
+superiore con nome utente e uscita, area contenuto, contenitore delle notifiche)
+e `base_nudo.html`, per le pagine di chi non e' dentro il programma: accesso ed
+errori.
+
+**La barra laterale** — `app/navigation.py`. Sei voci: Prodotti, Progetti,
+Documenti, Posta, Utenti, Diagnostica, piu' Stile in fondo fra le voci di
+servizio. Filtrate per ruolo; le sezioni non ancora realizzate compaiono spente,
+con la scritta che dice in quale sessione arriveranno (D-035).
+
+**Le pagine ristilate** — accesso, cambio password, pagina iniziale, elenco
+utenti, creazione utente, password assegnata, pagina di errore (che serve anche
+il 404 e l'accesso negato, D-037).
+
+**La vetrina** — `GET /stile`, riservata al creatore, in `app/routers/style.py`.
+Sei schede: Fondamenta, Pulsanti, Moduli, Elenchi, Segnali, Struttura. Gli
+esempi funzionano davvero: la ricerca filtra, l'ordinamento riordina,
+l'impaginazione cambia pagina, la finestra si apre. Non tocca il database:
+lavora su cinque righe finte scritte dentro il file, cosi' si apre anche il
+giorno in cui il database non risponde - che e' proprio uno dei giorni in cui si
+va a guardare una pagina di diagnostica (D-034).
+
+**HTMX 2.0.10** — scaricato in `app/static/vendor/htmx.min.js` e servito da noi.
+Lo usa la ricerca della vetrina, che pero' resta un modulo GET normale e
+funziona senza (D-036).
+
+**JavaScript** — `app/static/js/aurora.js`: notifiche che spariscono da sole,
+finestre di dialogo, trascinamento dei file. Niente di indispensabile.
+
+### Verificato
+
+**Test automatici: 90, tutti superati** (erano 51 alla fine della sessione 3).
+I 39 nuovi stanno in `tests/test_interfaccia.py`.
+
+| Criterio di accettazione | Come e' stato verificato | Esito |
+|---|---|---|
+| `/stile` mostra tutti i componenti | `test_la_vetrina_mostra_tutti_i_componenti`, diciannove componenti cercati uno per uno nella pagina | superato |
+| `/stile` non ha colori scritti a mano | `test_nessun_colore_scritto_dentro_i_template` su tutti i template | superato |
+| Nessun colore fuori dalle variabili | `test_i_colori_stanno_tutti_nelle_variabili` sul foglio di stile | superato |
+| Login e gestione utenti hanno l'aspetto definitivo | rese nel browser e ispezionate | superato |
+| Senza JavaScript si entra | `test_la_pagina_di_accesso_non_ha_bisogno_di_javascript`, `test_si_entra_davvero_senza_javascript` | superato |
+| Senza JavaScript si crea un utente | `test_si_crea_un_utente_senza_javascript` | superato |
+| Ogni campo ha un'etichetta collegata | `test_ogni_campo_ha_la_sua_etichetta_collegata` su quattro pagine | superato |
+| Contrasto minimo 4.5:1 | misurato dal browser: il peggiore e' 4.66:1 | superato |
+| Il menu e' filtrato per ruolo | tre test sulla barra laterale | superato |
+| Nessuna risorsa esterna | `test_nessun_template_punta_a_un_indirizzo_esterno`, `test_htmx_e_nel_repository_e_lo_serviamo_noi` | superato |
+
+**Prova nel browser.** Le pagine sono state rese con dati finti e ispezionate
+misurando gli stili calcolati, senza toccare il database di sviluppo:
+
+| Verifica | Esito |
+|---|---|
+| Impalcatura a 1440px: barra laterale 232px, barra superiore 56px, contenuto da 232 | superato |
+| Impalcatura a 1100px: barra laterale a 60px, sole icone, nomi come suggerimento | superato |
+| Nessuna pagina scorre in orizzontale, tabella da 1108px compresa | superato: scorre la tabella dentro il suo riquadro, non la pagina |
+| Contrasti misurati dal browser su tutte le etichette di stato | superato: da 4.66:1 a 5.88:1 |
+| Fuoco della tastiera visibile | superato: due pixel di accento con distacco |
+| Schede senza JavaScript | superato: un corpo visibile per gruppo, gruppi annidati indipendenti |
+| Intestazione della tabella ferma allo scorrimento | superato |
+| Notifica temporanea | superato: compare al caricamento e sparisce dopo cinque secondi |
+| Finestra modale | superato: si apre, si chiude con Esc, con la crocetta e con il clic sullo sfondo |
+| Conferma prima di disattivare un utente | superato: la domanda compare e rispondendo "no" il modulo non parte |
+| HTMX si carica dal nostro server e si avvia | superato: `window.htmx.version` vale 2.0.10 |
+| La password assegnata resta in monospazio, grande, selezionabile con un clic | superato |
+| Nessun errore nella consolle del browser | superato |
+
+### Difetti trovati e corretti durante la sessione
+
+1. **Il macro `menu` copriva le voci della barra laterale.** I macro importati
+   da una pagina finiscono nello stesso spazio delle variabili con cui viene
+   disegnato anche `base.html`. Quattro test si aprivano con
+   `'Macro' object is not iterable`, un messaggio che non dice niente. Il menu a
+   tendina si chiama `tendina`; le variabili si chiamano `voci_menu` e
+   `voci_menu_servizio`. La regola sta in `docs/GUIDA_STILE.md` e in D-034.
+
+2. **I campi in monospazio non erano in monospazio.** Il carattere dei campi e'
+   dichiarato su un selettore che comprende `input[type="text"]`, e un selettore
+   con un attributo pesa piu' di una classe sola: la classe `.campo-controllo--codice`
+   perdeva. Se ne e' accorta la misura degli stili calcolati nel browser, non la
+   lettura del foglio - e' esattamente il tipo di difetto che a leggere non si
+   vede. Risolto ripetendo la classe.
+
+3. **La colonna delle etichette dell'elenco descrittivo era troppo larga.**
+   Aveva un minimo di 140 pixel, che dentro un riquadro stretto lasciava ai
+   valori meno spazio che alle etichette. Ora prende quello che le serve fino a
+   un massimo di 200.
+
+### Scelte prese durante la sessione
+
+Cinque decisioni nuove in `docs/DECISIONI.md`, dalla D-033 alla D-037. Le due da
+leggere prima di scrivere una pagina:
+
+- **D-034**, i componenti sono macro e `/stile` e' il contratto: non si
+  inventano componenti nuovi senza aggiungerli alla vetrina;
+- **D-036**, HTMX e' un miglioramento e mai una condizione: prima di aggiungere
+  un attributo `hx-`, rispondere a "che cosa succede se lo script non arriva?".
+
+### Rimasto in sospeso per le sessioni successive
+
+- **Le anagrafiche della sessione 4 non sono state fatte.** Clienti, contatti,
+  classificazioni e matrice dei permessi modificabile dall'interfaccia restano
+  da realizzare. Le tabelle ci sono gia' dalla sessione 2 (`customers`,
+  `contacts`, `classifications`, `permission_rules`): manca il comportamento e
+  mancano le pagine. Ora che i componenti esistono, sono pagine da comporre.
+
+- **Il cambio di ruolo dall'interfaccia**, che era gia' in sospeso dalla
+  sessione 3, e' ancora li'. Va insieme alla matrice dei permessi.
+
+- **La pagina Diagnostica non esiste.** La voce di menu c'e', spenta. Ci
+  andranno lo stato del programma (oggi `/salute`, che risponde in JSON), lo
+  spazio libero dell'archivio e gli ultimi errori del registro. Sessione 11.
+
+- **L'ordinamento delle tabelle e' realizzato solo nella vetrina.** Il
+  componente costruisce i collegamenti giusti; a leggere i parametri e a
+  ordinare l'interrogazione dovra' pensarci ogni rotta che mostra un elenco. La
+  prima sara' quella dei prodotti, nella sessione 5.
+
+- **L'impaginazione non e' ancora usata da nessun elenco vero.** Gli utenti sono
+  pochi e ci stanno in una pagina. Serve dalla sessione 5 in avanti.
+
+- **`app/static/js/copia.js` non riesce a copiare in un browser senza fuoco.**
+  Non e' un difetto nuovo e non e' un difetto di Aurora: gli appunti sono
+  accessibili solo dopo un gesto vero dell'utente. Il ripiego scritto nella
+  pagina ("selezionala a mano") funziona ed e' quello che si vede.
+
+- **La cartella `app/static/vendor/` contiene un file di terzi.** HTMX 2.0.10,
+  51238 byte, impronta SHA-256
+  `71ea67185bfa8c98c39d31717c6fce5d852370fcdfd129db4543774d3145c0de`. Quando si
+  aggiornera', l'impronta va confrontata e la riga qui sopra aggiornata.
 
 ---
 

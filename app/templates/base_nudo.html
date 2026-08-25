@@ -1,0 +1,42 @@
+{# ===========================================================================
+   Impalcatura delle pagine senza impalcatura.
+
+   Sono le pagine che non hanno ne' barra laterale ne' barra superiore, per una
+   ragione sola: chi le guarda non e' dentro il programma. O non e' ancora
+   entrato (la pagina di accesso), o non e' arrivato da nessuna parte (le
+   pagine di errore).
+
+   Mostrare la navigazione a chi non e' entrato sarebbe anche sbagliato oltre
+   che inutile: direbbe a un estraneo quali sezioni esistono.
+
+   Il contenuto e' centrato nella finestra. I blocchi da riempire:
+
+     titolo      il testo della finestra del browser
+     contenuto   quello che sta dentro il riquadro centrale
+   =========================================================================== #}
+{% from "components/icone.html" import icona %}
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block titolo %}{{ app_name }}{% endblock %} - {{ app_name }}</title>
+    <link rel="stylesheet" href="/static/css/aurora.css">
+</head>
+<body>
+
+<main class="pagina-centrata">
+    {% block marchio %}
+    <div class="marchio">
+        <span class="segno">{{ icona("prodotti", 26) }}</span>
+        <span>{{ app_name }}</span>
+    </div>
+    {% endblock %}
+
+    {% block contenuto %}{% endblock %}
+
+    {% block piede %}{% endblock %}
+</main>
+
+</body>
+</html>

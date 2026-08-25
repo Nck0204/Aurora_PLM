@@ -13,6 +13,13 @@ Accanto a loro, da leggere prima di toccare una tabella:
 - `docs/MODELLO_DATI.md` — le tabelle del database, una riga di spiegazione
   ciascuna, il dettaglio delle colonne e i principi che le tengono insieme.
 
+E prima di scrivere una pagina:
+
+- `docs/GUIDA_STILE.md` — la palette, i componenti e le regole con cui si
+  compone una pagina. **I componenti ci sono gia'**: stanno in
+  `app/templates/components/` e si vedono tutti insieme all'indirizzo `/stile`.
+  Non se ne inventano di nuovi senza aggiungerli li'.
+
 ---
 
 ## 1. Che cosa e' Aurora
@@ -115,17 +122,21 @@ aurora/
 │   ├── db.py              engine, sessione, Base, get_db
 │   ├── dependencies.py    utente_corrente, richiedi_login, richiedi_creatore
 │   ├── templating.py      motore Jinja2 e funzione pagina()
+│   ├── navigation.py      le voci della barra laterale, filtrate per ruolo
 │   ├── models/            tabelle del database (una classe per tabella)
 │   ├── routers/           rotte HTTP, raggruppate per argomento
 │   ├── services/          logica applicativa, riusabile fuori dalle rotte
 │   ├── templates/         pagine Jinja2
+│   │   └── components/    i componenti riusabili, come macro
 │   └── static/            css, js e immagini serviti da noi
+│       └── vendor/        librerie di terzi (htmx), scaricate una volta
 │
 ├── alembic/               migrazioni del database
 │   ├── env.py             collegato a Base.metadata e al file .env
 │   └── versions/          una migrazione per file
 │
-├── docs/                  STATO.md, DECISIONI.md, MODELLO_DATI.md
+├── docs/                  STATO.md, DECISIONI.md, MODELLO_DATI.md,
+│                       GUIDA_STILE.md
 ├── scripts/               procedure operative (installazione, manutenzione)
 ├── tests/                 test pytest
 ├── storage/               archivio dei file caricati (NON in git)
@@ -150,8 +161,19 @@ Dove mettere una cosa nuova:
   scrivere controlli di permesso dentro il corpo della rotta: nascosti li',
   prima o poi ne manca uno;
 - **un modulo che invia con POST** → dentro il `<form>` va la riga
-  `<input type="hidden" name="csrf" value="{{ token_csrf(request) }}">`,
-  altrimenti la richiesta viene rifiutata con un 400 (vedi D-028).
+  `{{ csrf(request) }}` (macro in `components/campi.html`), altrimenti la
+  richiesta viene rifiutata con un 400 (vedi D-028);
+- **una pagina nuova** → si compone con i macro di
+  `app/templates/components/`, estendendo `base.html`. Non si riscrive l'HTML
+  di un pulsante, di un campo o di una tabella: esistono gia', e sono in
+  vetrina all'indirizzo `/stile`;
+- **un componente grafico nuovo** → un file in `app/templates/components/` con
+  in cima *quando si usa e quando non si usa*, le sue regole in `aurora.css`, un
+  esempio in `/stile` e una riga in `docs/GUIDA_STILE.md`. I cinque passi sono
+  elencati li' (sezione 10);
+- **un colore, una spaziatura, un raggio** → una variabile in `:root`, in cima
+  ad `app/static/css/aurora.css`. Mai un valore scritto dentro una regola o
+  dentro un template: c'e' un test che lo verifica (D-033).
 
 ## 5. Convenzioni di codice
 
@@ -211,6 +233,9 @@ Tutti dalla radice del progetto (`aurora/`), con l'ambiente virtuale attivo:
 
 - Aggiungere un collegamento a una risorsa esterna in un template.
 - Introdurre npm o un passaggio di compilazione del frontend.
+- Scrivere un colore dentro una regola CSS o dentro un template.
+- Far dipendere da JavaScript qualcosa che deve funzionare per forza: entrare,
+  cambiare la password, creare un utente, caricare un documento (vedi D-036).
 - Usare SQLite, nemmeno "solo per provare".
 - Scrivere `DELETE FROM` su una tabella applicativa.
 - Mettere una password o un indirizzo di server dentro un file `.py`.

@@ -37,3 +37,7 @@ solo `admin`, e sa riattivare un utente disattivato.
 - `CLAUDE.md` — convenzioni e regole permanenti del progetto
 - `docs/STATO.md` — a che punto e' il lavoro
 - `docs/DECISIONI.md` — le decisioni tecniche prese e il perche'
+- `docs/GUIDA_STILE.md` — palette e componenti, prima di scrivere una pagina
+
+I componenti dell'interfaccia si vedono tutti insieme, in tutte le varianti,
+all'indirizzo <http://localhost:8000/stile> (serve il ruolo di creatore).

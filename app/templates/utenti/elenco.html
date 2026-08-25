@@ -7,75 +7,105 @@
 
    Non c'e' nessun pulsante per cancellare un utente, e non va aggiunto:
    regola 5 di CLAUDE.md.
+
+   Le tre operazioni su ogni riga sono tre moduli POST distinti. Non sono
+   collegamenti e non lo diventeranno: cambiano lo stato del programma, quindi
+   devono passare dalla verifica del gettone CSRF (D-028).
    =========================================================================== #}
 {% extends "base.html" %}
 
+{% from "components/pulsanti.html" import pulsante_collegamento, modulo_pulsante %}
+{% from "components/tabella.html" import tabella %}
+{% from "components/stato.html" import etichetta, etichetta_utente %}
+{% from "components/riquadro.html" import riquadro %}
+
 {% block titolo %}Utenti{% endblock %}
+{% block sezione %}Utenti{% endblock %}
 
 {% block contenuto %}
-<h1>Utenti</h1>
 
-<p><a href="/utenti/nuovo">Crea un utente</a></p>
+<div class="testata">
+    <div>
+        <h1>Utenti</h1>
+        <p class="sottotitolo">
+            Le persone che possono entrare in {{ app_name }}. Non si
+            cancellano: si disattivano.
+        </p>
+    </div>
+    <div class="testata-azioni">
+        {{ pulsante_collegamento("Crea un utente", "/utenti/nuovo",
+                                 variante="primario", icona_nome="piu") }}
+    </div>
+</div>
 
-<table>
-    <thead>
-        <tr>
-            <th>Cognome e nome</th>
-            <th>Nome utente</th>
-            <th>Posta</th>
-            <th>Ruolo</th>
-            <th>Stato</th>
-            <th>Sessioni</th>
-            <th>Operazioni</th>
-        </tr>
-    </thead>
-    <tbody>
+{% set colonne = [
+    {"etichetta": "Cognome e nome"},
+    {"etichetta": "Nome utente", "classe": "colonna-codice"},
+    {"etichetta": "Posta"},
+    {"etichetta": "Ruolo"},
+    {"etichetta": "Stato"},
+    {"etichetta": "Sessioni", "classe": "colonna-numero",
+     "titolo": "Sessioni aperte adesso con questo nome"},
+    {"etichetta": "Operazioni", "classe": "colonna-azioni"},
+] %}
+
+{% call tabella(colonne,
+                vuota=(utenti|length == 0),
+                messaggio_vuoto="Nessun utente. Non dovrebbe succedere mai: "
+                                "almeno il creatore deve esserci.",
+                riepilogo=(utenti|length ~ " utent" ~ ("e" if utenti|length == 1 else "i"))) %}
     {% for u in utenti %}
-        <tr>
-            <td>{{ u.last_name }} {{ u.first_name }}</td>
-            <td>{{ u.username }}</td>
-            <td>{{ u.email }}</td>
-            <td>{{ u.global_role.value }}</td>
-            <td>
-                {% if u.is_active %}
-                    attivo{% if u.must_change_password %}, deve cambiare la password{% endif %}
-                {% else %}
-                    disattivato
-                {% endif %}
-            </td>
-            <td>{{ sessioni.get(u.id, 0) }}</td>
-            <td>
-                {# Tre moduli distinti, tutti POST: cambiano lo stato del
-                   programma e devono passare dalla verifica del gettone. #}
-                <form method="post" action="/utenti/{{ u.id }}/reimposta" class="in-linea">
-                    <input type="hidden" name="csrf" value="{{ token_csrf(request) }}">
-                    <button type="submit">Nuova password</button>
-                </form>
+    <tr>
+        <td>{{ u.last_name }} {{ u.first_name }}</td>
+        <td class="colonna-codice">{{ u.username }}</td>
+        <td>{{ u.email }}</td>
+        <td>
+            {% if u.is_creatore %}
+                {{ etichetta(u.global_role.value, variante="accento") }}
+            {% else %}
+                <span class="testo-tenue">{{ u.global_role.value }}</span>
+            {% endif %}
+        </td>
+        <td>{{ etichetta_utente(u) }}</td>
+        <td class="colonna-numero">{{ sessioni.get(u.id, 0) }}</td>
+        <td class="colonna-azioni">
+            <div class="fila-pulsanti spinge-a-destra">
+                {{ modulo_pulsante(request,
+                                   "/utenti/" ~ u.id ~ "/reimposta",
+                                   "Nuova password",
+                                   misura="piccolo",
+                                   icona_nome="chiave",
+                                   conferma="Assegnare una password nuova a "
+                                            ~ u.full_name ~ "? Tutte le sue "
+                                            "sessioni verranno chiuse.") }}
 
                 {% if u.is_active %}
-                <form method="post" action="/utenti/{{ u.id }}/disattiva" class="in-linea">
-                    <input type="hidden" name="csrf" value="{{ token_csrf(request) }}">
-                    <button type="submit">Disattiva</button>
-                </form>
+                    {{ modulo_pulsante(request,
+                                       "/utenti/" ~ u.id ~ "/disattiva",
+                                       "Disattiva",
+                                       variante="pericolo",
+                                       misura="piccolo",
+                                       conferma="Disattivare " ~ u.full_name
+                                                ~ "? Perdera' subito tutte le "
+                                                "sessioni aperte.") }}
                 {% else %}
-                <form method="post" action="/utenti/{{ u.id }}/riattiva" class="in-linea">
-                    <input type="hidden" name="csrf" value="{{ token_csrf(request) }}">
-                    <button type="submit">Riattiva</button>
-                </form>
+                    {{ modulo_pulsante(request,
+                                       "/utenti/" ~ u.id ~ "/riattiva",
+                                       "Riattiva",
+                                       misura="piccolo",
+                                       icona_nome="spunta") }}
                 {% endif %}
-            </td>
-        </tr>
-    {% else %}
-        <tr><td colspan="7">Nessun utente. Non dovrebbe succedere mai.</td></tr>
+            </div>
+        </td>
+    </tr>
     {% endfor %}
-    </tbody>
-</table>
+{% endcall %}
 
-<p><small>
+<p class="testo-tenue testo-piccolo margine-sopra">
     Gli utenti non si cancellano: si disattivano. Le loro firme sui documenti e
     le loro righe nel registro delle operazioni devono restare leggibili anche
     a distanza di anni. Chi viene disattivato perde subito tutte le sessioni
     aperte.
-</small></p>
+</p>
 
 {% endblock %}

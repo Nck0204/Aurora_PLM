@@ -1,0 +1,83 @@
+{# ===========================================================================
+   SCHEDE (tab)
+
+   QUANDO SI USA. Per dividere il dettaglio di un oggetto in gruppi che si
+   guardano uno per volta: la scheda di una versione di prodotto con "Dati",
+   "Documenti", "Posta", "Storia". Chi apre la pagina vede il primo gruppo e
+   passa agli altri senza ricaricare.
+
+   QUANDO NON SI USA. Per nascondere contenuto importante. Quello che sta
+   dietro una linguetta, molti non lo apriranno mai: se una cosa va vista,
+   deve stare nella pagina.
+
+   DUE MODI, E VANNO DISTINTI.
+
+   1. "schede" - i gruppi stanno tutti nella stessa pagina e si passa da uno
+      all'altro senza andare da nessuna parte. Realizzate con dei pallini di
+      scelta nascosti e le loro etichette: nessun JavaScript, e la tastiera ci
+      si muove gia' dentro con le frecce, che e' il comportamento che le linee
+      guida chiedono per le schede. Costa una riga di CSS e non costa niente
+      da mantenere.
+
+      Il rovescio: tutto il contenuto di tutte le schede viene mandato al
+      browser insieme. Va bene per tre schede di dettaglio, non va bene per
+      quattro tabelle da mille righe - li' si usano le schede-collegamento.
+
+   2. "schede_collegamento" - ogni linguetta e' una pagina diversa, con il suo
+      indirizzo. Si usa quando le sezioni sono pesanti da preparare o quando
+      ha senso poterne mandare una a un collega.
+
+   COME SI USA:
+
+       {% raw %}{% from "components/schede.html" import schede, scheda %}
+
+       {% call schede("dettaglio") %}
+           {% call scheda("dettaglio", "Dati", prima=true) %}
+               ...contenuto...
+           {% endcall %}
+           {% call scheda("dettaglio", "Documenti") %}
+               ...contenuto...
+           {% endcall %}
+       {% endcall %}{% endraw %}
+
+   Il primo parametro e' il nome del gruppo: serve a tenere insieme le
+   linguette e deve essere diverso per ogni gruppo di schede della stessa
+   pagina. Una scheda sola va marcata con prima=true, ed e' quella che si vede
+   aprendo la pagina.
+   =========================================================================== #}
+
+
+{% macro schede(gruppo) -%}
+<div class="schede">
+    {{ caller() }}
+</div>
+{%- endmacro %}
+
+
+{# Una scheda. L'ordine nel codice e': pallino, etichetta, corpo. Il CSS li
+   rimette in fila (le etichette in cima con "order", i corpi sotto), ma
+   l'ordine scritto qui e' quello che conta per la tastiera e per i lettori di
+   schermo, e questo e' l'ordine giusto. #}
+{% macro scheda(gruppo, titolo, prima=false, id=none) -%}
+{%- set scheda_id = id or (gruppo ~ "-" ~ titolo|lower|replace(" ", "-")) -%}
+<input type="radio" name="schede-{{ gruppo }}" id="{{ scheda_id }}"
+       {% if prima %}checked{% endif %}>
+<label for="{{ scheda_id }}">{{ titolo }}</label>
+<div class="scheda-corpo">
+    {{ caller() }}
+</div>
+{%- endmacro %}
+
+
+{# Le linguette che sono pagine diverse.
+
+   "voci" e' un elenco di dizionari con "etichetta" e "indirizzo"; "corrente"
+   e' l'indirizzo della pagina in cui ci si trova adesso. #}
+{% macro schede_collegamento(voci, corrente) -%}
+<nav class="schede-collegamenti" aria-label="Sezioni">
+    {%- for voce in voci %}
+    <a href="{{ voce.indirizzo }}"
+       {% if voce.indirizzo == corrente %}aria-current="page"{% endif %}>{{ voce.etichetta }}</a>
+    {%- endfor %}
+</nav>
+{%- endmacro %}

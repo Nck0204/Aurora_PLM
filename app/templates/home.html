@@ -1,48 +1,98 @@
 {# ===========================================================================
    Pagina iniziale.
 
-   In questa sessione dice solo chi e' entrato e cosa c'e' da vedere: la
-   struttura di navigazione vera e' della sessione 9.
+   Dice chi e' entrato, quante sessioni ha aperte e da dove si comincia. Non e'
+   ancora un cruscotto: i numeri veri - progetti in corso, documenti da
+   verificare, posta in quarantena - arriveranno quando ci saranno le tabelle
+   piene, nella sessione 12.
+
+   La conferma del cambio password e' una notifica temporanea e non un avviso
+   in linea: e' la conferma di una cosa che l'utente ha appena fatto e ha gia'
+   visto succedere. La regola sta in components/avvisi.html.
    =========================================================================== #}
 {% extends "base.html" %}
 
+{% from "components/campi.html" import csrf %}
+{% from "components/pulsanti.html" import pulsante, pulsante_collegamento %}
+{% from "components/avvisi.html" import notifica %}
+{% from "components/riquadro.html" import riquadro %}
+{% from "components/descrizione.html" import descrizione, voce %}
+{% from "components/stato.html" import etichetta %}
+{% from "components/icone.html" import icona %}
+
 {% block titolo %}Pagina iniziale{% endblock %}
+{% block sezione %}Pagina iniziale{% endblock %}
+
+{% block notifiche %}
+    {% if password_cambiata %}
+        {{ notifica("Le altre sessioni aperte con il tuo nome sono state chiuse.",
+                    variante="successo", titolo="Password cambiata") }}
+    {% endif %}
+{% endblock %}
 
 {% block contenuto %}
 
-{% if password_cambiata %}
-<p class="avviso ok" role="status">
-    Password cambiata. Le altre sessioni aperte con il tuo nome sono state
-    chiuse.
-</p>
-{% endif %}
+<div class="testata">
+    <div>
+        <h1>Benvenuto, {{ utente.first_name }}</h1>
+        <p class="sottotitolo">
+            {{ app_name }} - gestione dei progetti e della documentazione
+            tecnica.
+        </p>
+    </div>
+</div>
 
-<h1>{{ app_name }}</h1>
+<div class="griglia-riquadri">
 
-<p>Sei entrato come <strong>{{ utente.full_name }}</strong>
-   ({{ utente.username }}), ruolo {{ utente.global_role.value }}.</p>
+    {% call riquadro("Il tuo profilo") %}
+        {% call descrizione(stretta=true) %}
+            {{ voce("Nome e cognome", utente.full_name) }}
+            {{ voce("Nome utente", utente.username, monospazio=true) }}
+            {{ voce("Posta", utente.email) }}
+            {{ voce("Ruolo", etichetta(utente.global_role.value,
+                                       variante="accento" if utente.is_creatore else "neutra")) }}
+        {% endcall %}
+    {% endcall %}
 
-<p>Sessioni aperte con il tuo nome, questa compresa: {{ sessioni_attive }}.</p>
+    {% call riquadro("Sessioni aperte") %}
+        <p>
+            Con il tuo nome risultano aperte
+            <strong>{{ sessioni_attive }}</strong>
+            session{{ "e" if sessioni_attive == 1 else "i" }}, questa
+            compresa.
+        </p>
 
-<h2>Cosa si puo' fare</h2>
-<ul>
-    <li><a href="/cambio-password">Cambiare la propria password</a></li>
-    {% if utente.is_creatore %}
-    <li><a href="/utenti">Gestire gli utenti</a></li>
-    {% endif %}
-    <li><a href="/salute">Stato del programma</a></li>
-</ul>
+        {# Uscire da tutti i dispositivi e' un POST, come tutte le operazioni
+           che cambiano lo stato del programma. #}
+        <form method="post" action="/esci-ovunque">
+            {{ csrf(request) }}
+            {{ pulsante("Esci da tutti i dispositivi", variante="pericolo",
+                        icona_nome="esci") }}
+        </form>
 
-<h2>Uscita</h2>
-<form method="post" action="/esci-ovunque">
-    <input type="hidden" name="csrf" value="{{ token_csrf(request) }}">
-    <button type="submit">Esci da tutti i dispositivi</button>
-    <br>
-    <small>
-        Chiude tutte le sessioni aperte con il tuo nome, anche quelle su altri
-        calcolatori. Da usare se hai lasciato {{ app_name }} aperto da qualche
-        parte, o se temi che qualcuno conosca la tua password.
-    </small>
-</form>
+        <p class="campo-aiuto margine-sopra">
+            Da usare se hai lasciato {{ app_name }} aperto da qualche parte, o
+            se temi che qualcuno conosca la tua password.
+        </p>
+    {% endcall %}
+
+    {% call riquadro("Da qui si comincia") %}
+        <div class="impila">
+            {{ pulsante_collegamento("Cambia la tua password", "/cambio-password",
+                                     icona_nome="chiave", largo=true) }}
+            {% if utente.is_creatore %}
+                {{ pulsante_collegamento("Gestisci gli utenti", "/utenti",
+                                         icona_nome="utenti", largo=true) }}
+            {% endif %}
+        </div>
+
+        <p class="campo-aiuto margine-sopra">
+            Le sezioni spente nella barra a sinistra sono quelle non ancora
+            realizzate: la scritta accanto dice in quale sessione di lavoro
+            arriveranno.
+        </p>
+    {% endcall %}
+
+</div>
 
 {% endblock %}

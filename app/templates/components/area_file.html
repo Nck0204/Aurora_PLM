@@ -1,0 +1,77 @@
+{# ===========================================================================
+   AREA DI TRASCINAMENTO FILE
+
+   QUANDO SI USA. Ovunque si carichi un documento: schemi, disegni, distinte,
+   allegati. Sara' il componente principale della sessione 7, l'archivio dei
+   documenti.
+
+   IL CAMPO FILE C'E' SEMPRE. Il trascinamento e' un di piu' che lo script
+   aggiunge quando puo': sotto c'e' un normale <input type="file">, con la sua
+   etichetta collegata, e il pulsante "Scegli i file" e' quello del sistema
+   operativo. Con JavaScript spento si carica lo stesso, semplicemente senza
+   poter trascinare.
+
+   Questo non e' un dettaglio di gentilezza verso i browser vecchi: e' il
+   modo in cui si evita che il caricamento dei documenti - cioe' il mestiere
+   di Aurora - dipenda da uno script che potrebbe non arrivare.
+
+   IL MODULO CHE LO CONTIENE. Deve avere enctype="multipart/form-data",
+   altrimenti al server arrivano i nomi dei file e non i file. E' l'errore che
+   si fa una volta sola e si ricorda per sempre; qui c'e' scritto per non
+   doverlo ricordare.
+
+       {% raw %}<form method="post" action="/documenti/carica"
+             enctype="multipart/form-data">
+           {{ csrf(request) }}
+           {{ area_file("Documento da caricare", "file") }}
+           {{ pulsante("Carica", variante="primario") }}
+       </form>{% endraw %}
+
+   Parametri:
+
+     multipli      permette di sceglierne piu' di uno per volta
+     tipi          l'elenco delle estensioni accettate ("Accetta PDF e DWG"),
+                   che finisce anche nell'attributo accept
+     peso_massimo  scritto sotto, per non far scoprire il limite dopo aver
+                   aspettato il caricamento di un file da 300 MB
+   =========================================================================== #}
+
+
+{% from "components/icone.html" import icona %}
+
+
+{% macro area_file(etichetta, nome="file", multipli=false, accetta=none,
+                   tipi=none, peso_massimo=none, id=none) -%}
+{%- set campo_id = id or nome -%}
+<div class="campo">
+    <label class="campo-etichetta" for="{{ campo_id }}">{{ etichetta }}</label>
+
+    {#- data-area-file e' l'aggancio dello script: senza JavaScript resta un
+        attributo che nessuno guarda, e dentro c'e' comunque tutto quello che
+        serve. -#}
+    <div class="area-file" data-area-file>
+        {{ icona("carica", 32) }}
+
+        <div>
+            <p class="istruzione">Trascina qui i file, oppure scegli dal disco</p>
+            {%- if tipi %}
+            <p class="dettaglio">{{ tipi }}</p>
+            {%- endif %}
+            {%- if peso_massimo %}
+            <p class="dettaglio">Dimensione massima: {{ peso_massimo }}</p>
+            {%- endif %}
+        </div>
+
+        <input type="file"
+               id="{{ campo_id }}"
+               name="{{ nome }}"
+               {%- if multipli %} multiple{% endif %}
+               {%- if accetta %} accept="{{ accetta }}"{% endif %}>
+
+        {#- Lo script scrive qui dentro i nomi dei file scelti. Senza
+            JavaScript resta vuoto, e i nomi li mostra il campo file per conto
+            suo, come fa da trent'anni. -#}
+        <ul class="area-file-elenco" data-area-file-elenco hidden></ul>
+    </div>
+</div>
+{%- endmacro %}

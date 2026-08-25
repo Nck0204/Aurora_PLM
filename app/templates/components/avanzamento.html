@@ -1,0 +1,70 @@
+{# ===========================================================================
+   BARRA DI AVANZAMENTO DELLE FASI
+
+   QUANDO SI USA. In cima alla pagina di un progetto, per rispondere in un
+   colpo d'occhio alla domanda che fanno tutti: "a che punto siamo?".
+
+   Le fasi di un progetto sono in fila da sinistra a destra: quelle concluse,
+   quella in corso, quelle che devono venire. Il modello di fasi e le fasi
+   stesse arrivano dal database (tabelle phase_templates e phases): questo
+   componente disegna e basta, non decide niente.
+
+   NON E' UNA BARRA DI CARICAMENTO. Non dice una percentuale: dice a quale
+   passo si e' arrivati. Un progetto non e' "al 60%", e' "in verifica".
+
+   COME SI USA. Si passa un elenco di fasi, ciascuna un dizionario:
+
+       nome       il nome della fase, che si legge sotto il pallino
+       stato      "conclusa", "corrente", "ferma", oppure niente per le fasi
+                  che devono ancora venire
+       data       facoltativa: quando la fase e' stata chiusa
+
+       {% raw %}{% from "components/avanzamento.html" import avanzamento %}
+
+       {{ avanzamento([
+           {"nome": "Fattibilita'", "stato": "conclusa", "data": "12/03"},
+           {"nome": "Progettazione", "stato": "corrente"},
+           {"nome": "Prototipo"},
+       ]) }}{% endraw %}
+
+   DENTRO IL PALLINO. Le fasi concluse hanno una spunta, quelle ferme un punto
+   esclamativo, le altre il loro numero. Sono caratteri, non immagini: chi non
+   distingue il verde dal grigio vede comunque la differenza fra una spunta e
+   un numero.
+   =========================================================================== #}
+
+
+{% macro avanzamento(fasi, etichetta="Avanzamento delle fasi") -%}
+<ol class="avanzamento" aria-label="{{ etichetta }}">
+    {%- for fase in fasi %}
+    <li class="avanzamento-fase{% if fase.stato %} avanzamento-fase--{{ fase.stato }}{% endif %}"
+        {% if fase.stato == "corrente" %}aria-current="step"{% endif %}>
+
+        <span class="avanzamento-pallino" aria-hidden="true">
+            {%- if fase.stato == "conclusa" -%}
+                &check;
+            {%- elif fase.stato == "ferma" -%}
+                !
+            {%- else -%}
+                {{ loop.index }}
+            {%- endif -%}
+        </span>
+
+        <span class="avanzamento-nome">
+            {{ fase.nome }}
+            {#- Quello che il pallino dice con un simbolo, qui e' scritto: e'
+                l'unica parte che sentono i lettori di schermo. -#}
+            {%- if fase.stato == "conclusa" %}<span class="solo-lettura-vocale"> (conclusa)</span>
+            {%- elif fase.stato == "corrente" %}<span class="solo-lettura-vocale"> (in corso)</span>
+            {%- elif fase.stato == "ferma" %}<span class="solo-lettura-vocale"> (ferma)</span>
+            {%- else %}<span class="solo-lettura-vocale"> (da fare)</span>
+            {%- endif %}
+        </span>
+
+        {%- if fase.data %}
+        <span class="avanzamento-data">{{ fase.data }}</span>
+        {%- endif %}
+    </li>
+    {%- endfor %}
+</ol>
+{%- endmacro %}

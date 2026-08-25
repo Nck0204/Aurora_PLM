@@ -1,0 +1,245 @@
+{# ===========================================================================
+   CAMPI DI UN MODULO
+
+   QUANDO SI USA. Sempre, per qualunque campo. Non si scrive un <input> a mano
+   dentro una pagina: passando da qui si ottengono gratis tre cose che a mano
+   si dimenticano una volta su tre.
+
+     1. L'etichetta e' collegata al campo con for/id. Chi usa un lettore di
+        schermo sente che cosa sta compilando; chi usa il mouse puo' fare clic
+        sull'etichetta per portare il cursore nel campo.
+     2. Il messaggio di errore e' collegato al campo con aria-describedby e
+        il campo si segna con aria-invalid: l'errore viene letto ad alta voce
+        insieme al campo, non resta un pezzo di testo rosso staccato.
+     3. Gli obbligatori si vedono, e il motivo per cui si vedono e' scritto
+        anche a parole ("obbligatorio"), non solo con l'asterisco.
+
+   IL VALORE RITORNA SEMPRE. Quando un modulo viene rifiutato, la rotta lo
+   rimostra passando i valori gia' scritti: nessuno deve ribattere tre campi
+   perche' il quarto era sbagliato. L'unica eccezione, che non si discute, e'
+   la password: quella non torna indietro mai (vedi entra.html).
+
+   COME SI USA:
+
+       {% raw %}{% from "components/campi.html" import campo, area_testo, tendina, spunta %}
+
+       {{ campo("Nome utente", "username", valore=username,
+                obbligatorio=true, autocomplete="username") }}
+
+       {{ tendina("Ruolo", "ruolo",
+                  opzioni=[("utente", "utente"), ("creatore", "creatore")],
+                  scelto=ruolo,
+                  aiuto="Chi e' creatore gestisce gli utenti.") }}
+
+       {{ spunta("Ricordami su questo dispositivo", "ricordami") }}{% endraw %}
+
+   L'elenco delle opzioni di "tendina" e' fatto di coppie (valore, etichetta):
+   il valore e' quello che viaggia nel modulo, l'etichetta quella che si legge.
+
+   IL MACRO DEL MENU A TENDINA SI CHIAMA "tendina" E NON "menu". Non e' un
+   capriccio: i macro importati da una pagina figlia finiscono nel contesto con
+   cui viene disegnato anche base.html, e li' "menu" era gia' il nome delle
+   voci della barra laterale. La pagina si apriva con un errore che non diceva
+   niente ("'Macro' object is not iterable"). Vale come regola generale: i nomi
+   dei macro devono essere specifici, perche' vivono nello stesso spazio delle
+   variabili di tutte le pagine.
+   =========================================================================== #}
+
+
+{# --- Casella di testo ---------------------------------------------------
+   Il tipo si sceglie con "tipo": text, password, email, search, number, date.
+   Usare il tipo giusto non e' un dettaglio: e' quello che fa comparire la
+   tastiera numerica sui portatili con schermo tattile e che fa riconoscere il
+   modulo ai gestori di password. #}
+{% macro campo(etichetta, nome, valore="", tipo="text", obbligatorio=false,
+               errore=none, aiuto=none, segnaposto=none, autocomplete=none,
+               autofocus=false, sola_lettura=false, disabilitato=false,
+               monospazio=false, lunghezza_massima=none, lunghezza_minima=none,
+               id=none, attributi="") -%}
+{%- set campo_id = id or nome -%}
+<div class="campo{% if errore %} campo--con-errore{% endif %}">
+    <label class="campo-etichetta" for="{{ campo_id }}">
+        {{ etichetta }}
+        {%- if obbligatorio %}<span class="obbligatorio" title="obbligatorio">*<span class="solo-lettura-vocale"> obbligatorio</span></span>{% endif %}
+    </label>
+
+    <input type="{{ tipo }}"
+           id="{{ campo_id }}"
+           name="{{ nome }}"
+           class="campo-controllo{% if monospazio %} campo-controllo--codice{% endif %}"
+           value="{{ valore|default('', true) }}"
+           {%- if segnaposto %} placeholder="{{ segnaposto }}"{% endif %}
+           {%- if autocomplete %} autocomplete="{{ autocomplete }}"{% endif %}
+           {%- if lunghezza_massima %} maxlength="{{ lunghezza_massima }}"{% endif %}
+           {%- if lunghezza_minima %} minlength="{{ lunghezza_minima }}"{% endif %}
+           {%- if obbligatorio %} required{% endif %}
+           {%- if autofocus %} autofocus{% endif %}
+           {%- if sola_lettura %} readonly{% endif %}
+           {%- if disabilitato %} disabled{% endif %}
+           {%- if errore %} aria-invalid="true"{% endif %}
+           {%- if errore or aiuto %} aria-describedby="{{ campo_id }}-nota"{% endif %}
+           {{ attributi|safe }}>
+
+    {{ _nota(campo_id, errore, aiuto) }}
+</div>
+{%- endmacro %}
+
+
+{# --- Area di testo -------------------------------------------------------
+   Per le descrizioni, le note, i motivi di un rifiuto. Le righe si contano in
+   "righe": tre per una nota breve, otto per una descrizione. #}
+{% macro area_testo(etichetta, nome, valore="", righe=4, obbligatorio=false,
+                    errore=none, aiuto=none, segnaposto=none,
+                    lunghezza_massima=none, disabilitato=false,
+                    id=none, attributi="") -%}
+{%- set campo_id = id or nome -%}
+<div class="campo{% if errore %} campo--con-errore{% endif %}">
+    <label class="campo-etichetta" for="{{ campo_id }}">
+        {{ etichetta }}
+        {%- if obbligatorio %}<span class="obbligatorio" title="obbligatorio">*<span class="solo-lettura-vocale"> obbligatorio</span></span>{% endif %}
+    </label>
+
+    <textarea id="{{ campo_id }}"
+              name="{{ nome }}"
+              class="campo-controllo"
+              rows="{{ righe }}"
+              {%- if segnaposto %} placeholder="{{ segnaposto }}"{% endif %}
+              {%- if lunghezza_massima %} maxlength="{{ lunghezza_massima }}"{% endif %}
+              {%- if obbligatorio %} required{% endif %}
+              {%- if disabilitato %} disabled{% endif %}
+              {%- if errore %} aria-invalid="true"{% endif %}
+              {%- if errore or aiuto %} aria-describedby="{{ campo_id }}-nota"{% endif %}
+              {{ attributi|safe }}>{{ valore|default('', true) }}</textarea>
+
+    {{ _nota(campo_id, errore, aiuto) }}
+</div>
+{%- endmacro %}
+
+
+{# --- Menu a tendina ------------------------------------------------------
+   "opzioni" e' un elenco di coppie (valore, etichetta). "vuoto" aggiunge in
+   cima una voce senza valore, per i menu in cui non scegliere e' una
+   risposta ammessa ("Tutti i clienti", "Qualunque stato"). #}
+{% macro tendina(etichetta, nome, opzioni, scelto=none, obbligatorio=false,
+                 errore=none, aiuto=none, vuoto=none, disabilitato=false,
+                 id=none, attributi="") -%}
+{%- set campo_id = id or nome -%}
+<div class="campo{% if errore %} campo--con-errore{% endif %}">
+    <label class="campo-etichetta" for="{{ campo_id }}">
+        {{ etichetta }}
+        {%- if obbligatorio %}<span class="obbligatorio" title="obbligatorio">*<span class="solo-lettura-vocale"> obbligatorio</span></span>{% endif %}
+    </label>
+
+    <select id="{{ campo_id }}"
+            name="{{ nome }}"
+            class="campo-controllo"
+            {%- if obbligatorio %} required{% endif %}
+            {%- if disabilitato %} disabled{% endif %}
+            {%- if errore %} aria-invalid="true"{% endif %}
+            {%- if errore or aiuto %} aria-describedby="{{ campo_id }}-nota"{% endif %}
+            {{ attributi|safe }}>
+        {%- if vuoto %}
+        <option value="">{{ vuoto }}</option>
+        {%- endif %}
+        {%- for valore, testo in opzioni %}
+        <option value="{{ valore }}"{% if scelto is not none and scelto|string == valore|string %} selected{% endif %}>{{ testo }}</option>
+        {%- endfor %}
+    </select>
+
+    {{ _nota(campo_id, errore, aiuto) }}
+</div>
+{%- endmacro %}
+
+
+{# --- Casella di spunta ---------------------------------------------------
+   L'etichetta avvolge la casella: si puo' fare clic sul testo, che e' un
+   bersaglio molto piu' grande del quadratino.
+
+   I browser inviano una casella di spunta solo quando e' spuntata, e non la
+   inviano affatto quando non lo e'. Per questo dalla parte del server il
+   campo si legge come stringa facoltativa e non come booleano: vedi
+   esegui_accesso() in app/routers/auth.py. #}
+{% macro spunta(etichetta, nome, valore="si", spuntata=false, aiuto=none,
+                disabilitato=false, id=none, attributi="") -%}
+{%- set campo_id = id or nome -%}
+<div class="campo">
+    <label class="campo-spunta" for="{{ campo_id }}">
+        <input type="checkbox"
+               id="{{ campo_id }}"
+               name="{{ nome }}"
+               value="{{ valore }}"
+               {%- if spuntata %} checked{% endif %}
+               {%- if disabilitato %} disabled{% endif %}
+               {%- if aiuto %} aria-describedby="{{ campo_id }}-nota"{% endif %}
+               {{ attributi|safe }}>
+        <span class="testo">
+            <span>{{ etichetta }}</span>
+            {%- if aiuto %}
+            <span class="campo-aiuto" id="{{ campo_id }}-nota">{{ aiuto }}</span>
+            {%- endif %}
+        </span>
+    </label>
+</div>
+{%- endmacro %}
+
+
+{# --- Pallini di scelta ---------------------------------------------------
+   Quando le possibilita' sono da due a quattro e conviene vederle tutte
+   insieme invece di aprire un menu. Sopra le quattro si usa "menu".
+
+   Il gruppo e' un <fieldset> con la sua <legend>: e' cosi' che un lettore di
+   schermo capisce che quelle scelte vanno insieme e a che domanda
+   rispondono. #}
+{% macro scelta(etichetta, nome, opzioni, scelto=none, aiuto=none) -%}
+<fieldset class="campo gruppo-campi">
+    <legend class="campo-etichetta">{{ etichetta }}</legend>
+    {%- for valore, testo in opzioni %}
+    <label class="campo-spunta" for="{{ nome }}-{{ loop.index }}">
+        <input type="radio"
+               id="{{ nome }}-{{ loop.index }}"
+               name="{{ nome }}"
+               value="{{ valore }}"
+               {%- if scelto is not none and scelto|string == valore|string %} checked{% endif %}>
+        <span class="testo"><span>{{ testo }}</span></span>
+    </label>
+    {%- endfor %}
+    {%- if aiuto %}
+    <p class="campo-aiuto">{{ aiuto }}</p>
+    {%- endif %}
+</fieldset>
+{%- endmacro %}
+
+
+{# --- Il campo nascosto del gettone CSRF ----------------------------------
+   D-028: ogni modulo POST deve contenerlo, altrimenti riceve un 400. Questo
+   macro esiste perche' sia una riga sola e sempre la stessa.
+
+       {% raw %}<form method="post" action="/entra">
+           {{ csrf(request) }}
+           ...
+       </form>{% endraw %}
+
+   token_csrf() e' registrato fra le funzioni globali del motore Jinja2 in
+   app/templating.py, quindi e' raggiungibile anche da dentro un macro
+   importato; "request" invece va passato, perche' i macro importati non
+   vedono il contesto della pagina che li usa. #}
+{% macro csrf(request) -%}
+<input type="hidden" name="csrf" value="{{ token_csrf(request) }}">
+{%- endmacro %}
+
+
+{# --- Aiuto interno -------------------------------------------------------
+   La riga sotto il campo. Se c'e' un errore mostra quello, altrimenti la
+   spiegazione: mai tutti e due insieme, perche' nel momento in cui c'e' un
+   errore l'unica cosa da leggere e' l'errore.
+
+   Il nome comincia con un trattino basso per dire che non si usa fuori di
+   qui: Jinja non ha modo di renderlo privato davvero, ma la convenzione si
+   legge. #}
+{% macro _nota(campo_id, errore, aiuto) -%}
+{%- if errore %}
+    <span class="campo-errore" id="{{ campo_id }}-nota" role="alert">{{ errore }}</span>
+{%- elif aiuto %}
+    <span class="campo-aiuto" id="{{ campo_id }}-nota">{{ aiuto }}</span>
+{%- endif %}
+{%- endmacro %}

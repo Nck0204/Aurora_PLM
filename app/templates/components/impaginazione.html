@@ -1,0 +1,122 @@
+{# ===========================================================================
+   IMPAGINAZIONE
+
+   QUANDO SI USA. Sotto ogni elenco che possa superare le cinquanta righe.
+   Non e' un vezzo: una pagina che tira fuori dal database tremila documenti
+   li deve anche disegnare, e quello e' il momento in cui il programma
+   comincia a sembrare lento.
+
+   SONO COLLEGAMENTI, NON PULSANTI. Ogni pagina dell'elenco ha il suo
+   indirizzo: si apre in una scheda nuova, si copia, si manda a un collega, si
+   ritrova nella cronologia. E funziona senza JavaScript.
+
+   COME SI USA:
+
+       {% raw %}{% from "components/impaginazione.html" import impaginazione %}
+
+       {{ impaginazione(pagina=pagina, totale_pagine=totale_pagine,
+                        indirizzo="/documenti", parametri={"q": q},
+                        totale_righe=totale) }}{% endraw %}
+
+   Parametri:
+
+     pagina          la pagina che si sta guardando, contata da 1
+     totale_pagine   quante ce ne sono in tutto
+     indirizzo       la rotta dell'elenco
+     parametri       gli altri parametri da tenere (ricerca, filtri,
+                     ordinamento): senza, cambiare pagina li azzererebbe
+     totale_righe    quante righe ci sono in tutto, per la scritta di fianco
+
+   Con una pagina sola non si mostra niente: un'impaginazione con un solo
+   numero e' rumore.
+
+   QUANTE PAGINE SI VEDONO. Al massimo sette numeri: la prima, l'ultima, e
+   quelle intorno a dove si e' adesso. In mezzo compaiono i puntini. Con
+   duecento pagine, mostrarle tutte farebbe una riga di numeri lunga tre
+   schermate.
+   =========================================================================== #}
+
+
+{% macro impaginazione(pagina, totale_pagine, indirizzo, parametri=none,
+                       totale_righe=none, nome_parametro="pagina") -%}
+{%- if totale_pagine and totale_pagine > 1 %}
+
+{#- I numeri da mostrare, calcolati una volta sola. Lo zero non e' una pagina:
+    vuol dire "qui vanno i puntini".
+
+    Con sette pagine o meno si mostrano tutte. Sopra, si mostrano sempre la
+    prima e l'ultima piu' quella corrente con una vicina per parte: con
+    duecento pagine, mostrarle tutte farebbe una riga lunga tre schermate. -#}
+{%- set numeri = [] -%}
+{%- for numero in range(1, totale_pagine + 1) -%}
+    {%- if totale_pagine <= 7
+           or numero == 1
+           or numero == totale_pagine
+           or (numero >= pagina - 1 and numero <= pagina + 1) -%}
+        {%- if numeri and numero > numeri[-1] + 1 -%}
+            {%- set _ = numeri.append(0) -%}
+        {%- endif -%}
+        {%- set _ = numeri.append(numero) -%}
+    {%- endif -%}
+{%- endfor -%}
+
+<nav class="impaginazione" aria-label="Pagine dei risultati">
+
+    {#- Precedente. Sulla prima pagina c'e' ma non si preme: e' uno <span>,
+        quindi la tastiera non ci si ferma nemmeno. -#}
+    {%- if pagina > 1 %}
+    <a class="impaginazione-voce"
+       href="{{ _indirizzo(indirizzo, nome_parametro, pagina - 1, parametri) }}"
+       rel="prev" aria-label="Pagina precedente">&lsaquo;</a>
+    {%- else %}
+    <span class="impaginazione-voce impaginazione-voce--spenta" aria-hidden="true">&lsaquo;</span>
+    {%- endif %}
+
+    {%- for numero in numeri %}
+        {%- if numero == 0 %}
+    <span class="impaginazione-salto" aria-hidden="true">&hellip;</span>
+        {%- elif numero == pagina %}
+    <span class="impaginazione-voce impaginazione-voce--corrente"
+          aria-current="page">{{ numero }}</span>
+        {%- else %}
+    <a class="impaginazione-voce"
+       href="{{ _indirizzo(indirizzo, nome_parametro, numero, parametri) }}"
+       aria-label="Pagina {{ numero }}">{{ numero }}</a>
+        {%- endif %}
+    {%- endfor %}
+
+    {#- Successiva. -#}
+    {%- if pagina < totale_pagine %}
+    <a class="impaginazione-voce"
+       href="{{ _indirizzo(indirizzo, nome_parametro, pagina + 1, parametri) }}"
+       rel="next" aria-label="Pagina successiva">&rsaquo;</a>
+    {%- else %}
+    <span class="impaginazione-voce impaginazione-voce--spenta" aria-hidden="true">&rsaquo;</span>
+    {%- endif %}
+
+    {%- if totale_righe is not none %}
+    <span class="impaginazione-conteggio">
+        {{ totale_righe }} risultat{{ "o" if totale_righe == 1 else "i" }},
+        pagina {{ pagina }} di {{ totale_pagine }}
+    </span>
+    {%- endif %}
+</nav>
+{%- endif %}
+{%- endmacro %}
+
+
+{# Compone l'indirizzo di una pagina tenendosi gli altri parametri.
+
+   Il filtro urlencode su un dizionario produce la stringa dei parametri gia'
+   con le codifiche giuste: un cliente che si chiama "Rossi & Figli" cercato
+   dalla casella di ricerca non deve spezzare l'indirizzo.
+
+   In "parametri" si passano solo le voci valorizzate: un filtro non scelto si
+   omette, non si passa come None, altrimenti nell'indirizzo comparirebbe la
+   parola "None". #}
+{% macro _indirizzo(indirizzo, nome_parametro, numero, parametri) -%}
+{%- set tutti = {} -%}
+{%- set _ = tutti.update(parametri or {}) -%}
+{%- set _ = tutti.update({nome_parametro: numero}) -%}
+{{- indirizzo }}?{{ tutti|urlencode -}}
+{%- endmacro %}

@@ -1,0 +1,87 @@
+{# ===========================================================================
+   ETICHETTE DI STATO
+
+   QUANDO SI USA. Ogni volta che una riga o una scheda deve dire in quale
+   stato si trova: la versione di un prodotto, un documento, un utente, un
+   messaggio di posta.
+
+   PERCHE' PASSA DA QUI E NON SI SCRIVE A MANO. Perche' lo stesso stato deve
+   avere lo stesso colore in ogni pagina del programma, per sempre. Se la
+   tinta la sceglie chi scrive la pagina, dopo cinque sessioni "rilasciato" e'
+   verde in tre elenchi e azzurro nel quarto, e chi guarda smette di fidarsi
+   del colore.
+
+   La corrispondenza fra stato e tinta e' fissata qui sotto una volta sola e
+   ricalca l'elenco LifecycleState di app/models/enums.py.
+
+   IL COLORE NON E' MAI L'UNICA INFORMAZIONE. Dentro l'etichetta c'e' sempre
+   la parola scritta: chi non distingue il verde dal giallo legge "rilasciato"
+   e "superato" e non perde niente. Il pallino colorato davanti e' un di piu'.
+
+   COME SI USA:
+
+       {% raw %}{% from "components/stato.html" import etichetta_ciclo_vita, etichetta %}
+
+       {{ etichetta_ciclo_vita(versione.lifecycle_state) }}
+       {{ etichetta("3 sessioni aperte", variante="accento") }}
+       {{ etichetta("disattivato", variante="errore") }}{% endraw %}
+   =========================================================================== #}
+
+
+{# I cinque stati del ciclo di vita di una versione di prodotto, con la loro
+   tinta e il testo da mostrare. La chiave e' il valore che sta nel database
+   (in italiano, con il trattino basso: vedi D-014). #}
+{% set STATI_CICLO_VITA = {
+    "in_sviluppo":   {"classe": "in-sviluppo",   "testo": "in sviluppo"},
+    "rilasciato":    {"classe": "rilasciato",    "testo": "rilasciato"},
+    "in_produzione": {"classe": "in-produzione", "testo": "in produzione"},
+    "superato":      {"classe": "superato",      "testo": "superato"},
+    "obsoleto":      {"classe": "obsoleto",      "testo": "obsoleto"},
+} %}
+
+
+{# Lo stato di una versione di prodotto.
+
+   Accetta sia il membro dell'elenco (LifecycleState.RILASCIATO) sia la
+   stringa che c'e' dentro ("rilasciato"): le rotte passano l'uno o l'altra a
+   seconda di come hanno letto il dato, e non deve essere un problema. #}
+{% macro etichetta_ciclo_vita(stato) -%}
+{%- set chiave = stato.value if stato is not string else stato -%}
+{%- set voce = STATI_CICLO_VITA.get(chiave) -%}
+{%- if voce -%}
+<span class="etichetta etichetta--{{ voce.classe }}">{{ voce.testo }}</span>
+{%- else -%}
+{# Stato non previsto: si mostra comunque, in grigio. Meglio una parola
+   sconosciuta che una casella vuota, che nasconderebbe il problema. #}
+<span class="etichetta">{{ chiave }}</span>
+{%- endif -%}
+{%- endmacro %}
+
+
+{# Etichetta generica, per tutto quello che non e' il ciclo di vita.
+
+   Varianti: neutra (di partenza), accento, successo, attenzione, errore.
+   Con pallino=false sparisce il pallino colorato: si usa quando l'etichetta
+   e' un conteggio o una sigla e non uno stato. #}
+{% macro etichetta(testo, variante="neutra", pallino=true, titolo=none) -%}
+<span class="etichetta
+             {%- if variante != 'neutra' %} etichetta--{{ variante }}{% endif %}
+             {%- if not pallino %} etichetta--semplice{% endif %}"
+      {%- if titolo %} title="{{ titolo }}"{% endif %}>{{ testo }}</span>
+{%- endmacro %}
+
+
+{# Lo stato di un utente: attivo, disattivato, deve cambiare la password.
+
+   Sta qui e non nella pagina degli utenti perche' comparira' in tre o quattro
+   posti diversi (elenco utenti, squadra di un progetto, autore di un
+   documento) e deve dire sempre la stessa cosa allo stesso modo. #}
+{% macro etichetta_utente(utente) -%}
+{%- if not utente.is_active -%}
+    {{ etichetta("disattivato", variante="errore") }}
+{%- elif utente.must_change_password -%}
+    {{ etichetta("deve cambiare la password", variante="attenzione") }}
+{%- else -%}
+    {{ etichetta("attivo", variante="successo") }}
+{%- endif -%}
+{%- endmacro %}

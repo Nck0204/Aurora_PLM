@@ -1,0 +1,773 @@
+{# ===========================================================================
+   LA VETRINA DEI COMPONENTI - /stile
+
+   E' il riferimento delle sessioni successive: chi costruisce una pagina nuova
+   apre questa, trova il componente che gli serve, copia la riga d'esempio.
+
+   TRE REGOLE PER CHI LA MODIFICA
+
+   1. Non si scrivono colori qui dentro. Nemmeno uno. I campioni della palette
+      qui sotto mostrano le variabili richiamandole per nome, non ricopiandone
+      il valore: cosi' il giorno in cui una tinta cambia in aurora.css, questa
+      pagina lo dice da sola invece di mentire.
+
+   2. Ogni componente si mostra passando dal suo macro, mai riscrivendone
+      l'HTML a mano. Se in vetrina il pulsante fosse scritto a mano e nel macro
+      cambiasse qualcosa, la vetrina mostrerebbe una cosa che non esiste piu' -
+      che e' il modo peggiore possibile di sbagliare, per una pagina il cui
+      unico mestiere e' dire come stanno le cose.
+
+   3. Ogni componente nuovo si aggiunge anche qui, nella scheda giusta. Un
+      componente che non e' in vetrina non lo trovera' nessuno e verra'
+      riscritto da capo alla prossima sessione.
+   =========================================================================== #}
+{% extends "base.html" %}
+
+{% from "components/icone.html" import icona %}
+{% from "components/pulsanti.html" import pulsante, pulsante_collegamento, modulo_pulsante %}
+{% from "components/campi.html" import campo, area_testo, tendina, spunta, scelta, csrf %}
+{% from "components/tabella.html" import tabella %}
+{% from "components/stato.html" import etichetta, etichetta_ciclo_vita %}
+{% from "components/riquadro.html" import riquadro %}
+{% from "components/dialogo.html" import dialogo, pulsante_apri, pulsante_chiudi %}
+{% from "components/avvisi.html" import avviso, notifica %}
+{% from "components/ricerca.html" import ricerca %}
+{% from "components/impaginazione.html" import impaginazione %}
+{% from "components/schede.html" import schede, scheda, schede_collegamento %}
+{% from "components/avanzamento.html" import avanzamento %}
+{% from "components/descrizione.html" import descrizione, voce %}
+{% from "components/area_file.html" import area_file %}
+{% from "components/vuoto.html" import vuoto %}
+
+{% block titolo %}Stile{% endblock %}
+{% block sezione %}Stile &middot; vetrina dei componenti{% endblock %}
+
+{% block contenuto %}
+
+<div class="testata">
+    <div>
+        <h1>Vetrina dei componenti</h1>
+        <p class="sottotitolo">
+            Tutto quello che si puo' mettere in una pagina di {{ app_name }},
+            in ogni variante. Le pagine nuove si costruiscono con questi pezzi:
+            non se ne inventano altri senza aggiungerli anche qui.
+        </p>
+    </div>
+</div>
+
+{{ avviso("I componenti stanno in app/templates/components/, uno o due per "
+          "file. In cima a ciascun file e' scritto quando si usa e quando non "
+          "si usa: quella e' la documentazione, questa e' la prova.",
+          titolo="Dove stanno") }}
+
+{% call schede("vetrina") %}
+
+{# =========================================================================
+   SCHEDA 1 - FONDAMENTA
+   ========================================================================= #}
+{% call scheda("vetrina", "Fondamenta", prima=true) %}
+
+    <h2>Palette</h2>
+    <p class="testo-tenue">
+        Ogni tinta e' una variabile CSS dichiarata in <code>:root</code>, in
+        cima ad <code>aurora.css</code>. Nel resto del programma si richiama
+        con <code>var(--nome)</code>: dentro un componente non si scrive mai un
+        valore esadecimale.
+    </p>
+
+    {#- I campioni si disegnano richiamando la variabile per nome. Qui non c'e'
+        nessun colore scritto: c'e' l'elenco dei nomi, e il colore lo va a
+        prendere il browser dal foglio di stile. -#}
+    {% set superfici = [
+        ("--colore-sfondo", "lo sfondo della pagina"),
+        ("--colore-superficie", "riquadri, barre, tabelle"),
+        ("--colore-superficie-sollevata", "quello che sta sopra un riquadro"),
+        ("--colore-superficie-passaggio", "la stessa, sotto il mouse"),
+        ("--colore-riga-alterna", "le righe pari di una tabella"),
+        ("--colore-bordo", "il bordo normale"),
+        ("--colore-bordo-tenue", "i separatori interni"),
+        ("--colore-bordo-marcato", "il bordo sotto il mouse"),
+    ] %}
+    {% set tinte = [
+        ("--colore-testo", "il testo normale"),
+        ("--colore-testo-tenue", "le spiegazioni, le etichette"),
+        ("--colore-accento", "l'azione principale, i collegamenti"),
+        ("--colore-accento-scuro", "l'accento premuto"),
+        ("--colore-successo", "e' andata bene"),
+        ("--colore-attenzione", "guarda prima di premere"),
+        ("--colore-errore", "non e' andata"),
+    ] %}
+    {% set stati = [
+        ("--stato-in-sviluppo", "in sviluppo"),
+        ("--stato-rilasciato", "rilasciato"),
+        ("--stato-in-produzione", "in produzione"),
+        ("--stato-superato", "superato"),
+        ("--stato-obsoleto", "obsoleto"),
+    ] %}
+
+    <h3>Superfici e bordi</h3>
+    <div class="campioni">
+        {% for nome, a_che_serve in superfici %}
+        <div class="campione">
+            <span class="campione-tinta" style="background-color: var({{ nome }})"></span>
+            <span class="campione-nome mono">{{ nome }}</span>
+            <span class="campione-uso">{{ a_che_serve }}</span>
+        </div>
+        {% endfor %}
+    </div>
+
+    <h3>Testo e tinte di servizio</h3>
+    <div class="campioni">
+        {% for nome, a_che_serve in tinte %}
+        <div class="campione">
+            <span class="campione-tinta" style="background-color: var({{ nome }})"></span>
+            <span class="campione-nome mono">{{ nome }}</span>
+            <span class="campione-uso">{{ a_che_serve }}</span>
+        </div>
+        {% endfor %}
+    </div>
+
+    <h3>Stati del ciclo di vita</h3>
+    <p class="testo-tenue">
+        Sono i cinque valori di <code>LifecycleState</code>. La corrispondenza
+        fra stato e tinta e' fissata una volta sola: lo stesso stato ha lo
+        stesso colore in ogni pagina, per sempre.
+    </p>
+    <div class="campioni">
+        {% for nome, a_che_serve in stati %}
+        <div class="campione">
+            <span class="campione-tinta" style="background-color: var({{ nome }})"></span>
+            <span class="campione-nome mono">{{ nome }}</span>
+            <span class="campione-uso">{{ a_che_serve }}</span>
+        </div>
+        {% endfor %}
+    </div>
+
+    <h2>Spaziature</h2>
+    <p class="testo-tenue">
+        Scala basata su 4 pixel. Non si usano misure fuori da questa scala:
+        avere nove valori invece di trenta e' quello che tiene allineate le
+        pagine scritte in giorni diversi.
+    </p>
+    {% set spaziature = ["--spazio-1", "--spazio-2", "--spazio-3", "--spazio-4",
+                         "--spazio-5", "--spazio-6", "--spazio-8", "--spazio-10",
+                         "--spazio-12"] %}
+    <div class="impila">
+        {% for nome in spaziature %}
+        <div class="affianca">
+            <span class="misura-barra" style="width: var({{ nome }})"></span>
+            <span class="mono testo-piccolo">{{ nome }}</span>
+        </div>
+        {% endfor %}
+    </div>
+
+    <h2>Caratteri</h2>
+    <div class="griglia-riquadri">
+        {% call riquadro("Testo") %}
+            <p>Solo caratteri gia' presenti nel sistema operativo: niente da
+               scaricare, niente che manchi il primo giorno.</p>
+            <p class="testo-tenue testo-piccolo">
+                system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial
+            </p>
+        {% endcall %}
+
+        {% call riquadro("Codici") %}
+            <p class="mono">COD-0O1-lI8 &middot; nicolo.dangelo &middot; 0O1lI</p>
+            <p class="testo-tenue testo-piccolo">
+                Monospazio per quello che si ribatte a mano o si confronta
+                carattere per carattere: codici prodotto, codici articolo, nomi
+                utente, impronte. Li' la differenza fra 0 e O deve vedersi.
+            </p>
+        {% endcall %}
+    </div>
+
+    <h2>Icone</h2>
+    <p class="testo-tenue">
+        Disegni SVG scritti a mano in <code>components/icone.html</code>.
+        Prendono il colore del testo in cui si trovano, quindi non hanno
+        varianti colorate.
+    </p>
+    {% set nomi_icone = ["prodotti", "progetti", "documenti", "posta", "utenti",
+                         "diagnostica", "stile", "casa", "cerca", "esci",
+                         "chiave", "piu", "spunta", "attenzione", "errore",
+                         "informazione", "carica", "cartella-vuota",
+                         "freccia-sinistra", "freccia-destra"] %}
+    <div class="campioni">
+        {% for nome in nomi_icone %}
+        <div class="campione campione--icona">
+            {{ icona(nome, 24) }}
+            <span class="campione-nome mono">{{ nome }}</span>
+        </div>
+        {% endfor %}
+    </div>
+
+{% endcall %}
+
+{# =========================================================================
+   SCHEDA 2 - PULSANTI
+   ========================================================================= #}
+{% call scheda("vetrina", "Pulsanti") %}
+
+    <h2>Varianti</h2>
+    <p class="testo-tenue">
+        Il primario e' <strong>uno solo per pagina</strong>: se ce ne sono tre,
+        nessuno dei tre e' l'azione principale.
+    </p>
+    <div class="fila-pulsanti">
+        {{ pulsante("Primario", tipo="button", variante="primario") }}
+        {{ pulsante("Secondario", tipo="button") }}
+        {{ pulsante("Pericolo", tipo="button", variante="pericolo") }}
+        {{ pulsante("Piatto", tipo="button", variante="piatto") }}
+        {{ pulsante("Disabilitato", tipo="button", disabilitato=true) }}
+    </div>
+
+    <h2>Misure</h2>
+    <div class="fila-pulsanti">
+        {{ pulsante("Normale", tipo="button", variante="primario") }}
+        {{ pulsante("Piccolo", tipo="button", variante="primario", misura="piccolo") }}
+        {{ pulsante("Normale", tipo="button") }}
+        {{ pulsante("Piccolo", tipo="button", misura="piccolo") }}
+        {{ pulsante("Pericolo piccolo", tipo="button", variante="pericolo", misura="piccolo") }}
+    </div>
+
+    <h2>Con icona</h2>
+    <div class="fila-pulsanti">
+        {{ pulsante("Crea", tipo="button", variante="primario", icona_nome="piu") }}
+        {{ pulsante("Nuova password", tipo="button", icona_nome="chiave") }}
+        {{ pulsante("Esci", tipo="button", variante="pericolo", icona_nome="esci") }}
+        {{ pulsante("Indietro", tipo="button", misura="piccolo", icona_nome="freccia-sinistra") }}
+    </div>
+
+    <h2>Largo</h2>
+    <p class="testo-tenue">Occupa tutta la larghezza: il pulsante "Entra" del
+       modulo di accesso, o quello in fondo a un riquadro stretto.</p>
+    <div class="colonna-stretta">
+        {{ pulsante("Entra", tipo="button", variante="primario", largo=true) }}
+    </div>
+
+    <h2>Collegamenti travestiti da pulsante</h2>
+    <p class="testo-tenue">
+        Portano da un'altra parte e non cambiano niente. Un'azione che cambia i
+        dati non e' mai un collegamento: e' un modulo POST, con il suo gettone.
+    </p>
+    <div class="fila-pulsanti">
+        {{ pulsante_collegamento("Vai all'elenco", "/stile", variante="primario") }}
+        {{ pulsante_collegamento("Annulla", "/stile") }}
+        {{ pulsante_collegamento("Piccolo", "/stile", misura="piccolo") }}
+    </div>
+
+    <h2>Modulo con un pulsante solo</h2>
+    <p class="testo-tenue">
+        Il caso piu' frequente di tutti. Il macro mette da se' il campo
+        nascosto del gettone CSRF, cosi' non lo si puo' dimenticare.
+    </p>
+    <div class="fila-pulsanti">
+        {{ modulo_pulsante(request, "/stile", "Azione", misura="piccolo") }}
+        {{ modulo_pulsante(request, "/stile", "Con conferma",
+                           variante="pericolo", misura="piccolo",
+                           conferma="Questa e' la domanda che compare prima.") }}
+    </div>
+
+{% endcall %}
+
+{# =========================================================================
+   SCHEDA 3 - MODULI
+   ========================================================================= #}
+{% call scheda("vetrina", "Moduli") %}
+
+    <div class="colonna-stretta">
+
+        <h2>Campi</h2>
+        {% call riquadro("Tutti gli stati di un campo") %}
+        <div class="modulo">
+            {{ campo("Campo normale", "esempio_normale",
+                     valore="Un valore gia' scritto") }}
+
+            {{ campo("Campo obbligatorio", "esempio_obbligatorio",
+                     obbligatorio=true,
+                     aiuto="La riga di spiegazione sta qui sotto e serve a "
+                           "dire come va compilato.") }}
+
+            {{ campo("Campo con errore", "esempio_errore",
+                     valore="valore-non-buono",
+                     errore="Questo codice e' gia' di un altro prodotto.") }}
+
+            {{ campo("Campo con codice", "esempio_codice",
+                     valore="MOT-A100-R02",
+                     monospazio=true,
+                     aiuto="Monospazio: si ribatte a mano e si confronta "
+                           "carattere per carattere.") }}
+
+            {{ campo("Campo in sola lettura", "esempio_sola_lettura",
+                     valore="Non si modifica", sola_lettura=true) }}
+
+            {{ campo("Campo disabilitato", "esempio_disabilitato",
+                     valore="Non si compila", disabilitato=true) }}
+
+            {{ campo("Password", "esempio_password", tipo="password") }}
+
+            <div class="modulo-riga">
+                {{ campo("Nome", "esempio_nome", valore="Mario") }}
+                {{ campo("Cognome", "esempio_cognome", valore="Rossi") }}
+            </div>
+        </div>
+        {% endcall %}
+
+        <h2 id="area-di-testo">Area di testo</h2>
+        {% call riquadro() %}
+        <div class="modulo">
+            {{ area_testo("Descrizione", "esempio_descrizione",
+                          valore="Scheda di controllo motore, revisione 2.",
+                          righe=4,
+                          aiuto="Per le note lunghe e le descrizioni.") }}
+
+            {{ area_testo("Con errore", "esempio_area_errore",
+                          righe=3,
+                          errore="La descrizione non puo' essere vuota.") }}
+        </div>
+        {% endcall %}
+
+        <h2>Menu a tendina</h2>
+        {% call riquadro() %}
+        <div class="modulo">
+            {{ tendina("Stato", "esempio_stato",
+                    opzioni=[("in_sviluppo", "in sviluppo"),
+                             ("rilasciato", "rilasciato"),
+                             ("in_produzione", "in produzione"),
+                             ("superato", "superato"),
+                             ("obsoleto", "obsoleto")],
+                    scelto="rilasciato") }}
+
+            {{ tendina("Cliente", "esempio_cliente",
+                    opzioni=[("1", "Meccanica Bianchi"),
+                             ("2", "Impianti Ferrari")],
+                    vuoto="Qualunque cliente",
+                    aiuto="La voce vuota si mette quando \"non scegliere\" e' "
+                          "una risposta ammessa.") }}
+
+            {{ tendina("Con errore", "esempio_menu_errore",
+                    opzioni=[("a", "Prima voce"), ("b", "Seconda voce")],
+                    errore="Scegli una voce.") }}
+        </div>
+        {% endcall %}
+
+        <h2>Caselle di spunta e scelte</h2>
+        {% call riquadro() %}
+        <div class="modulo">
+            {{ spunta("Casella semplice", "esempio_spunta_1") }}
+
+            {{ spunta("Casella gia' spuntata", "esempio_spunta_2",
+                      spuntata=true,
+                      aiuto="Anche la casella di spunta puo' avere la sua riga "
+                            "di spiegazione.") }}
+
+            {{ spunta("Casella disabilitata", "esempio_spunta_3",
+                      disabilitato=true) }}
+
+            {{ scelta("Che cosa si fa della versione precedente",
+                      "esempio_scelta",
+                      opzioni=[("superata", "La segno come superata"),
+                               ("attiva", "La lascio in produzione"),
+                               ("obsoleta", "La segno come obsoleta")],
+                      scelto="superata",
+                      aiuto="Da due a quattro possibilita' si mostrano tutte. "
+                            "Sopra le quattro si usa un menu a tendina.") }}
+        </div>
+        {% endcall %}
+
+        <h2>Area di trascinamento file</h2>
+        {% call riquadro() %}
+            {{ area_file("Documento da caricare", "esempio_file",
+                         multipli=true,
+                         tipi="Accetta PDF, DWG, STEP e immagini",
+                         peso_massimo="50 MB") }}
+            <p class="campo-aiuto margine-sopra">
+                Il campo file vero c'e' sempre: il trascinamento e' un di piu'
+                che lo script aggiunge quando puo'. Con JavaScript spento si
+                carica lo stesso, semplicemente senza poter trascinare.
+            </p>
+        {% endcall %}
+
+        <h2>La riga in fondo al modulo</h2>
+        {% call riquadro(piede=pulsante("Salva", tipo="button", variante="primario")) %}
+            <p>Le azioni possono stare in fondo al riquadro, su fondo piu'
+               chiaro, oppure dentro il modulo:</p>
+            <div class="modulo-azioni">
+                {{ pulsante("Salva", tipo="button", variante="primario") }}
+                {{ pulsante_collegamento("Annulla", "/stile") }}
+            </div>
+        {% endcall %}
+
+    </div>
+
+{% endcall %}
+
+{# =========================================================================
+   SCHEDA 4 - ELENCHI
+   ========================================================================= #}
+{% call scheda("vetrina", "Elenchi") %}
+
+    <h2>Barra di ricerca</h2>
+    <p class="testo-tenue">
+        E' un modulo GET, sempre: la ricerca fatta resta nell'indirizzo e si
+        puo' mandare a un collega. Questa qui sotto funziona per davvero:
+        filtra le righe finte. Scrivendo, la tabella si aggiorna senza
+        ricaricare la pagina (e' HTMX); premendo Invio con JavaScript spento,
+        la pagina si ricarica filtrata. Tutte e due le strade portano allo
+        stesso posto.
+    </p>
+
+    {{ ricerca("/stile", valore=q,
+               segnaposto="Codice o descrizione",
+               htmx='hx-get="/stile/esempio-ricerca"
+                     hx-trigger="input changed delay:300ms"
+                     hx-target="#risultati-ricerca"
+                     hx-swap="innerHTML"') }}
+
+    <div id="risultati-ricerca" class="margine-sopra">
+        {% include "stile_risultati.html" %}
+    </div>
+
+    <h2>Tabella con ordinamento</h2>
+    <p class="testo-tenue">
+        L'intestazione resta ferma mentre si scorre, le righe si alternano,
+        l'ordinamento lo fa il server e finisce nell'indirizzo. Anche questa
+        funziona: prova a premere su "Codice" o su "Cliente".
+    </p>
+
+    {% set colonne_ordinabili = [
+        {"etichetta": "Codice", "chiave": "codice", "classe": "colonna-codice"},
+        {"etichetta": "Descrizione", "chiave": "descrizione"},
+        {"etichetta": "Cliente", "chiave": "cliente"},
+        {"etichetta": "Versione", "classe": "colonna-numero"},
+        {"etichetta": "Stato"},
+        {"etichetta": "Operazioni", "classe": "colonna-azioni"},
+    ] %}
+
+    {% call tabella(colonne_ordinabili,
+                    vuota=(righe|length == 0),
+                    messaggio_vuoto="Nessun prodotto con questi filtri.",
+                    ordina=ordina, verso=verso, indirizzo="/stile",
+                    riepilogo=(righe|length ~ " prodotti")) %}
+        {% for riga in righe %}
+        <tr>
+            <td class="colonna-codice">{{ riga.codice }}</td>
+            <td>{{ riga.descrizione }}</td>
+            <td>{{ riga.cliente }}</td>
+            <td class="colonna-numero">{{ riga.versione }}</td>
+            <td>{{ etichetta_ciclo_vita(riga.stato) }}</td>
+            <td class="colonna-azioni">
+                <div class="fila-pulsanti spinge-a-destra">
+                    {{ pulsante("Apri", tipo="button", misura="piccolo") }}
+                </div>
+            </td>
+        </tr>
+        {% endfor %}
+    {% endcall %}
+
+    <h2>Tabella vuota</h2>
+    <p class="testo-tenue">
+        Quando il filtro non trova niente la tabella resta, con una riga sola
+        che spiega. Togliere la tabella farebbe sparire anche i filtri, e
+        nessuno saprebbe piu' che cosa cambiare.
+    </p>
+    {% call tabella(colonne_ordinabili, vuota=true,
+                    messaggio_vuoto="Nessun prodotto contiene \"xyz\". Prova "
+                                    "con una parte del codice.") %}
+    {% endcall %}
+
+    <h2>Impaginazione</h2>
+    <p class="testo-tenue">
+        Con una pagina sola non si mostra niente. Sopra le sette pagine
+        compaiono i puntini: la prima, l'ultima e quelle intorno a dove si e'
+        adesso.
+    </p>
+    {{ impaginazione(pagina=1, totale_pagine=5, indirizzo="/stile",
+                     parametri={"q": q}, totale_righe=94) }}
+    {{ impaginazione(pagina=pagina_numero, totale_pagine=20,
+                     indirizzo="/stile", parametri={"q": q},
+                     totale_righe=387, nome_parametro="pagina_numero") }}
+
+    <h2>Riquadro vuoto</h2>
+    <p class="testo-tenue">
+        Quando non c'e' proprio niente - non un filtro che non trova, ma un
+        elenco mai riempito. Dice sempre due cose: perche' e' vuoto e che cosa
+        si puo' fare adesso.
+    </p>
+    {{ vuoto("Nessun prodotto",
+             "Non e' ancora stato creato nessun prodotto. Il primo si crea dal "
+             "pulsante qui sotto: servono il codice parlante e il cliente.",
+             azione=pulsante_collegamento("Crea un prodotto", "/stile",
+                                          variante="primario",
+                                          icona_nome="piu"),
+             icona_nome="prodotti") }}
+
+    <h2 class="margine-sopra">Riquadro vuoto senza azione</h2>
+    <p class="testo-tenue">
+        Quando non c'e' niente da fare - per esempio perche' l'utente non ha i
+        permessi - l'azione si omette. Proporre un pulsante che poi risponde
+        "accesso negato" e' peggio che non proporlo.
+    </p>
+    {{ vuoto("Nessun documento",
+             "Su questa versione non e' stato caricato nessun documento. Puo' "
+             "caricarli chi ha il ruolo di ingegnere sul progetto.") }}
+
+{% endcall %}
+
+{# =========================================================================
+   SCHEDA 5 - SEGNALI
+   ========================================================================= #}
+{% call scheda("vetrina", "Segnali") %}
+
+    <h2>Etichette di stato</h2>
+    <p class="testo-tenue">
+        Il colore non e' mai l'unica informazione: dentro l'etichetta c'e'
+        sempre la parola scritta. Chi non distingue il verde dal giallo legge
+        "rilasciato" e "superato" e non perde niente.
+    </p>
+
+    <h3>Ciclo di vita di una versione</h3>
+    <div class="affianca">
+        {{ etichetta_ciclo_vita("in_sviluppo") }}
+        {{ etichetta_ciclo_vita("rilasciato") }}
+        {{ etichetta_ciclo_vita("in_produzione") }}
+        {{ etichetta_ciclo_vita("superato") }}
+        {{ etichetta_ciclo_vita("obsoleto") }}
+    </div>
+
+    <h3>Etichette di servizio</h3>
+    <div class="affianca">
+        {{ etichetta("neutra") }}
+        {{ etichetta("accento", variante="accento") }}
+        {{ etichetta("successo", variante="successo") }}
+        {{ etichetta("attenzione", variante="attenzione") }}
+        {{ etichetta("errore", variante="errore") }}
+        {{ etichetta("senza pallino", variante="accento", pallino=false) }}
+        {{ etichetta("3 sessioni", pallino=false) }}
+    </div>
+
+    <h2>Avvisi in linea</h2>
+    <p class="testo-tenue">
+        Stanno dentro la pagina e <strong>non se ne vanno</strong>. Si usano
+        per tutto quello che deve essere letto per forza.
+    </p>
+
+    {{ avviso("Il messaggio normale, quando c'e' qualcosa da sapere.") }}
+    {{ avviso("L'operazione e' riuscita.", variante="successo") }}
+    {{ avviso("Questa versione e' in produzione: modificarla richiede "
+              "l'approvazione del responsabile.", variante="attenzione",
+              titolo="Guarda prima di premere") }}
+    {{ avviso("La password attuale non e' corretta.", variante="errore") }}
+
+    <h2>Notifiche temporanee</h2>
+    <p class="testo-tenue">
+        Compaiono in basso a destra e spariscono da sole. Si usano
+        <strong>solo</strong> per confermare che qualcosa e' riuscito. Non ci
+        si mette mai un errore su cui si deve agire: le notifiche spariscono, e
+        chi si e' girato dall'altra parte non le rivede piu'.
+    </p>
+    <p class="testo-tenue">
+        Una notifica di prova e' comparsa in basso a destra all'apertura di
+        questa pagina. Queste qui sotto sono le stesse, ferme, per poterle
+        guardare con calma:
+    </p>
+
+    <div class="impila colonna-stretta esempi-notifiche">
+        {{ notifica("Utente creato.", variante="successo", durata=0) }}
+        {{ notifica("Il documento e' stato caricato.", variante="informazione",
+                    titolo="Caricamento riuscito", durata=0) }}
+        {{ notifica("La versione precedente e' rimasta in produzione.",
+                    variante="attenzione", durata=0) }}
+        {{ notifica("Il collegamento al server di posta non risponde.",
+                    variante="errore", durata=0) }}
+    </div>
+
+    <h2>Finestra di dialogo</h2>
+    <p class="testo-tenue">
+        Per una conferma che merita di essere letta. <strong>Mai per qualcosa
+        di indispensabile</strong>: una finestra modale ha bisogno di
+        JavaScript per aprirsi, e le operazioni che devono funzionare sempre
+        restano moduli normali su una pagina propria.
+    </p>
+
+    <div class="fila-pulsanti">
+        {{ pulsante_apri("Apri la finestra", "esempio-dialogo") }}
+        {{ pulsante_apri("Conferma pericolosa", "esempio-dialogo-pericolo",
+                         variante="pericolo") }}
+    </div>
+
+    {% call dialogo("esempio-dialogo", "Titolo della finestra",
+                    piede=pulsante_chiudi("Ho capito")) %}
+        <p>Il corpo della finestra. Dentro ci puo' stare un testo, un elenco
+           descrittivo o un modulo cortissimo.</p>
+        <p>Si chiude con Esc, con la crocetta, con il pulsante o facendo clic
+           sullo sfondo scuro. Il fuoco della tastiera resta dentro finche' e'
+           aperta e torna dov'era quando si chiude: lo fa l'elemento
+           <code>&lt;dialog&gt;</code> del browser, non un nostro script.</p>
+    {% endcall %}
+
+    {% call dialogo("esempio-dialogo-pericolo", "Disattivare l'utente?",
+                    piede=pulsante_chiudi("Annulla")
+                          ~ pulsante("Disattiva", tipo="button",
+                                     variante="pericolo")) %}
+        <p>Mario Rossi perdera' subito tutte le sessioni aperte e non potra'
+           piu' entrare.</p>
+        <p>Il suo profilo resta: le firme sui documenti e le righe del registro
+           devono restare leggibili anche a distanza di anni. In Aurora non si
+           cancella niente.</p>
+    {% endcall %}
+
+{% endcall %}
+
+{# =========================================================================
+   SCHEDA 6 - STRUTTURA
+   ========================================================================= #}
+{% call scheda("vetrina", "Struttura") %}
+
+    <h2>Riquadri</h2>
+    <div class="griglia-riquadri">
+        {% call riquadro("Con testata") %}
+            <p>Il caso normale: un titolo e un contenuto.</p>
+        {% endcall %}
+
+        {% call riquadro("Con azione", azioni=pulsante("Modifica", tipo="button", misura="piccolo")) %}
+            <p>L'azione sta a destra nella testata.</p>
+        {% endcall %}
+
+        {% call riquadro("Con piede", piede=pulsante("Salva", tipo="button", variante="primario", misura="piccolo")) %}
+            <p>Le azioni di un modulo stanno in fondo, su fondo piu' chiaro.</p>
+        {% endcall %}
+
+        {% call riquadro() %}
+            <p>Senza testata: quando il titolo lo da' gia' la pagina.</p>
+        {% endcall %}
+    </div>
+
+    <h2>Elenco descrittivo</h2>
+    <p class="testo-tenue">
+        La scheda di dettaglio di qualunque cosa. Non e' una tabella a due
+        colonne: e' un elenco di definizioni, e i lettori di schermo lo
+        annunciano come tale.
+    </p>
+
+    <div class="griglia-riquadri">
+        {% call riquadro("Normale") %}
+            {% call descrizione() %}
+                {{ voce("Codice", "MOT-A100-R02", monospazio=true) }}
+                {{ voce("Descrizione", "Scheda di controllo motore") }}
+                {{ voce("Cliente", "Meccanica Bianchi") }}
+                {{ voce("Stato", etichetta_ciclo_vita("in_produzione")) }}
+                {{ voce("Note", none) }}
+            {% endcall %}
+        {% endcall %}
+
+        {% call riquadro("Con le righe") %}
+            {% call descrizione(righe=true) %}
+                {{ voce("Codice", "MOT-B220-R01", monospazio=true) }}
+                {{ voce("Versione", "1.4") }}
+                {{ voce("Stato", etichetta_ciclo_vita("rilasciato")) }}
+            {% endcall %}
+        {% endcall %}
+
+        {% call riquadro("Stretta") %}
+            {% call descrizione(stretta=true) %}
+                {{ voce("Codice", "MOT-C310-R01", monospazio=true) }}
+                {{ voce("Cliente", "Termotecnica Rossi") }}
+                {{ voce("Stato", etichetta_ciclo_vita("superato")) }}
+            {% endcall %}
+        {% endcall %}
+    </div>
+
+    <h2>Barra di avanzamento delle fasi</h2>
+    <p class="testo-tenue">
+        Le fasi di un progetto in fila. Risponde alla domanda che fanno tutti:
+        "a che punto siamo?". Non e' una barra di caricamento e non dice una
+        percentuale: un progetto non e' "al 60%", e' "in verifica".
+    </p>
+
+    {% call riquadro("Progetto in corso") %}
+        {{ avanzamento([
+            {"nome": "Fattibilita'", "stato": "conclusa", "data": "12 marzo"},
+            {"nome": "Progettazione", "stato": "conclusa", "data": "28 aprile"},
+            {"nome": "Prototipo", "stato": "corrente"},
+            {"nome": "Validazione"},
+            {"nome": "Industrializzazione"},
+            {"nome": "Produzione"},
+        ]) }}
+    {% endcall %}
+
+    <div class="margine-sopra">
+    {% call riquadro("Progetto fermo") %}
+        {{ avanzamento([
+            {"nome": "Fattibilita'", "stato": "conclusa", "data": "3 febbraio"},
+            {"nome": "Progettazione", "stato": "ferma",
+             "data": "in attesa di approvazione"},
+            {"nome": "Prototipo"},
+        ]) }}
+    {% endcall %}
+    </div>
+
+    <h2>Schede</h2>
+    <p class="testo-tenue">
+        Quelle che stai usando adesso: pallini di scelta nascosti e le loro
+        etichette. Nessun JavaScript, e la tastiera ci si muove dentro con le
+        frecce. Il rovescio e' che tutto il contenuto arriva al browser
+        insieme: per quattro tabelle da mille righe si usano invece le
+        schede-collegamento.
+    </p>
+
+    {% call riquadro("Schede nella stessa pagina") %}
+        {% call schede("esempio") %}
+            {% call scheda("esempio", "Prima", prima=true) %}
+                <p>Il contenuto della prima scheda.</p>
+            {% endcall %}
+            {% call scheda("esempio", "Seconda") %}
+                <p>Il contenuto della seconda scheda.</p>
+            {% endcall %}
+            {% call scheda("esempio", "Terza") %}
+                <p>Il contenuto della terza scheda.</p>
+            {% endcall %}
+        {% endcall %}
+    {% endcall %}
+
+    <div class="margine-sopra">
+    {% call riquadro("Schede che sono pagine diverse") %}
+        {{ schede_collegamento([
+            {"etichetta": "Dati", "indirizzo": "/stile"},
+            {"etichetta": "Documenti", "indirizzo": "/stile-documenti"},
+            {"etichetta": "Posta", "indirizzo": "/stile-posta"},
+        ], corrente="/stile") }}
+        <p class="testo-tenue">
+            Ogni linguetta ha il suo indirizzo: si manda a un collega e si
+            mette nei preferiti. Si usano quando le sezioni sono pesanti da
+            preparare.
+        </p>
+    {% endcall %}
+    </div>
+
+    <h2>Barra laterale</h2>
+    <p class="testo-tenue">
+        E' quella a sinistra. Le voci arrivano gia' filtrate per ruolo da
+        <code>app/navigation.py</code>: il template le disegna e basta. Le
+        sezioni non ancora realizzate ci sono ma sono spente, e la scritta
+        accanto dice in quale sessione arriveranno. Sotto i 1280 pixel di
+        larghezza si stringe alle sole icone: prova a restringere la finestra.
+    </p>
+    <p class="testo-tenue">
+        Nascondere una voce non protegge niente: il lucchetto e' la dipendenza
+        dichiarata sulla rotta. Il menu si limita a non mostrare le porte che
+        non si aprirebbero comunque.
+    </p>
+
+{% endcall %}
+
+{% endcall %}
+
+{% endblock %}
+
+{# La notifica che compare all'apertura della pagina: serve a far vedere che le
+   notifiche vere si comportano come devono, comparendo e poi andandosene. #}
+{% block notifiche %}
+    {{ notifica("Questa sparisce da sola dopo cinque secondi.",
+                variante="successo", titolo="Notifica di prova") }}
+{% endblock %}

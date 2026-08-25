@@ -1,0 +1,53 @@
+{# ===========================================================================
+   RIQUADRO
+
+   QUANDO SI USA. Per raccogliere una cosa sola e staccarla dal fondo: un
+   modulo, una tabella, una scheda di dettaglio, un gruppo di numeri.
+
+   QUANDO NON SI USA. Per il contenuto principale di una pagina che gia' ha il
+   suo titolo: riquadri dentro riquadri dentro riquadri fanno una pagina che
+   sembra un armadio di cassetti. Se la pagina mostra una cosa sola, quella
+   cosa non ha bisogno di essere incorniciata.
+
+   COME SI USA. Con il blocco:
+
+       {% raw %}{% from "components/riquadro.html" import riquadro %}
+
+       {% call riquadro("Dati dell'utente", azioni=pulsante_collegamento(...)) %}
+           <p>Contenuto del riquadro.</p>
+       {% endcall %}{% endraw %}
+
+   Parametri:
+
+     titolo   compare nella testata. Se manca, la testata non c'e'.
+     azioni   HTML gia' composto (di solito un pulsante) messo a destra nella
+              testata: "Modifica", "Aggiungi", "Esporta".
+     piede    HTML gia' composto messo in fondo, su fondo piu' chiaro: e' il
+              posto delle azioni di un modulo.
+     nudo     vero quando dentro c'e' solo una tabella: toglie il margine
+              interno, perche' il bordo della tabella e' gia' quello del
+              riquadro.
+   =========================================================================== #}
+
+
+{% macro riquadro(titolo=none, azioni=none, piede=none, nudo=false,
+                  livello_titolo="h2", id=none) -%}
+<section class="riquadro"{% if id %} id="{{ id }}"{% endif %}>
+    {%- if titolo %}
+    <header class="riquadro-testata">
+        <{{ livello_titolo }}>{{ titolo }}</{{ livello_titolo }}>
+        {%- if azioni %}
+        <div class="fila-pulsanti">{{ azioni }}</div>
+        {%- endif %}
+    </header>
+    {%- endif %}
+
+    <div class="riquadro-corpo{% if nudo %} riquadro-corpo--nudo{% endif %}">
+        {{ caller() }}
+    </div>
+
+    {%- if piede %}
+    <footer class="riquadro-piede">{{ piede }}</footer>
+    {%- endif %}
+</section>
+{%- endmacro %}

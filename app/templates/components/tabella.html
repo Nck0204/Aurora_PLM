@@ -1,0 +1,121 @@
+{# ===========================================================================
+   TABELLA DATI
+
+   QUANDO SI USA. Per ogni elenco di righe con piu' di una colonna: prodotti,
+   documenti, progetti, utenti, messaggi. E' il componente che in Aurora si
+   guarda piu' a lungo di tutti, quindi e' quello su cui vale la pena essere
+   pignoli.
+
+   Che cosa porta gia' fatto:
+
+     - l'intestazione resta ferma mentre si scorre (thead sticky), cosi' alla
+       riga quaranta si sa ancora che cosa si sta leggendo;
+     - le righe si alternano di tinta;
+     - la tabella scorre in orizzontale dentro il suo riquadro invece di
+       allargare la pagina;
+     - quando non c'e' niente da mostrare compare una riga sola con una frase
+       che spiega perche', invece di una tabella vuota che sembra un guasto.
+
+   L'ORDINAMENTO LO FA IL SERVER. Le intestazioni ordinabili sono
+   collegamenti che rimettono nell'indirizzo il parametro "ordina" e il verso.
+   Non e' una scelta di ripiego: cosi' l'elenco ordinato ha un indirizzo suo,
+   che si mette nei preferiti e si manda a un collega, e funziona anche senza
+   JavaScript. La rotta legge i due parametri e ordina la sua interrogazione.
+
+   COME SI USA. Si passa l'elenco delle colonne e si scrivono le righe dentro
+   il blocco:
+
+       {% raw %}{% from "components/tabella.html" import tabella %}
+
+       {% set colonne = [
+           {"etichetta": "Codice", "chiave": "codice", "classe": "colonna-codice"},
+           {"etichetta": "Descrizione"},
+           {"etichetta": "Stato"},
+           {"etichetta": "", "classe": "colonna-azioni"},
+       ] %}
+
+       {% call tabella(colonne, vuota=prodotti|length == 0,
+                       messaggio_vuoto="Nessun prodotto con questi filtri.",
+                       ordina=ordina, verso=verso, indirizzo="/prodotti") %}
+           {% for p in prodotti %}
+           <tr>
+               <td class="colonna-codice">{{ p.code }}</td>
+               <td>{{ p.description }}</td>
+               <td>{{ etichetta_stato(p.state) }}</td>
+               <td class="colonna-azioni">...</td>
+           </tr>
+           {% endfor %}
+       {% endcall %}{% endraw %}
+
+   Ogni colonna e' un dizionario con:
+
+     etichetta   il testo dell'intestazione (obbligatorio, puo' essere vuoto)
+     chiave      se c'e', la colonna diventa ordinabile e questo e' il valore
+                 che finisce nel parametro "ordina"
+     classe      classe della cella: colonna-numero, colonna-codice,
+                 colonna-azioni
+     titolo      spiegazione che compare passandoci sopra con il mouse
+   =========================================================================== #}
+
+
+{% macro tabella(colonne, vuota=false, messaggio_vuoto="Nessun risultato.",
+                 ordina=none, verso="asc", indirizzo="", riepilogo=none) -%}
+<div class="tabella-contenitore">
+    <table class="tabella">
+        <thead>
+            <tr>
+                {%- for colonna in colonne %}
+                <th scope="col"
+                    {%- if colonna.classe %} class="{{ colonna.classe }}"{% endif %}
+                    {%- if colonna.titolo %} title="{{ colonna.titolo }}"{% endif %}
+                    {%- if colonna.chiave and ordina == colonna.chiave %} aria-sort="{{ 'ascending' if verso == 'asc' else 'descending' }}"{% endif %}>
+                    {%- if colonna.chiave -%}
+                        {{ _collegamento_ordinamento(colonna, ordina, verso, indirizzo) }}
+                    {%- else -%}
+                        {{ colonna.etichetta }}
+                    {%- endif -%}
+                </th>
+                {%- endfor %}
+            </tr>
+        </thead>
+        <tbody>
+            {%- if vuota %}
+            <tr class="riga-vuota">
+                <td colspan="{{ colonne|length }}">{{ messaggio_vuoto }}</td>
+            </tr>
+            {%- else %}
+            {{ caller() }}
+            {%- endif %}
+        </tbody>
+    </table>
+</div>
+{%- if riepilogo %}
+<div class="tabella-riepilogo">
+    <span>{{ riepilogo }}</span>
+</div>
+{%- endif %}
+{%- endmacro %}
+
+
+{# L'intestazione cliccabile di una colonna ordinabile.
+
+   Il verso si rovescia quando si preme di nuovo sulla colonna gia' ordinata;
+   passando a un'altra colonna si riparte sempre dal crescente, che e' quello
+   che ci si aspetta.
+
+   Le frecce sono i caratteri triangolari del carattere di sistema, non
+   immagini: non c'e' niente da scaricare. #}
+{% macro _collegamento_ordinamento(colonna, ordina, verso, indirizzo) -%}
+{%- set attivo = (ordina == colonna.chiave) -%}
+{%- set prossimo_verso = "desc" if (attivo and verso == "asc") else "asc" -%}
+<a class="ordina{% if attivo %} ordina--attivo{% endif %}"
+   href="{{ indirizzo }}?ordina={{ colonna.chiave }}&verso={{ prossimo_verso }}">
+    <span>{{ colonna.etichetta }}</span>
+    <span class="freccia" aria-hidden="true">{% if attivo and verso == "asc" %}&#9650;{% else %}&#9660;{% endif %}</span>
+    {%- if attivo %}
+    <span class="solo-lettura-vocale">
+        (ordinato in modo {{ "crescente" if verso == "asc" else "decrescente" }})
+    </span>
+    {%- endif %}
+</a>
+{%- endmacro %}

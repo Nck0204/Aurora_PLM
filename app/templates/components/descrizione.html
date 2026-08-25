@@ -1,0 +1,70 @@
+{# ===========================================================================
+   ELENCO DESCRITTIVO (etichetta / valore)
+
+   QUANDO SI USA. Per la scheda di dettaglio di qualunque cosa: i dati di un
+   prodotto, di un utente, di un documento, di un progetto. Ogni riga e' una
+   coppia "come si chiama il dato" / "quanto vale".
+
+   QUANDO NON SI USA. Per un elenco di cose dello stesso tipo: quello e' una
+   tabella. Qui le righe sono attributi diversi di un oggetto solo.
+
+   PERCHE' UN <dl> E NON UNA TABELLA A DUE COLONNE. Perche' quello che c'e'
+   qui non e' una tabella di dati: e' un elenco di definizioni, e i lettori di
+   schermo lo annunciano come tale ("etichetta, valore"). Una tabella a due
+   colonne verrebbe letta come una griglia con intestazioni che non ci sono.
+
+   COME SI USA. Si passa un elenco di coppie (etichetta, valore), oppure si
+   scrivono le righe a mano dentro il blocco quando i valori contengono altri
+   componenti (un'etichetta di stato, un collegamento, un pulsante):
+
+       {% raw %}{% from "components/descrizione.html" import descrizione, voce %}
+
+       {{ descrizione([
+           ("Nome utente", utente.username),
+           ("Posta", utente.email),
+       ]) }}
+
+       {% call descrizione() %}
+           {{ voce("Nome utente", utente.username, monospazio=true) }}
+           {{ voce("Stato", etichetta_utente(utente)) }}
+       {% endcall %}{% endraw %}
+
+   Varianti:
+
+     righe=true    una riga di separazione sotto ogni coppia: serve quando le
+                   voci sono piu' di sei e l'occhio si perde.
+     stretta=true  etichetta sopra e valore sotto, su una colonna sola: per le
+                   colonne laterali e i riquadri stretti.
+   =========================================================================== #}
+
+
+{% macro descrizione(coppie=none, righe=false, stretta=false) -%}
+<dl class="descrizione
+           {%- if righe %} descrizione--righe{% endif %}
+           {%- if stretta %} descrizione--stretta{% endif %}">
+    {%- if coppie %}
+        {%- for etichetta, valore in coppie %}
+            {{ voce(etichetta, valore) }}
+        {%- endfor %}
+    {%- else %}
+        {{ caller() }}
+    {%- endif %}
+</dl>
+{%- endmacro %}
+
+
+{# Una coppia. Il valore puo' essere testo o HTML gia' composto da un altro
+   componente (un'etichetta di stato, un collegamento).
+
+   Con monospazio=true il valore si legge in carattere a spaziatura fissa:
+   codici prodotto, codici articolo, nomi utente, impronte. #}
+{% macro voce(etichetta, valore, monospazio=false, vuoto="&mdash;") -%}
+<dt>{{ etichetta }}</dt>
+<dd{% if monospazio %} class="mono"{% endif %}>
+    {%- if valore is none or valore == "" -%}
+        <span class="testo-tenue">{{ vuoto|safe }}</span>
+    {%- else -%}
+        {{ valore }}
+    {%- endif -%}
+</dd>
+{%- endmacro %}
