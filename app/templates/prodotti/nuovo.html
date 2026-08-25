@@ -1,0 +1,130 @@
+{# ===========================================================================
+   Creazione di un prodotto. Riservata al creatore.
+
+   Crea due cose insieme: il prodotto e la sua versione 1. Un prodotto senza
+   versioni non e' niente su cui si possa lavorare (D-040), e per questo il
+   modulo non chiede niente sulla versione: la prima e' sempre la 1, sempre
+   "in sviluppo", sempre non derivata da nessuna.
+
+   L'ANTEPRIMA DELLA SCOMPOSIZIONE. Il riquadro a destra mostra come viene
+   letto il codice mentre lo si scrive. Lo aggiorna HTMX chiedendo
+   /prodotti/anteprima-codice a ogni pausa della battitura.
+
+   **Senza JavaScript il modulo funziona lo stesso**: l'anteprima resta ferma
+   sulla sua frase di partenza e la scomposizione si vede dopo il salvataggio,
+   sulla scheda del prodotto. E' la regola D-036: prima di scrivere un
+   attributo hx- si risponde a "che cosa succede se lo script non arriva?".
+
+   Il gettone CSRF sta dentro il modulo e viaggia anche con la richiesta HTMX,
+   perche' quella e' un POST come gli altri (hx-include lo porta con se').
+   =========================================================================== #}
+{% extends "base.html" %}
+
+{% from "components/campi.html" import campo, area_testo, tendina, csrf %}
+{% from "components/pulsanti.html" import pulsante, pulsante_collegamento %}
+{% from "components/riquadro.html" import riquadro %}
+{% from "components/avvisi.html" import avviso %}
+{% from "components/descrizione.html" import descrizione, voce %}
+
+{% block titolo %}Nuovo prodotto{% endblock %}
+{% block sezione %}Prodotti{% endblock %}
+
+{% block contenuto %}
+
+<div class="testata">
+    <div>
+        <h1>Nuovo prodotto</h1>
+        <p class="sottotitolo">
+            Insieme al prodotto nasce la sua versione 1, in sviluppo.
+        </p>
+    </div>
+    <div class="testata-azioni">
+        {{ pulsante_collegamento("Torna all'elenco", "/prodotti",
+                                 icona_nome="freccia-sinistra") }}
+    </div>
+</div>
+
+{% if not clienti %}
+
+    {{ avviso("Prima di creare un prodotto serve almeno un cliente attivo: "
+              "ogni prodotto e' sviluppato per qualcuno.",
+              variante="attenzione", titolo="Nessun cliente disponibile") }}
+
+    <div class="fila-pulsanti margine-sopra">
+        {{ pulsante_collegamento("Aggiungi un cliente", "/clienti/nuovo",
+                                 variante="primario", icona_nome="piu") }}
+    </div>
+
+{% else %}
+
+<form method="post" action="/prodotti/nuovo" class="modulo">
+    {{ csrf(request) }}
+
+    <div class="griglia-riquadri">
+
+        {% call riquadro("Dati del prodotto",
+                         piede=pulsante("Crea il prodotto", variante="primario")
+                               ~ pulsante_collegamento("Annulla", "/prodotti")) %}
+
+            {#- La casella del codice e' quella che comanda l'anteprima.
+                hx-post la manda a ogni pausa della battitura, hx-include
+                porta con se' il gettone CSRF del modulo, hx-target dice
+                dove infilare la risposta. Togliendo questi tre attributi la
+                pagina continua a funzionare. -#}
+            {{ campo("Codice", "codice", valore=codice, obbligatorio=true,
+                     monospazio=true, autofocus=true, lunghezza_massima=60,
+                     segnaposto="RMS1100-24-110SW",
+                     aiuto="Il codice parlante del prodotto. Viene accettato "
+                           "anche se non corrisponde alla regola di "
+                           "scomposizione.",
+                     attributi='hx-post="/prodotti/anteprima-codice"'
+                               ' hx-trigger="keyup changed delay:300ms"'
+                               ' hx-target="#anteprima-codice"'
+                               ' hx-include="closest form"') }}
+
+            {{ tendina("Cliente", "cliente", opzioni=clienti,
+                       scelto=cliente, obbligatorio=true,
+                       vuoto="Scegli il cliente",
+                       aiuto="Per chi viene sviluppato questo prodotto.") }}
+
+            {{ area_testo("Descrizione", "descrizione", valore=descrizione,
+                          righe=4,
+                          aiuto="A che cosa serve il prodotto, in una riga o "
+                                "due.") }}
+
+        {% endcall %}
+
+        {% call riquadro("Come viene letto il codice") %}
+            <div id="anteprima-codice">
+                {% if coppie %}
+                    {% call descrizione(stretta=true) %}
+                        {% for etichetta_elemento, valore in coppie %}
+                            {{ voce(etichetta_elemento, valore, monospazio=true) }}
+                        {% endfor %}
+                    {% endcall %}
+                {% elif not regola.utilizzabile %}
+                    {{ avviso(regola.problema,
+                              variante="errore",
+                              titolo="Regola non utilizzabile") }}
+                {% else %}
+                    <p class="campo-aiuto">
+                        Scrivi il codice qui accanto: gli elementi riconosciuti
+                        compaiono qui mentre scrivi.
+                    </p>
+                {% endif %}
+            </div>
+
+            <p class="campo-aiuto margine-sopra">
+                La regola con cui il codice viene letto sta in un file di
+                configurazione, non dentro il programma: quando l'azienda la
+                confermera' si cambia quel file. Un codice che non corrisponde
+                viene accettato lo stesso.
+            </p>
+        {% endcall %}
+
+    </div>
+</form>
+
+{% endif %}
+
+{% endblock %}

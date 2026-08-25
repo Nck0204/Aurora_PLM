@@ -171,8 +171,12 @@ def test_le_sezioni_non_ancora_fatte_non_sono_collegamenti(client, db_session):
 
     pagina = client.get("/").text
 
-    assert "Prodotti" in pagina, "la voce spenta si deve comunque vedere"
-    assert 'href="/prodotti"' not in pagina, "ma non deve essere un collegamento"
+    # "Documenti" e' la prima sezione ancora da fare: arrivera' nella sessione
+    # 7. Fino alla sessione 4 questo test guardava "Prodotti", che pero' dalla
+    # sessione 5 e' una sezione vera e un collegamento vero. Quando arrivera'
+    # anche l'archivio documenti, qui andra' messa la sezione spenta di allora.
+    assert "Documenti" in pagina, "la voce spenta si deve comunque vedere"
+    assert 'href="/documenti"' not in pagina, "ma non deve essere un collegamento"
     assert 'aria-disabled="true"' in pagina
 
 

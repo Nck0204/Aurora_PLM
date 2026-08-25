@@ -1,0 +1,53 @@
+{# ===========================================================================
+   Creazione di un cliente. Riservata al creatore.
+
+   Un modulo corto su una pagina propria, non una finestra modale: se la
+   finestra non si aprisse, il cliente non si potrebbe piu' creare, e senza
+   clienti non si creano prodotti. La regola sta in components/dialogo.html.
+   =========================================================================== #}
+{% extends "base.html" %}
+
+{% from "components/campi.html" import campo, area_testo, csrf %}
+{% from "components/pulsanti.html" import pulsante, pulsante_collegamento %}
+{% from "components/riquadro.html" import riquadro %}
+
+{% block titolo %}Nuovo cliente{% endblock %}
+{% block sezione %}Clienti{% endblock %}
+
+{% block contenuto %}
+
+<div class="testata">
+    <div>
+        <h1>Nuovo cliente</h1>
+        <p class="sottotitolo">
+            Il cliente serve prima del prodotto: ogni prodotto e' sviluppato
+            per qualcuno.
+        </p>
+    </div>
+</div>
+
+<div class="colonna-stretta">
+<form method="post" action="/clienti/nuovo" class="modulo">
+    {{ csrf(request) }}
+
+    {% call riquadro("Dati del cliente",
+                     piede=pulsante("Crea il cliente", variante="primario")
+                           ~ pulsante_collegamento("Annulla", "/clienti")) %}
+
+        {{ campo("Nome", "nome", valore=nome_cliente, obbligatorio=true,
+                 autofocus=true, lunghezza_massima=160,
+                 aiuto="Il nome dell'azienda per esteso.") }}
+
+        {{ campo("Sigla", "codice", valore=codice, obbligatorio=true,
+                 monospazio=true, lunghezza_massima=20,
+                 aiuto="La sigla breve usata in azienda, quella che compare "
+                       "dentro i codici dei prodotti. Deve essere unica.") }}
+
+        {{ area_testo("Note", "note", valore=note, righe=4,
+                      aiuto="Quello che serve ricordare su questo cliente.") }}
+
+    {% endcall %}
+</form>
+</div>
+
+{% endblock %}

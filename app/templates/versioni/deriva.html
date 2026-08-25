@@ -1,0 +1,70 @@
+{# ===========================================================================
+   Creazione di una versione derivata.
+
+   Due campi soli, e tutti e due obbligatori: da quale versione si parte e
+   perche'. Il numero della versione nuova non si sceglie - lo decide il
+   programma - e nemmeno lo stato: una versione appena nata e' "in sviluppo".
+
+   La motivazione e' obbligatoria perche' "perche' esiste la versione 3?" e'
+   la domanda che qualcuno si fara' fra due anni, e la risposta va scritta
+   adesso che si sa.
+   =========================================================================== #}
+{% extends "base.html" %}
+
+{% from "components/campi.html" import area_testo, tendina, csrf %}
+{% from "components/pulsanti.html" import pulsante, pulsante_collegamento %}
+{% from "components/riquadro.html" import riquadro %}
+{% from "components/descrizione.html" import descrizione, voce %}
+
+{% block titolo %}Nuova versione di {{ prodotto.code }}{% endblock %}
+{% block sezione %}Prodotti{% endblock %}
+
+{% block contenuto %}
+
+<div class="testata">
+    <div>
+        <h1>Nuova versione</h1>
+        <p class="sottotitolo">
+            <span class="mono">{{ prodotto.code }}</span> &middot;
+            sara' la versione {{ prossimo_numero }}
+        </p>
+    </div>
+    <div class="testata-azioni">
+        {{ pulsante_collegamento("Annulla", "/versioni/" ~ origine.id,
+                                 icona_nome="freccia-sinistra") }}
+    </div>
+</div>
+
+<div class="colonna-stretta">
+
+<form method="post" action="/versioni/{{ origine.id }}/deriva" class="modulo">
+    {{ csrf(request) }}
+
+    {% call riquadro("Da dove si parte e perche'",
+                     piede=pulsante("Crea la versione " ~ prossimo_numero,
+                                    variante="primario")
+                           ~ pulsante_collegamento("Annulla",
+                                                   "/versioni/" ~ origine.id)) %}
+
+        {{ tendina("Versione di origine", "origine",
+                   opzioni=versioni_scelta, scelto=origine.id|string,
+                   obbligatorio=true,
+                   aiuto="Da quale versione parte il lavoro nuovo. Resta "
+                         "scritta nella catena delle derivazioni.") }}
+
+        {{ area_testo("Perche' serve una versione nuova", "motivazione",
+                      valore=motivazione, righe=4, obbligatorio=true,
+                      segnaposto="Richiesta di variante del cliente: "
+                                 "connettore diverso.") }}
+
+        {% call descrizione(stretta=true) %}
+            {{ voce("Numero", prossimo_numero) }}
+            {{ voce("Stato di partenza", "in sviluppo") }}
+        {% endcall %}
+
+    {% endcall %}
+</form>
+
+</div>
+
+{% endblock %}

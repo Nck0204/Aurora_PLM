@@ -1,0 +1,192 @@
+{# ===========================================================================
+   Scheda di un prodotto: dati, codice scomposto, tutte le versioni.
+
+   Le versioni sono in **ordine cronologico**, dalla prima all'ultima: e'
+   l'ordine in cui la storia si racconta, e la colonna "derivata da" dice come
+   ciascuna e' nata.
+
+   Il riquadro di modifica compare solo al creatore. Gli altri la scheda la
+   leggono: sapere che cosa fa l'azienda non e' un'informazione riservata, e
+   chi lavora su un progetto ha bisogno di arrivare al prodotto da cui e'
+   nato.
+   =========================================================================== #}
+{% extends "base.html" %}
+
+{% from "components/campi.html" import campo, area_testo, tendina, csrf %}
+{% from "components/pulsanti.html" import pulsante, pulsante_collegamento, modulo_pulsante %}
+{% from "components/riquadro.html" import riquadro %}
+{% from "components/tabella.html" import tabella %}
+{% from "components/descrizione.html" import descrizione, voce %}
+{% from "components/stato.html" import etichetta, etichetta_ciclo_vita %}
+{% from "components/avvisi.html" import avviso, notifica %}
+
+{% block titolo %}{{ prodotto.code }}{% endblock %}
+{% block sezione %}Prodotti{% endblock %}
+
+{% block notifiche %}
+    {% if creato %}
+        {{ notifica("Insieme al prodotto e' nata la sua versione 1, in sviluppo.",
+                    variante="successo", titolo="Prodotto creato") }}
+    {% elif salvato %}
+        {{ notifica("I dati del prodotto sono stati aggiornati.",
+                    variante="successo", titolo="Salvato") }}
+    {% endif %}
+{% endblock %}
+
+{% block contenuto %}
+
+<div class="testata">
+    <div>
+        <h1 class="mono">{{ prodotto.code }}</h1>
+        <p class="sottotitolo">
+            {{ prodotto.customer.name }} &middot;
+            {{ versioni|length }} version{{ "e" if versioni|length == 1 else "i" }}
+        </p>
+    </div>
+    <div class="testata-azioni">
+        {{ pulsante_collegamento("Torna all'elenco", "/prodotti",
+                                 icona_nome="freccia-sinistra") }}
+    </div>
+</div>
+
+{% if not prodotto.code_parts %}
+    {{ avviso(avviso_non_riconosciuto, variante="attenzione",
+              titolo="Codice non scomposto") }}
+{% endif %}
+
+{% if not prodotto.is_active %}
+    {{ avviso("Questo prodotto e' disattivato: non compare negli elenchi "
+              "normali. Le sue versioni e i suoi progetti restano leggibili.",
+              variante="attenzione", titolo="Prodotto disattivato") }}
+{% endif %}
+
+<div class="griglia-riquadri">
+
+    {% call riquadro("Il codice, letto") %}
+        {% if coppie %}
+            {% call descrizione(stretta=true) %}
+                {% for etichetta_elemento, valore in coppie %}
+                    {{ voce(etichetta_elemento, valore, monospazio=true) }}
+                {% endfor %}
+            {% endcall %}
+        {% else %}
+            <p class="campo-aiuto">
+                Il codice non corrisponde alla regola di scomposizione in uso,
+                quindi non e' stato scomposto in elementi. Il prodotto funziona
+                lo stesso: quello che manca e' la ricerca per modello, potenza
+                e tensione.
+            </p>
+        {% endif %}
+    {% endcall %}
+
+    {% call riquadro("Dati") %}
+        {% call descrizione(stretta=true) %}
+            {{ voce("Codice", prodotto.code, monospazio=true) }}
+            {{ voce("Cliente", prodotto.customer.name) }}
+            {{ voce("Descrizione", prodotto.description) }}
+            {{ voce("Creato il", prodotto.created_at.strftime("%d/%m/%Y")) }}
+        {% endcall %}
+    {% endcall %}
+
+</div>
+
+{# --- Le versioni --- #}
+{% call riquadro("Versioni, dalla prima all'ultima", nudo=true) %}
+
+    {% set colonne = [
+        {"etichetta": "Versione", "classe": "colonna-numero"},
+        {"etichetta": "Stato"},
+        {"etichetta": "Derivata da"},
+        {"etichetta": "Motivo"},
+        {"etichetta": "Progetto"},
+        {"etichetta": "Creata il"},
+    ] %}
+
+    {% call tabella(colonne,
+                    vuota=(versioni|length == 0),
+                    messaggio_vuoto="Nessuna versione. Non dovrebbe succedere "
+                                    "mai: la versione 1 nasce insieme al "
+                                    "prodotto.") %}
+        {% for v in versioni %}
+        <tr>
+            <td class="colonna-numero">
+                <a href="/versioni/{{ v.id }}">v{{ v.version_number }}</a>
+            </td>
+            <td>{{ etichetta_ciclo_vita(v.lifecycle_state) }}</td>
+            <td>
+                {% if v.derived_from %}
+                    v{{ v.derived_from.version_number }}
+                {% else %}
+                    <span class="testo-tenue">prima versione</span>
+                {% endif %}
+            </td>
+            <td>
+                {% if v.derivation_reason %}{{ v.derivation_reason }}
+                {% else %}<span class="testo-tenue">&mdash;</span>{% endif %}
+            </td>
+            <td>
+                {% if v.project %}
+                    <a href="/progetti/{{ v.project.id }}">aperto</a>
+                {% else %}
+                    <span class="testo-tenue">nessuno</span>
+                {% endif %}
+            </td>
+            <td>{{ v.created_at.strftime("%d/%m/%Y") }}</td>
+        </tr>
+        {% endfor %}
+    {% endcall %}
+
+{% endcall %}
+
+{% if utente.is_creatore %}
+
+<div class="griglia-riquadri">
+
+    {# --- Modifica --- #}
+    <form method="post" action="/prodotti/{{ prodotto.id }}" class="modulo">
+        {{ csrf(request) }}
+
+        {% call riquadro("Modifica il prodotto",
+                         piede=pulsante("Salva", variante="primario")) %}
+
+            {{ campo("Codice", "codice", valore=prodotto.code,
+                     obbligatorio=true, monospazio=true, lunghezza_massima=60,
+                     aiuto="Cambiando il codice la scomposizione viene "
+                           "ricalcolata subito.") }}
+
+            {{ tendina("Cliente", "cliente", opzioni=clienti,
+                       scelto=prodotto.customer_id, obbligatorio=true) }}
+
+            {{ area_testo("Descrizione", "descrizione",
+                          valore=prodotto.description or "", righe=4) }}
+
+        {% endcall %}
+    </form>
+
+    {# --- Fuori servizio --- #}
+    {% call riquadro("Fuori servizio") %}
+        <p class="campo-aiuto">
+            Un prodotto non si cancella: si disattiva. Le sue versioni, i suoi
+            progetti e i suoi documenti restano leggibili.
+        </p>
+        <div class="fila-pulsanti margine-sopra">
+            {% if prodotto.is_active %}
+                {{ modulo_pulsante(request,
+                                   "/prodotti/" ~ prodotto.id ~ "/disattiva",
+                                   "Disattiva il prodotto", variante="pericolo",
+                                   conferma="Disattivare " ~ prodotto.code
+                                            ~ "? Non comparira' piu' negli "
+                                            "elenchi normali.") }}
+            {% else %}
+                {{ modulo_pulsante(request,
+                                   "/prodotti/" ~ prodotto.id ~ "/riattiva",
+                                   "Riattiva il prodotto", icona_nome="spunta") }}
+            {% endif %}
+        </div>
+    {% endcall %}
+
+</div>
+
+{% endif %}
+
+{% endblock %}

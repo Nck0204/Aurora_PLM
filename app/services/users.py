@@ -296,16 +296,27 @@ def riattiva(
     )
 
 
-def elenco_utenti(db: Session) -> list[User]:
+def elenco_utenti(db: Session, solo_attivi: bool = False) -> list[User]:
     """Tutti gli utenti, attivi e no, in ordine di cognome e nome.
 
     Qui i disattivati **si mostrano**, a differenza di quasi tutte le altre
     interrogazioni del programma: e' proprio la pagina in cui si va per
     riattivarne uno, e nasconderli lo renderebbe impossibile. Nell'elenco
     compare la colonna "stato" che li distingue.
+
+    Con solo_attivi=True i disattivati restano fuori. Lo chiedono le pagine
+    che non elencano le persone ma le fanno **scegliere** - la squadra di un
+    progetto, per esempio: proporre di assegnare un lavoro a chi non puo' piu'
+    entrare non ha senso.
     """
+    interrogazione = select(User)
+    if solo_attivi:
+        interrogazione = interrogazione.where(User.is_active.is_(True))
+
     return list(
-        db.scalars(select(User).order_by(User.last_name, User.first_name)).all()
+        db.scalars(
+            interrogazione.order_by(User.last_name, User.first_name)
+        ).all()
     )
 
 

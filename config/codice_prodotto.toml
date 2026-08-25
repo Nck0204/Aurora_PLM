@@ -1,0 +1,47 @@
+# ===========================================================================
+#  Scomposizione del codice prodotto
+#
+#  I codici dei prodotti sono "parlanti": leggendo RMS1100-24-110SW una
+#  persona dell'azienda capisce di che cosa si tratta. Questo file dice al
+#  programma come leggerli, cosi' che gli elementi riconosciuti diventino
+#  campi su cui si puo' cercare.
+#
+#  ATTENZIONE - LA REGOLA QUI SOTTO E' UN'IPOTESI.
+#  Al momento in cui e' stata scritta (sessione 5) l'azienda non aveva ancora
+#  confermato come vanno letti i codici. Sta in questo file, e non dentro il
+#  programma, proprio per questo: quando la regola vera sara' nota si cambia
+#  qui e si riavvia il server, senza toccare una riga di codice e senza
+#  rifare una migrazione.
+#
+#  COME SI CAMBIA
+#
+#  "espressione" e' un'espressione regolare in stile Python con i gruppi
+#  **nominati**: ogni (?P<nome>...) e' un elemento del codice. Il nome del
+#  gruppo diventa la chiave in products.code_parts, e l'ordine in cui i
+#  gruppi compaiono qui e' l'ordine in cui gli elementi vengono mostrati.
+#
+#  "[etichette]" da' a ciascun gruppo il nome in italiano che si legge
+#  nell'interfaccia. Un gruppo senza etichetta si mostra comunque, con il
+#  nome del gruppo: manca un'etichetta, non funziona una cosa in meno.
+#
+#  Le virgolette sono tre e semplici ('''), non doppie: dentro un testo
+#  scritto cosi' la barra rovesciata delle espressioni regolari (\d, \w)
+#  vale per quello che e', e non va raddoppiata.
+#
+#  DOPO AVER CAMBIATO LA REGOLA. I prodotti gia' inseriti conservano la
+#  scomposizione vecchia finche' non vengono riscomposti: code_parts e' un
+#  dato ricavato, e si ricalcola. Vedi docs/DECISIONI.md, D-042.
+# ===========================================================================
+
+# Ipotesi di partenza, quella che legge RMS1100-24-110SW come
+#   modello RMS · potenza 1100 · ingresso 24 · uscita 110 · variante SW
+espressione = '''^(?P<modello>[A-Za-z]+)(?P<potenza>\d+)-(?P<tensione_ingresso>\d+)-(?P<tensione_uscita>\d+)(?P<variante>[A-Za-z0-9]*)$'''
+
+
+# Il nome in italiano di ciascun elemento, come si legge nell'interfaccia.
+[etichette]
+modello = "Modello"
+potenza = "Potenza"
+tensione_ingresso = "Tensione di ingresso"
+tensione_uscita = "Tensione di uscita"
+variante = "Variante"

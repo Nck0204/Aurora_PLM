@@ -1,7 +1,7 @@
 # Modello dati — rilascio R1
 
-Ultimo aggiornamento: **24 agosto 2026**, sessione 3 (nessuna tabella
-cambiata: aggiornata solo la sezione 7 con i sospesi ora chiusi).
+Ultimo aggiornamento: **25 agosto 2026**, sessione 5 (nessuna tabella
+cambiata: aggiornate la sezione 4.3 e la sezione 7).
 
 Questo file descrive le diciannove tabelle create dalla migrazione
 `897359b06e69_modello_dati_r1.py`. Una tabella per file in `app/models/`, una
@@ -200,7 +200,7 @@ questo nome / da questo indirizzo negli ultimi minuti".
 | `code` | varchar(60) | `NN` `UQ`. Il codice parlante, per esempio `RMS1100-24-110SW`. |
 | `customer_id` | UUID | `NN` `IX` -> `customers.id`. Vedi la nota 6.1. |
 | `description` | text | |
-| `code_parts` | jsonb | `NN`, `{}` di partenza. Il codice scomposto negli elementi riconosciuti. E' un dato **ricavato**: comodo per cercare, mai la fonte della verita'. |
+| `code_parts` | jsonb | `NN`, `{}` di partenza. Il codice scomposto negli elementi riconosciuti. E' un dato **ricavato**: comodo per cercare, mai la fonte della verita'. Chi lo riempie e' `app/services/product_codes.py`, con la regola scritta in `config/codice_prodotto.toml` (D-038). Resta `{}` quando il codice non corrisponde alla regola, e **questo non impedisce di creare il prodotto** (D-039). |
 | `is_active` | boolean | `NN`, vero di partenza. |
 
 #### `product_versions` — le versioni di un prodotto
@@ -493,3 +493,19 @@ in R1: se in R2 servira' un elenco controllato, diventera' una tabella.
   `audit_logs`, come vuole D-018.
 - ~~**Il ripristino della password di `admin`.**~~ Fatto nella sessione 3:
   `scripts/reimposta_password.py`.
+
+Aggiornamento della sessione 5, sullo stesso problema del filtro delle righe
+disattivate. La sessione ha aggiunto tre interrogazioni che devono filtrare, e
+tutte e tre hanno seguito lo stesso principio: **il filtro sta
+nell'interrogazione, in una funzione sola, e chi la usa non lo puo'
+dimenticare.**
+
+| Dove | Come |
+|---|---|
+| Prodotti | `products._filtra()`, usata sia per contare sia per prendere una pagina: due elenchi di filtri scritti due volte prima o poi divergono, e l'impaginazione mostrerebbe un totale che non torna. |
+| Progetti | `projects._progetti_visibili()`: l'unione con `assignments` **e'** il filtro, quindi senza di essa l'interrogazione non sta nemmeno in piedi (D-043). |
+| Clienti proponibili | `customers.elenco_clienti(solo_attivi=True)`: l'elenco che si **guarda** mostra i disattivati (e' la pagina da cui si riattivano), quello che si **sceglie** no. |
+
+Non e' ancora una soluzione generale, e probabilmente non ce ne sara' una: e'
+il modello di D-032, **un controllo solo sulla strada obbligata**, applicato
+tre volte.

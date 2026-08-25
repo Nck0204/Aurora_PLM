@@ -1,0 +1,90 @@
+{# ===========================================================================
+   Elenco dei progetti visibili.
+
+   E' la stessa interrogazione del cruscotto, con gli stessi filtri: chi arriva
+   qui dalla voce di menu deve trovare quello che ha appena visto sulla pagina
+   iniziale, non un elenco costruito con altre regole.
+
+   Un progetto che questa persona non puo' vedere non compare qui **e** non si
+   apre scrivendone l'indirizzo: il controllo e' lo stesso nei due punti
+   (app/services/projects.py).
+   =========================================================================== #}
+{% extends "base.html" %}
+
+{% from "components/tabella.html" import tabella %}
+{% from "components/ricerca.html" import ricerca %}
+{% from "components/stato.html" import etichetta_ciclo_vita %}
+{% from "components/vuoto.html" import vuoto %}
+{% from "components/pulsanti.html" import pulsante_collegamento %}
+
+{% block titolo %}Progetti{% endblock %}
+{% block sezione %}Progetti{% endblock %}
+
+{% block contenuto %}
+
+<div class="testata">
+    <div>
+        <h1>Progetti</h1>
+        <p class="sottotitolo">
+            {% if utente.is_creatore %}
+                Tutti i progetti aperti. Un progetto si apre su una versione di
+                prodotto, dalla scheda della versione.
+            {% else %}
+                I progetti a cui sei assegnato.
+            {% endif %}
+        </p>
+    </div>
+</div>
+
+{{ ricerca("/progetti", valore=q, nome="q",
+           etichetta="Cerca fra i progetti",
+           segnaposto="Codice prodotto o cliente", filtri=filtri) }}
+
+{% if progetti or q or stato_scelto or fase_scelta %}
+
+    {% set colonne = [
+        {"etichetta": "Prodotto", "classe": "colonna-codice"},
+        {"etichetta": "Versione", "classe": "colonna-numero"},
+        {"etichetta": "Cliente"},
+        {"etichetta": "Fase corrente"},
+        {"etichetta": "Ciclo di vita"},
+        {"etichetta": "Responsabile"},
+        {"etichetta": "Aperto il"},
+    ] %}
+
+    {% call tabella(colonne,
+                    vuota=(progetti|length == 0),
+                    messaggio_vuoto="Nessun progetto con questi filtri.",
+                    riepilogo=(progetti|length ~ " progett" ~ ("o" if progetti|length == 1 else "i"))) %}
+        {% for p in progetti %}
+        <tr>
+            <td class="colonna-codice">
+                <a href="/progetti/{{ p.id }}">{{ p.product_version.product.code }}</a>
+            </td>
+            <td class="colonna-numero">{{ p.product_version.version_number }}</td>
+            <td>{{ p.product_version.product.customer.name }}</td>
+            <td>
+                {% if p.current_phase %}{{ p.current_phase.name }}
+                {% else %}<span class="testo-tenue">&mdash;</span>{% endif %}
+            </td>
+            <td>{{ etichetta_ciclo_vita(p.product_version.lifecycle_state) }}</td>
+            <td>{{ p.project_manager.full_name }}</td>
+            <td>{{ p.opened_at.strftime("%d/%m/%Y") }}</td>
+        </tr>
+        {% endfor %}
+    {% endcall %}
+
+{% else %}
+
+    {{ vuoto("Nessun progetto",
+             "Un progetto si apre su una versione di prodotto, dalla scheda "
+             "della versione: e' li' che nasce il legame uno a uno fra le due "
+             "cose.",
+             azione=pulsante_collegamento("Vai ai prodotti", "/prodotti",
+                                          variante="primario",
+                                          icona_nome="prodotti"),
+             icona_nome="progetti") }}
+
+{% endif %}
+
+{% endblock %}

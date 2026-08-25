@@ -1,0 +1,133 @@
+{# ===========================================================================
+   Elenco dei prodotti, con ricerca, filtri, ordinamento e impaginazione.
+
+   E' il primo elenco vero di Aurora: quello su cui l'ordinamento fatto dal
+   server e l'impaginazione, costruiti nella sessione 4, vengono usati per la
+   prima volta su dati veri.
+
+   I FILTRI SONO COSTRUITI SULLA CONFIGURAZIONE. Le tendine "Modello",
+   "Potenza", "Tensione..." non sono scritte qui: arrivano dalla regola di
+   scomposizione (config/codice_prodotto.toml). Se domani la regola avra' un
+   elemento in piu', comparira' una tendina in piu' senza che nessuno tocchi
+   questo file. Le voci di ciascuna tendina sono i valori che i prodotti hanno
+   davvero: un filtro che non trova mai niente e' peggio di un filtro che non
+   c'e'.
+   =========================================================================== #}
+{% extends "base.html" %}
+
+{% from "components/pulsanti.html" import pulsante_collegamento %}
+{% from "components/tabella.html" import tabella %}
+{% from "components/ricerca.html" import ricerca %}
+{% from "components/impaginazione.html" import impaginazione %}
+{% from "components/stato.html" import etichetta, etichetta_ciclo_vita %}
+{% from "components/vuoto.html" import vuoto %}
+{% from "components/avvisi.html" import avviso %}
+
+{% block titolo %}Prodotti{% endblock %}
+{% block sezione %}Prodotti{% endblock %}
+
+{% block contenuto %}
+
+<div class="testata">
+    <div>
+        <h1>Prodotti</h1>
+        <p class="sottotitolo">
+            Ogni prodotto ha un codice parlante e almeno una versione. Il
+            lavoro si apre sulle versioni, non sui prodotti.
+        </p>
+    </div>
+    {% if utente.is_creatore %}
+    <div class="testata-azioni">
+        {{ pulsante_collegamento("Nuovo prodotto", "/prodotti/nuovo",
+                                 variante="primario", icona_nome="piu") }}
+    </div>
+    {% endif %}
+</div>
+
+{% if not regola.utilizzabile %}
+    {{ avviso(regola.problema ~ " I prodotti si creano e si leggono lo stesso, "
+              "ma la ricerca per modello, potenza e tensione non funziona "
+              "finche' il file non viene corretto.",
+              variante="errore",
+              titolo="La regola di scomposizione dei codici non e' utilizzabile") }}
+{% endif %}
+
+{# Le tendine arrivano gia' composte dalla rotta: il cliente, piu' una per
+   ciascun elemento previsto dalla regola di scomposizione. Vedi
+   _filtri_ricerca() in app/routers/products.py. #}
+{{ ricerca("/prodotti", valore=q, nome="q",
+           etichetta="Cerca fra i prodotti",
+           segnaposto="Codice o descrizione",
+           filtri=filtri,
+           nascosti={"ordina": ordina, "verso": verso}) }}
+
+{% if totale or q or cliente or elementi_scelti %}
+
+    {% set colonne = [
+        {"etichetta": "Codice", "chiave": "codice", "classe": "colonna-codice"},
+        {"etichetta": "Cliente", "chiave": "cliente"},
+        {"etichetta": "Descrizione"},
+        {"etichetta": "Versioni", "classe": "colonna-numero"},
+        {"etichetta": "Ultima versione"},
+        {"etichetta": "Aggiornato", "chiave": "aggiornato"},
+    ] %}
+
+    {% call tabella(colonne,
+                    vuota=(prodotti|length == 0),
+                    messaggio_vuoto="Nessun prodotto con questi filtri. "
+                                    "Prova a svuotare la casella di ricerca.",
+                    ordina=ordina, verso=verso, indirizzo="/prodotti",
+                    riepilogo=(totale ~ " prodott" ~ ("o" if totale == 1 else "i") ~ " trovat" ~ ("o" if totale == 1 else "i"))) %}
+        {% for p in prodotti %}
+        <tr>
+            <td class="colonna-codice">
+                <a href="/prodotti/{{ p.id }}">{{ p.code }}</a>
+                {% if not p.code_parts %}
+                    {{ etichetta("non scomposto", variante="attenzione",
+                                 titolo="Il codice non corrisponde alla regola "
+                                        "di scomposizione in uso") }}
+                {% endif %}
+                {% if not p.is_active %}
+                    {{ etichetta("disattivato", variante="errore") }}
+                {% endif %}
+            </td>
+            <td>{{ p.customer.name }}</td>
+            <td>
+                {% if p.description %}{{ p.description }}
+                {% else %}<span class="testo-tenue">&mdash;</span>{% endif %}
+            </td>
+            <td class="colonna-numero">{{ p.versions|length }}</td>
+            <td>
+                {% if p.versions %}
+                    {% set ultima = p.versions|last %}
+                    <a href="/versioni/{{ ultima.id }}">v{{ ultima.version_number }}</a>
+                    {{ etichetta_ciclo_vita(ultima.lifecycle_state) }}
+                {% else %}
+                    <span class="testo-tenue">&mdash;</span>
+                {% endif %}
+            </td>
+            <td>{{ p.updated_at.strftime("%d/%m/%Y") }}</td>
+        </tr>
+        {% endfor %}
+    {% endcall %}
+
+    {{ impaginazione(pagina=pagina_corrente, totale_pagine=totale_pagine,
+                     indirizzo="/prodotti", parametri=parametri,
+                     totale_righe=totale) }}
+
+{% else %}
+
+    {{ vuoto("Nessun prodotto",
+             "Non e' ancora stato creato nessun prodotto. Insieme al primo "
+             "nascera' la sua versione 1, e su quella si potra' aprire un "
+             "progetto.",
+             azione=(pulsante_collegamento("Crea il primo prodotto",
+                                           "/prodotti/nuovo",
+                                           variante="primario",
+                                           icona_nome="piu")
+                     if utente.is_creatore else none),
+             icona_nome="prodotti") }}
+
+{% endif %}
+
+{% endblock %}

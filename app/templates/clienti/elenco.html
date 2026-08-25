@@ -1,0 +1,83 @@
+{# ===========================================================================
+   Elenco dei clienti. Riservato al creatore.
+
+   Come per gli utenti, qui i disattivati si vedono: e' la pagina da cui si
+   riattiva un cliente. La colonna "stato" li distingue.
+
+   Non c'e' nessun pulsante per cancellare, e non va aggiunto: regola 5 di
+   CLAUDE.md. Un cliente disattivato e' un cliente con cui non si aprono
+   lavori nuovi, non un cliente che non e' mai esistito.
+   =========================================================================== #}
+{% extends "base.html" %}
+
+{% from "components/pulsanti.html" import pulsante_collegamento %}
+{% from "components/tabella.html" import tabella %}
+{% from "components/stato.html" import etichetta %}
+{% from "components/vuoto.html" import vuoto %}
+
+{% block titolo %}Clienti{% endblock %}
+{% block sezione %}Clienti{% endblock %}
+
+{% block contenuto %}
+
+<div class="testata">
+    <div>
+        <h1>Clienti</h1>
+        <p class="sottotitolo">
+            Le aziende per cui si sviluppano i prodotti. La sigla e' quella
+            che si usa a voce e che compare dentro i codici.
+        </p>
+    </div>
+    <div class="testata-azioni">
+        {{ pulsante_collegamento("Aggiungi un cliente", "/clienti/nuovo",
+                                 variante="primario", icona_nome="piu") }}
+    </div>
+</div>
+
+{% if clienti %}
+
+    {% set colonne = [
+        {"etichetta": "Sigla", "classe": "colonna-codice"},
+        {"etichetta": "Nome"},
+        {"etichetta": "Prodotti attivi", "classe": "colonna-numero"},
+        {"etichetta": "Stato"},
+        {"etichetta": "Operazioni", "classe": "colonna-azioni"},
+    ] %}
+
+    {% call tabella(colonne,
+                    riepilogo=(clienti|length ~ " client" ~ ("e" if clienti|length == 1 else "i"))) %}
+        {% for c in clienti %}
+        <tr>
+            <td class="colonna-codice">{{ c.code }}</td>
+            <td><a href="/clienti/{{ c.id }}">{{ c.name }}</a></td>
+            <td class="colonna-numero">{{ prodotti.get(c.id, 0) }}</td>
+            <td>
+                {% if c.is_active %}
+                    {{ etichetta("attivo", variante="successo") }}
+                {% else %}
+                    {{ etichetta("disattivato", variante="errore") }}
+                {% endif %}
+            </td>
+            <td class="colonna-azioni">
+                <div class="fila-pulsanti spinge-a-destra">
+                    {{ pulsante_collegamento("Apri", "/clienti/" ~ c.id,
+                                             misura="piccolo") }}
+                </div>
+            </td>
+        </tr>
+        {% endfor %}
+    {% endcall %}
+
+{% else %}
+
+    {{ vuoto("Nessun cliente",
+             "Non e' ancora stato inserito nessun cliente. Serve prima di poter "
+             "creare un prodotto: ogni prodotto e' sviluppato per qualcuno.",
+             azione=pulsante_collegamento("Aggiungi il primo cliente",
+                                          "/clienti/nuovo",
+                                          variante="primario", icona_nome="piu"),
+             icona_nome="clienti") }}
+
+{% endif %}
+
+{% endblock %}

@@ -1,0 +1,207 @@
+{# ===========================================================================
+   Scheda di una versione di prodotto.
+
+   L'AVVISO IN CIMA. Se esiste una versione piu' recente dello stesso
+   prodotto, la prima cosa che si legge e' che questa non e' quella corrente,
+   con il collegamento per andarci. Sta in cima e non in fondo perche' e'
+   l'informazione che cambia tutto quello che si legge dopo: capita che
+   qualcuno lavori mezza giornata sulla versione sbagliata, ed e' proprio il
+   tipo di errore che un programma deve rendere difficile.
+
+   I PULSANTI DEL CICLO DI VITA sono costruiti sul grafo delle transizioni
+   (app/services/lifecycle.py): compaiono solo gli stati in cui si puo'
+   davvero andare da qui. Il giorno in cui il grafo cambiera', cambieranno
+   anche i pulsanti, senza toccare questo file.
+
+   Ogni pulsante porta alla pagina di conferma, non esegue: rilasciare una
+   versione ne supera un'altra, e chi lo fa deve poter leggere prima che cosa
+   succedera'.
+   =========================================================================== #}
+{% extends "base.html" %}
+
+{% from "components/pulsanti.html" import pulsante_collegamento %}
+{% from "components/riquadro.html" import riquadro %}
+{% from "components/descrizione.html" import descrizione, voce %}
+{% from "components/stato.html" import etichetta, etichetta_ciclo_vita %}
+{% from "components/avvisi.html" import avviso, notifica %}
+{% from "components/tabella.html" import tabella %}
+
+{% block titolo %}{{ prodotto.code }} v{{ versione.version_number }}{% endblock %}
+{% block sezione %}Prodotti{% endblock %}
+
+{% block notifiche %}
+    {% if cambiato %}
+        {% if superata %}
+            {{ notifica("La versione " ~ superata ~ " e' passata da sola a "
+                        "«superato»: lo ha fatto il programma applicando la "
+                        "regola, e nel registro risulta come azione di sistema.",
+                        variante="successo",
+                        titolo="Rilasciata, e la precedente e' stata superata",
+                        durata=0) }}
+        {% else %}
+            {{ notifica("La versione e' passata a «" ~ cambiato ~ "».",
+                        variante="successo", titolo="Stato aggiornato") }}
+        {% endif %}
+    {% endif %}
+{% endblock %}
+
+{% block contenuto %}
+
+{# --- L'avviso della versione piu' recente, in cima a tutto --- #}
+{% if versione_corrente %}
+    {% call avviso("", variante="attenzione",
+                   titolo="Questa non e' la versione corrente") %}
+        <p>
+            Di questo prodotto esiste la
+            <strong>versione {{ versione_corrente.version_number }}</strong>,
+            piu' recente di quella che stai guardando.
+        </p>
+        <p class="margine-sopra">
+            {{ pulsante_collegamento("Vai alla versione "
+                                     ~ versione_corrente.version_number,
+                                     "/versioni/" ~ versione_corrente.id,
+                                     variante="primario", misura="piccolo",
+                                     icona_nome="freccia-destra") }}
+        </p>
+    {% endcall %}
+{% endif %}
+
+<div class="testata">
+    <div>
+        <h1>
+            <span class="mono">{{ prodotto.code }}</span>
+            versione {{ versione.version_number }}
+        </h1>
+        <p class="sottotitolo">
+            {{ prodotto.customer.name }} &middot;
+            {{ etichetta_ciclo_vita(versione.lifecycle_state) }}
+        </p>
+    </div>
+    <div class="testata-azioni">
+        {{ pulsante_collegamento("Il prodotto", "/prodotti/" ~ prodotto.id,
+                                 icona_nome="prodotti") }}
+    </div>
+</div>
+
+<div class="griglia-riquadri">
+
+    {% call riquadro("La versione") %}
+        {% call descrizione(stretta=true) %}
+            {{ voce("Numero", versione.version_number) }}
+            {{ voce("Stato", etichetta_ciclo_vita(versione.lifecycle_state)) }}
+            {{ voce("Derivata da",
+                    ("versione " ~ versione.derived_from.version_number)
+                    if versione.derived_from else none,
+                    vuoto="prima versione del prodotto") }}
+            {{ voce("Motivo della derivazione", versione.derivation_reason) }}
+            {{ voce("Creata il", versione.created_at.strftime("%d/%m/%Y")) }}
+            {{ voce("Rilasciata il",
+                    versione.released_at.strftime("%d/%m/%Y")
+                    if versione.released_at else none) }}
+        {% endcall %}
+    {% endcall %}
+
+    {% call riquadro("Il codice, letto") %}
+        {% if coppie %}
+            {% call descrizione(stretta=true) %}
+                {% for etichetta_elemento, valore in coppie %}
+                    {{ voce(etichetta_elemento, valore, monospazio=true) }}
+                {% endfor %}
+            {% endcall %}
+        {% else %}
+            <p class="campo-aiuto">
+                Il codice di questo prodotto non corrisponde alla regola di
+                scomposizione in uso.
+            </p>
+        {% endif %}
+    {% endcall %}
+
+</div>
+
+{# --- Il ciclo di vita --- #}
+{% call riquadro("Ciclo di vita") %}
+
+    <p>
+        La versione e' <strong>{{ nome_stato(versione.lifecycle_state) }}</strong>.
+    </p>
+
+    {% if puo_cambiare_stato %}
+        {% if stati_possibili %}
+            <p class="campo-aiuto margine-sopra">
+                Da qui si puo' passare a questi stati, e a nessun altro. Ogni
+                passaggio chiede prima una conferma.
+            </p>
+            <div class="fila-pulsanti margine-sopra">
+                {% for stato in stati_possibili %}
+                    {{ pulsante_collegamento(
+                           "Porta a «" ~ nome_stato(stato) ~ "»",
+                           "/versioni/" ~ versione.id ~ "/stato?nuovo=" ~ stato.value,
+                           variante="primario" if loop.first else "secondario") }}
+                {% endfor %}
+            </div>
+        {% else %}
+            <p class="campo-aiuto margine-sopra">
+                E' l'ultimo passo del ciclo di vita: da qui non si va piu' da
+                nessuna parte.
+            </p>
+        {% endif %}
+    {% else %}
+        <p class="campo-aiuto margine-sopra">
+            Il ciclo di vita di una versione lo cambiano il project manager del
+            suo progetto e chi ha il ruolo di creatore.
+        </p>
+    {% endif %}
+
+{% endcall %}
+
+{# --- Il progetto --- #}
+{% call riquadro("Progetto") %}
+    {% if progetto %}
+        {% call descrizione(stretta=true) %}
+            {{ voce("Responsabile", progetto.project_manager.full_name) }}
+            {{ voce("Fase corrente",
+                    progetto.current_phase.name if progetto.current_phase else none) }}
+            {{ voce("Modello di fasi",
+                    progetto.phase_template.name ~ " v"
+                    ~ progetto.phase_template.version) }}
+            {{ voce("Aperto il", progetto.opened_at.strftime("%d/%m/%Y")) }}
+            {{ voce("Squadra", squadra|length ~ " person"
+                               ~ ("a" if squadra|length == 1 else "e")) }}
+        {% endcall %}
+        <div class="fila-pulsanti margine-sopra">
+            {{ pulsante_collegamento("Apri il progetto",
+                                     "/progetti/" ~ progetto.id,
+                                     icona_nome="progetti") }}
+        </div>
+    {% else %}
+        <p class="campo-aiuto">
+            Su questa versione non e' ancora stato aperto nessun progetto. Una
+            versione ne ha al massimo uno: il progetto e' il lavoro che si fa
+            su di lei.
+        </p>
+        {% if utente.is_creatore %}
+        <div class="fila-pulsanti margine-sopra">
+            {{ pulsante_collegamento("Apri un progetto",
+                                     "/progetti/nuovo?versione=" ~ versione.id,
+                                     variante="primario", icona_nome="piu") }}
+        </div>
+        {% endif %}
+    {% endif %}
+{% endcall %}
+
+{# --- Versione derivata --- #}
+{% if puo_cambiare_stato %}
+{% call riquadro("Una versione nuova") %}
+    <p class="campo-aiuto">
+        Una versione nuova nasce sempre da un'altra: si sceglie da quale si
+        parte e si scrive perche'. Parte da «in sviluppo».
+    </p>
+    <div class="fila-pulsanti margine-sopra">
+        {{ pulsante_collegamento("Deriva una versione nuova",
+                                 "/versioni/" ~ versione.id ~ "/deriva",
+                                 icona_nome="piu") }}
+    </div>
+{% endcall %}
+{% endif %}
+
+{% endblock %}

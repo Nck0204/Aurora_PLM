@@ -1,0 +1,110 @@
+{# ===========================================================================
+   Conferma di un cambio di stato del ciclo di vita.
+
+   E' UNA PAGINA E NON UNA FINESTRA MODALE, di proposito. Rilasciare una
+   versione ne fa passare un'altra a "superato": e' un'operazione che ne
+   provoca una seconda, e chi preme deve poter leggere prima che cosa
+   succedera'. Una finestra modale ha bisogno di JavaScript per aprirsi, e se
+   non si aprisse l'operazione partirebbe senza che nessuno abbia letto
+   niente. La regola sta in docs/GUIDA_STILE.md.
+
+   Quello che la pagina dice, in ordine:
+
+     1. da quale stato a quale stato si sta passando;
+     2. **quale versione verra' superata**, con il suo numero e il suo stato
+        di adesso - oppure che non ce n'e' nessuna, che va detto lo stesso;
+     3. la casella della motivazione, quando lo stato la richiede.
+   =========================================================================== #}
+{% extends "base.html" %}
+
+{% from "components/campi.html" import area_testo, csrf %}
+{% from "components/pulsanti.html" import pulsante, pulsante_collegamento %}
+{% from "components/riquadro.html" import riquadro %}
+{% from "components/descrizione.html" import descrizione, voce %}
+{% from "components/stato.html" import etichetta_ciclo_vita %}
+{% from "components/avvisi.html" import avviso %}
+
+{% block titolo %}Conferma il cambio di stato{% endblock %}
+{% block sezione %}Prodotti{% endblock %}
+
+{% block contenuto %}
+
+<div class="testata">
+    <div>
+        <h1>Conferma il cambio di stato</h1>
+        <p class="sottotitolo">
+            <span class="mono">{{ prodotto.code }}</span>
+            versione {{ versione.version_number }}
+        </p>
+    </div>
+</div>
+
+<div class="colonna-stretta">
+
+<form method="post" action="/versioni/{{ versione.id }}/stato" class="modulo">
+    {{ csrf(request) }}
+    <input type="hidden" name="nuovo" value="{{ nuovo_stato.value }}">
+
+    {% call riquadro("Che cosa stai per fare",
+                     piede=pulsante("Conferma il passaggio a «"
+                                    ~ nome_stato(nuovo_stato) ~ "»",
+                                    variante="primario")
+                           ~ pulsante_collegamento("Annulla",
+                                                   "/versioni/" ~ versione.id)) %}
+
+        {% call descrizione() %}
+            {{ voce("Prodotto", prodotto.code, monospazio=true) }}
+            {{ voce("Versione", versione.version_number) }}
+            {{ voce("Stato di adesso",
+                    etichetta_ciclo_vita(versione.lifecycle_state)) }}
+            {{ voce("Stato dopo", etichetta_ciclo_vita(nuovo_stato)) }}
+        {% endcall %}
+
+        {# --- La regola automatica del superamento --- #}
+        {% if da_superare %}
+            {% call avviso("", variante="attenzione",
+                           titolo="Una seconda versione verra' cambiata") %}
+                <p>
+                    Rilasciando questa versione, la
+                    <strong>versione {{ da_superare.version_number }}</strong> -
+                    che adesso e'
+                    {{ etichetta_ciclo_vita(da_superare.lifecycle_state) }} -
+                    passera' automaticamente a
+                    <strong>superato</strong>.
+                </p>
+                <p class="margine-sopra">
+                    Lo fa il programma applicando la regola, non tu: nel
+                    registro delle operazioni la riga risultera' come azione di
+                    sistema, senza autore.
+                </p>
+            {% endcall %}
+        {% elif precedente_intoccata %}
+            {{ avviso("La versione " ~ precedente_intoccata.version_number
+                      ~ " e' la precedente di questa, ma resta com'e': una "
+                      "versione «" ~ nome_stato(precedente_intoccata.lifecycle_state)
+                      ~ "» non puo' passare a «superato».",
+                      variante="informazione",
+                      titolo="Nessuna versione verra' superata") }}
+        {% elif nuovo_stato.value == "rilasciato" %}
+            {{ avviso("Non c'e' nessuna versione precedente da superare: "
+                      "questa e' la prima di questo prodotto.",
+                      variante="informazione",
+                      titolo="Nessuna versione verra' superata") }}
+        {% endif %}
+
+        {# --- La motivazione, quando serve --- #}
+        {% if serve_motivazione %}
+            {{ area_testo("Perche' questa versione diventa obsoleta",
+                          "motivazione", valore=motivazione, righe=4,
+                          obbligatorio=true,
+                          aiuto="Resta nel registro delle operazioni. Fra due "
+                                "anni sara' l'unica risposta a «perche' e' "
+                                "stata dichiarata obsoleta?».") }}
+        {% endif %}
+
+    {% endcall %}
+</form>
+
+</div>
+
+{% endblock %}

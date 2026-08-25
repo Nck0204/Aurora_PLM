@@ -1,6 +1,6 @@
 # Stato di avanzamento
 
-Ultimo aggiornamento: **25 agosto 2026**, fine della sessione 4.
+Ultimo aggiornamento: **25 agosto 2026**, fine della sessione 5.
 
 Il progetto e' diviso in 13 sessioni di lavoro. Questa tabella dice a che
 punto siamo. Va aggiornata **alla fine di ogni sessione**, prima del commit.
@@ -17,9 +17,9 @@ Stati possibili: `da fare` · `in corso` · `completata`
 | 2 | Modello dati R1 | **completata** | Diciannove tabelle come modelli SQLAlchemy, una migrazione Alembic, dati iniziali idempotenti, test del modello, `docs/MODELLO_DATI.md`. Dettaglio sotto. |
 | 3 | Accesso e gestione utenti | **completata** | Password con argon2id, accesso con sessione e "ricordami" rotante, blocco dopo cinque tentativi, cambio password obbligatorio al primo accesso, protezione CSRF, gestione utenti riservata al creatore, registro di audit. Dettaglio sotto. |
 | 4 | Sistema grafico | **completata** | Foglio di stile unico con tutti i valori in variabili, quindici componenti come macro Jinja2, barra laterale filtrata per ruolo, vetrina `/stile`, pagine di accesso e gestione utenti ristilate, pagine di errore. Dettaglio sotto. |
-| 4b | Anagrafiche | da fare | Clienti, contatti e classificazioni; matrice dei permessi modificabile dall'interfaccia; cambio di ruolo di un utente. Nessuna cancellazione, solo disattivazione. Le tabelle esistono dalla sessione 2: mancano comportamento e pagine. |
-| 5 | Prodotti e versioni | da fare | Anagrafica dei prodotti, scomposizione del codice parlante in `code_parts`, versioni e catena delle derivazioni, stati del ciclo di vita. |
-| 6 | Progetti, assegnazioni e fasi | da fare | Apertura di un progetto su una versione, squadra e ruoli, scelta del modello di fasi, passaggi di fase con richiesta e approvazione. |
+| 4b | Anagrafiche | **in parte** | Clienti e contatti: fatti nella sessione 5 (elenco, creazione, modifica, disattivazione, riattivazione). Restano da fare la matrice dei permessi modificabile dall'interfaccia e il cambio di ruolo di un utente: servono ai documenti, sessione 7. |
+| 5 | Prodotti, versioni e progetti | **completata** | Clienti e contatti, prodotti con la scomposizione del codice configurabile, versioni e derivazioni, grafo del ciclo di vita con superamento automatico, apertura dei progetti, cruscotto iniziale. Dettaglio sotto. |
+| 6 | Fasi e assegnazioni | da fare | L'apertura del progetto, la squadra e la scelta del modello di fasi sono state fatte nella sessione 5. Restano: passaggi di fase con richiesta e approvazione, modifica della squadra a progetto avviato, chiusura di un progetto. |
 | 7 | Archivio documenti | da fare | Caricamento file, calcolo dell'impronta SHA-256, deposito per impronta, versioni successive, presa in carico, permessi effettivi calcolati sulla matrice. |
 | 8 | Revisioni e approvazioni | da fare | Flusso di revisione dei documenti tecnici: bozza, in verifica, rilasciato, superato. |
 | 9 | Interfaccia completa | da fare | Struttura di navigazione, ricerca, elenchi con filtri e paginazione, rifinitura del tema scuro. |
@@ -35,6 +35,263 @@ Stati possibili: `da fare` · `in corso` · `completata`
 > comportamento. Resta una **domanda aperta**: le tabelle di distinta base e
 > articoli sono del rilascio R3 e in questo piano non compaiono; va chiarito se
 > le 13 sessioni coprono il solo R1 o arrivano anche a R2 e R3.
+
+---
+
+## Sessione 5 — Prodotti, versioni e progetti · completata (25 agosto 2026)
+
+La sessione ha messo in piedi il cuore del programma: **il prodotto, le sue
+versioni, il ciclo di vita di ciascuna e il progetto che ci si apre sopra.**
+Da qui in avanti Aurora ha qualcosa da mostrare la mattina: la pagina iniziale
+non e' piu' un saluto, e' il cruscotto dei progetti.
+
+Insieme a loro sono state fatte anche le **anagrafiche dei clienti** che erano
+rimaste in sospeso dalla sessione 4 (riga 4b della tabella): clienti, contatti
+e disattivazione. Restano fuori la matrice dei permessi e il cambio di ruolo,
+che non servivano a questa sessione.
+
+> **Nessuna migrazione.** Le tabelle c'erano tutte dalla sessione 2. Questa
+> sessione ci ha costruito sopra soltanto comportamento e pagine, che e'
+> esattamente quello che D-021 si aspettava. `alembic current` non si muove.
+
+### Realizzato
+
+**La scomposizione del codice prodotto, configurabile** — la regola con cui
+`RMS1100-24-110SW` viene letto **non sta nel programma**. Sta in
+`config/codice_prodotto.toml`, indicato da `PRODUCT_CODE_CONFIG` nel file
+`.env`: dentro ci sono un'espressione regolare con gruppi nominati e il nome in
+italiano di ciascun gruppo. L'ipotesi di partenza legge modello (`RMS`),
+potenza (`1100`), tensione di ingresso (`24`), tensione di uscita (`110`),
+variante (`SW`).
+
+Il motivo e' che l'azienda **non ha ancora confermato la regola**: quando lo
+fara' si cambia una riga di quel file e si riavvia il server, senza toccare
+una riga di codice (D-038). Nessun template sa quanti elementi ha un codice: i
+filtri della ricerca si costruiscono da soli su quello che la regola dichiara.
+
+**Un codice che non corrisponde viene accettato lo stesso**, con `code_parts`
+vuoto e un avviso visibile in tre punti (anteprima, scheda del prodotto,
+elenco). Non esiste in nessun punto del programma un controllo sulla forma di
+un codice, e c'e' un test che serve solo a impedire che qualcuno ne aggiunga
+uno in buona fede (D-039).
+
+**Servizi** (`app/services/`):
+
+| File | A che cosa serve |
+|---|---|
+| `product_codes.py` | Legge il file di configurazione, scompone un codice, restituisce le coppie etichetta/valore da mostrare. Non solleva mai. |
+| `customers.py` | Clienti e contatti: elenco, creazione, modifica, disattivazione, riattivazione. |
+| `products.py` | Prodotti e versioni: creazione (con la V1), ricerca con filtri e impaginazione, derivazione, riscomposizione dei codici. |
+| `lifecycle.py` | **Il grafo delle transizioni**, il superamento automatico, chi puo' cambiare stato. |
+| `projects.py` | Apertura di un progetto, squadra, e le interrogazioni del cruscotto gia' filtrate per chi guarda. |
+
+**Il grafo del ciclo di vita** sta in una tabella sola,
+`TRANSIZIONI_AMMESSE` in `lifecycle.py`, e si legge in dieci righe:
+
+```
+in sviluppo --> rilasciato --> in produzione
+                    |                |
+                    +--> superato <--+
+                             |
+      (da ogni stato) --> obsoleto
+```
+
+Non si torna mai indietro, `obsoleto` e' l'unico stato terminale. Una
+transizione fuori dal grafo produce una frase italiana che dice **quali sono
+quelle possibili**, non un errore tecnico. I pulsanti delle pagine si
+costruiscono sul grafo: un'operazione impossibile non viene nemmeno proposta.
+
+**Il superamento automatico** — quando una versione passa a `rilasciato`, la
+precedente dello stesso prodotto passa da sola a `superato`. Prima di
+procedere c'e' una **pagina di conferma** (non una finestra modale: se non si
+aprisse, l'operazione partirebbe senza che nessuno abbia letto niente) che
+dice quale versione verra' superata, con il suo numero e il suo stato di
+adesso. Nel registro l'operazione risulta **come azione di sistema**, con
+`user_id` nullo: chi ha premuto il pulsante ha rilasciato la versione nuova,
+non ha superato la vecchia (D-042).
+
+**Pagine** (`app/routers/`, `app/templates/`):
+
+| Indirizzo | Che cosa fa |
+|---|---|
+| `GET /` | **Il cruscotto**: i progetti visibili, con codice, versione, cliente, fase, ciclo di vita e responsabile. Filtri per stato e per fase. |
+| `GET /clienti` · `/clienti/nuovo` · `/clienti/{id}` | Anagrafica clienti, con i contatti nella stessa pagina. Solo creatore. |
+| `POST /clienti/{id}/disattiva` · `/riattiva` | Fuori servizio e ritorno. Nessuna cancellazione. |
+| `POST /clienti/{id}/contatti` · `POST /contatti/{id}/disattiva` · `/riattiva` | Le persone di riferimento presso il cliente. |
+| `GET /prodotti` | Elenco con ricerca per codice, cliente **e elementi scomposti**, ordinamento e impaginazione. |
+| `GET/POST /prodotti/nuovo` | Creazione, con **anteprima in tempo reale** della scomposizione. Solo creatore. |
+| `POST /prodotti/anteprima-codice` | Il pezzo di pagina che alimenta l'anteprima. L'unica rotta HTMX. |
+| `GET /prodotti/{id}` · `POST /prodotti/{id}` · `/disattiva` · `/riattiva` | Scheda del prodotto con tutte le versioni in ordine cronologico. |
+| `GET /versioni/{id}` | Scheda della versione, con **l'avviso in cima** se ne esiste una piu' recente. |
+| `GET/POST /versioni/{id}/deriva` | Versione derivata: si sceglie l'origine e si scrive perche'. |
+| `GET /versioni/{id}/stato` | **La conferma** del cambio di stato: dice che cosa succedera'. |
+| `POST /versioni/{id}/stato` | Esegue il cambio, applicando grafo e superamento automatico. |
+| `GET /progetti` · `GET /progetti/{id}` | Elenco e scheda, con la barra delle fasi. |
+| `GET/POST /progetti/nuovo?versione={id}` | Apertura del progetto su una versione. Solo creatore. |
+
+**Nessun componente grafico nuovo.** Tutte le pagine sono composte con i
+quindici macro della sessione 4. L'unica aggiunta e' **un'icona**, `clienti`,
+dentro il componente esistente `icone.html`, con il suo esempio in `/stile`
+come vogliono i cinque passi: senza, la voce "Clienti" avrebbe avuto la stessa
+icona di "Utenti", e nella barra stretta - dove si vedono le sole icone -
+sarebbero state indistinguibili.
+
+**La barra laterale** — "Prodotti" e "Progetti" si accendono, e si aggiunge
+"Clienti" (riservata al creatore). Restano spente Documenti (sessione 7), Posta
+(10) e Diagnostica (11).
+
+**Configurazione** — due parametri nuovi in `.env` e `.env.example`:
+`PRODUCT_CODE_CONFIG` e `PAGE_SIZE`.
+
+### Verificato
+
+**Test automatici: 180, tutti superati** (erano 90 alla fine della sessione 4).
+I 90 nuovi stanno in `tests/test_prodotti.py` (23), `tests/test_versioni.py`
+(37), `tests/test_progetti.py` (18) e `tests/test_clienti.py` (12).
+
+| Criterio di accettazione | Come e' stato verificato | Esito |
+|---|---|---|
+| `RMS1100-24-110SW`: scomposizione corretta | `test_il_codice_di_esempio_si_scompone_come_previsto`, `test_la_scomposizione_finisce_nel_database` | superato |
+| I campi scomposti sono ricercabili | `test_i_campi_scomposti_sono_ricercabili`, su un elemento, su due insieme e su un valore inesistente | superato |
+| V2 per derivazione, rilasciata, V1 superata da sola | `test_la_v2_rilasciata_supera_la_v1_da_sola` e `test_il_giro_completo_dall_interfaccia` | superato |
+| Transizione non ammessa: messaggio chiaro | `test_il_rifiuto_e_una_frase_italiana_che_dice_come_si_fa`, `test_una_transizione_non_ammessa_dall_interfaccia_e_leggibile` | superato |
+| Test sulla regola di superamento e sul grafo | 17 test fra grafo, superamento e permessi | superato |
+| Un utente non assegnato non vede il progetto | `test_chi_non_e_assegnato_non_vede_il_progetto_nel_cruscotto`, e la stessa cosa dal browser | superato |
+
+Due test verificano cose che non sono comportamento ma **forma**, e servono a
+proteggere una regola: `test_il_grafo_copre_tutti_gli_stati` (aggiungendo uno
+stato a `LifecycleState` diventa rosso, perche' una riga mancante dal grafo si
+comporterebbe come uno stato terminale senza che nessuno lo abbia deciso) e
+`test_non_esiste_nessuna_rotta_per_cancellare_un_cliente`.
+
+**Prova nel browser**, con il server avviato e il database di sviluppo. Il giro
+e' stato fatto per intero, come lo farebbe una persona:
+
+| Passo | Esito |
+|---|---|
+| Creazione del cliente "Ferrovie Nord Milano" (FNM) | superato |
+| Anteprima in tempo reale scrivendo `RMS1100-24-110SW` | superato: modello RMS, potenza 1100, ingresso 24, uscita 110, variante SW, aggiornata da HTMX senza ricaricare |
+| Anteprima con un codice fuori regola | superato: "Codice non riconosciuto", con la spiegazione che verra' accettato lo stesso |
+| Creazione del prodotto | superato: scheda con la scomposizione e la versione 1 in sviluppo |
+| Ricerca `?modello=RMS&tensione_uscita=110` | superato: le cinque tendine sono generate dalla configurazione, con i soli valori esistenti |
+| Apertura del progetto sulla V1 | superato: sei fasi del modello "Standard v1", norme copiate, PM assegnato da solo |
+| Rilascio della V1 | superato: la conferma dice "nessuna versione verra' superata, questa e' la prima" |
+| Derivazione della V2 con motivazione | superato |
+| Conferma del rilascio della V2 | superato: **"la versione 1 - che adesso e' rilasciato - passera' automaticamente a superato"** |
+| Dopo la conferma | superato: notifica che non sparisce, e la V1 e' `superato` |
+| Scheda della V1 dopo il superamento | superato: avviso in cima "Questa non e' la versione corrente" con il collegamento alla 2; i pulsanti di stato si riducono al solo "obsoleto" |
+| Transizione non ammessa costruita a mano | superato: 400 con "Una versione «superato» non puo' passare a «in sviluppo». Da qui si puo' andare soltanto a: obsoleto." |
+| Cruscotto con un progetto vero | superato: tutte e sei le colonne chieste, piu' i due filtri |
+| Ogni campo ha la sua etichetta collegata | superato: 16 campi su cinque pagine, nessuno scoperto |
+| Nessuna risorsa esterna nelle pagine nuove | superato |
+| Nessuno scorrimento orizzontale, a 1440 e a 1100 pixel | superato: a 1100 la barra laterale si stringe a 60px |
+| Contrasto delle etichette di stato negli elenchi nuovi | superato: 5.84:1 |
+| La colonna del codice e' in monospazio | superato |
+| `/stile` dopo l'aggiunta dell'icona | superato: 21 icone, nessuna disegnata con il ripiego del punto interrogativo |
+| Nessun errore nella consolle del browser | superato |
+
+### Difetti trovati e corretti durante la sessione
+
+1. **`pagina()` ha due nomi occupati, e uno e' "nome".** Il modulo dei clienti
+   rimandava indietro il nome scritto come `nome=nome`, che pero' e' anche il
+   secondo parametro di `pagina()` (il file del template). L'errore che ne
+   usciva - `pagina() got multiple values for argument 'nome'` - non dice
+   niente a chi lo legge. E' la stessa trappola dei nomi dei macro Jinja
+   trovata nella sessione 4. I due nomi occupati sono `nome` e `stato`; si
+   passa `nome_cliente`, `stato_scelto`. La nota sta ora nella docstring di
+   `pagina()`, che e' il posto in cui si va a leggere.
+
+2. **Un campo di testo vuoto arrivava come campo mancante.** Un modulo inviato
+   con una casella vuota produceva un 422 con il messaggio tecnico di FastAPI
+   invece del nostro messaggio in italiano: una casella vuota, per il
+   protocollo, e' un campo che non c'e'. Tutti i campi che il programma
+   verifica da se' hanno ora un valore di partenza vuoto, cosi' la verifica
+   arriva sempre al nostro codice e l'utente legge sempre una frase italiana.
+
+3. **`elenco_utenti()` non sapeva escludere i disattivati.** Serviva al modulo
+   della squadra di un progetto: proporre di assegnare un lavoro a chi non puo'
+   piu' entrare non ha senso. Aggiunto `solo_attivi`, falso di partenza, che
+   lascia l'elenco degli utenti come prima.
+
+4. **La verifica a mano ha fatto diventare rossi quarantasei test in una
+   volta** - ed e' il difetto piu' istruttivo dei quattro, perche' e' lo stesso
+   della sessione 3 ricomparso su un'altra tabella.
+
+   I test usavano `RMS1100-24-110SW` come codice di comodo per creare prodotti.
+   Poi la prova nel browser ha creato **quel** prodotto, per davvero, sul
+   database di sviluppo; `products.code` e' unico, e da quel momento ogni test
+   che creava un prodotto si e' rotto. Il programma non c'entrava niente: i
+   test si erano scelti un dato che il programma vero poteva raggiungere.
+
+   La medicina e' quella che la sessione 3 aveva gia' scritto in
+   `tests/conftest.py` per i nomi utente, applicata ai codici prodotto:
+   `modello_irripetibile()` produce una sigla di sole lettere casuali dopo
+   "PRV", e `codice_irripetibile()` ci costruisce intorno un codice con i
+   numeri fissi. Cosi' un test puo' ancora affermare che la potenza vale 1100 e
+   la tensione di uscita 110 - il codice se lo e' scritto lui - senza poter
+   collidere con niente.
+
+   Il codice `RMS1100-24-110SW` resta nei test **che non toccano il database**:
+   quelli che verificano la scomposizione sono esattamente il criterio di
+   accettazione dell'azienda, e la frase va letta con il codice vero.
+
+   La regola generale, ora scritta in `conftest.py`: **i test si scelgono i
+   propri dati dentro uno spazio di nomi che il programma vero non raggiunge.**
+   Vale per i nomi utente (due punti), per i cognomi
+   (`cognome_irripetibile()`), per le sigle dei clienti e adesso per i codici
+   dei prodotti.
+
+### Scelte prese durante la sessione
+
+Sei decisioni nuove in `docs/DECISIONI.md`, dalla D-038 alla D-043. Le tre da
+rileggere prima di toccare i prodotti o i progetti:
+
+- **D-038 e D-039**, la regola di scomposizione sta in un file e **un codice
+  non si rifiuta mai**;
+- **D-042**, il grafo delle transizioni sta in un posto solo e vale anche per
+  le operazioni che fa il programma da solo;
+- **D-043**, chi non e' assegnato non vede, e il filtro sta
+  nell'interrogazione, non nel template.
+
+### Rimasto in sospeso per le sessioni successive
+
+- **Il passaggio di fase non si fa.** Un progetto entra nella prima fase del
+  suo modello e li' resta: richiesta, approvazione e storia dei passaggi sono
+  la sessione 6. La tabella `phase_transitions` esiste e la riga dell'ingresso
+  nella prima fase viene gia' scritta nel registro di audit.
+
+- **La squadra non si modifica dopo l'apertura.** `projects.assegna()` e
+  `projects.revoca()` ci sono e sono verificati dai test, ma la pagina che li
+  usa no: si assegna alla nascita del progetto e basta. Va con la sessione 6.
+
+- **Un progetto non si chiude.** `closed_at` c'e' nella tabella e la scheda lo
+  mostra, ma non c'e' il pulsante. Sessione 6.
+
+- **La matrice dei permessi e il cambio di ruolo** restano da fare, dalla
+  sessione 3. Non servivano qui: i permessi di questa sessione sono due
+  domande sole ("sei il creatore?", "sei assegnato?"). Serviranno con i
+  documenti, nella sessione 7, che e' il posto in cui la matrice viene
+  davvero usata.
+
+- **`riscomponi()` non ha una pagina.** Il giorno in cui l'azienda confermera'
+  la regola di scomposizione, i prodotti gia' inseriti vanno riportati alla
+  regola nuova. La funzione c'e' ed e' verificata; manca il pulsante che la
+  richiama su tutti i prodotti. Va nella pagina di diagnostica, sessione 11.
+
+- **I filtri della ricerca prodotti leggono tutta la colonna `code_parts`.**
+  Con qualche migliaio di prodotti non si nota. Se un giorno diventassero
+  centomila, `valori_degli_elementi()` e' la funzione da riscrivere con
+  un'interrogazione per elemento; il commento e' scritto li' accanto.
+
+- **Sul database di sviluppo sono rimasti i dati della verifica a mano.** Il
+  cliente "Ferrovie Nord Milano" (FNM), il prodotto `RMS1100-24-110SW` con le
+  sue due versioni e il progetto aperto sulla V1. Non si cancellano (regola 5)
+  e fanno comodo: sono il primo caso vero su cui provare le sessioni
+  successive. Insieme a loro c'e' l'utente `prova.sessione5`, creatore, con
+  password `verifica-sessione-cinque`: **e' una password di sviluppo scritta
+  qui apposta perche' non protegge niente di reale.** Sul server aziendale
+  quell'utente non deve esistere - va disattivato prima della messa in
+  produzione, nella sessione 13.
 
 ---
 

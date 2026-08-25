@@ -16,7 +16,9 @@ tracce.
 """
 
 import html
+import random
 import re
+import string
 import uuid
 
 import pytest
@@ -254,3 +256,153 @@ def entra(
         dati["ricordami"] = "si"
 
     return client.post("/entra", data=dati, follow_redirects=False)
+
+
+# --- Aiuti per i test dei prodotti, delle versioni e dei progetti -----------
+#
+# Servono a tutti i file della sessione 5 e stanno qui per la stessa ragione
+# per cui ci sta crea_utente(): un aiuto copiato in tre file di test diventa
+# tre aiuti diversi alla prima modifica.
+#
+# I codici e le sigle inventati qui portano una coda casuale, come i cognomi
+# di cognome_irripetibile(): il database di sviluppo contiene dati veri
+# lasciati dalle verifiche a mano, e "customers.code" e "products.code" hanno
+# tutti e due un vincolo di unicita'.
+
+
+def sigla_irripetibile(prefisso: str = "PRV") -> str:
+    """Una sigla cliente che nel database non puo' gia' esserci."""
+    return prefisso + uuid.uuid4().hex[:6].upper()
+
+
+def modello_irripetibile() -> str:
+    """Una sigla di modello che nel listino dell'azienda non ci puo' essere.
+
+    Sono otto lettere casuali dopo "PRV". Serve a costruire codici prodotto
+    che non collidano con quelli veri: **e' successo davvero**. La verifica a
+    mano della sessione 5 ha creato dall'interfaccia il prodotto
+    "RMS1100-24-110SW", che i test usavano come codice di comodo, e da quel
+    momento quarantasei test sono diventati rossi tutti insieme - non perche'
+    il programma fosse sbagliato, ma perche' "products.code" e' unico.
+
+    E' la stessa lezione di cognome_irripetibile() e la stessa medicina: i
+    test si scelgono i propri dati dentro uno spazio di nomi che il programma
+    vero non raggiunge.
+
+    Solo lettere, niente cifre: nell'espressione di scomposizione il modello
+    e' il gruppo delle lettere iniziali, e una cifra in mezzo finirebbe nella
+    potenza cambiando la scomposizione.
+    """
+    return "PRV" + "".join(random.choices(string.ascii_uppercase, k=8))
+
+
+def codice_irripetibile(
+    potenza: str = "1100",
+    ingresso: str = "24",
+    uscita: str = "110",
+    variante: str = "SW",
+) -> str:
+    """Un codice prodotto che non puo' gia' esserci, e che si scompone.
+
+    Il modello e' l'unica parte casuale: tutto il resto e' fisso, cosi' un
+    test puo' affermare che la potenza vale 1100 e la tensione di uscita 110
+    senza dover prima chiedere al programma che cosa ha capito - il che
+    sarebbe verificare una funzione con se stessa.
+    """
+    return f"{modello_irripetibile()}{potenza}-{ingresso}-{uscita}{variante}"
+
+
+def crea_cliente(db: Session, nome: str = "Cliente di prova"):
+    """Mette nel database un cliente attivo, con una sigla libera."""
+    from app.models import Customer
+
+    cliente = Customer(name=nome, code=sigla_irripetibile(), is_active=True)
+    db.add(cliente)
+    db.flush()
+    return cliente
+
+
+def crea_prodotto(
+    db: Session,
+    cliente=None,
+    codice: str | None = None,
+    autore=None,
+):
+    """Un prodotto con la sua versione 1, creato passando dal servizio vero.
+
+    Passa dal servizio e non costruisce le righe a mano di proposito: cosi' i
+    test lavorano sugli stessi dati che produce l'interfaccia, scomposizione
+    del codice e riga di audit comprese.
+    """
+    from app.services import products
+
+    if codice is None:
+        codice = codice_irripetibile()
+    if cliente is None:
+        cliente = crea_cliente(db)
+    if autore is None:
+        autore = crea_utente(
+            db,
+            username=f"prova.autore.{uuid.uuid4().hex[:8]}",
+            ruolo=GlobalRole.CREATORE,
+        )
+
+    prodotto, versione = products.crea_prodotto(
+        db,
+        codice=codice,
+        cliente=cliente,
+        descrizione="Prodotto creato da un test.",
+        autore=autore,
+    )
+    db.flush()
+    return prodotto, versione
+
+
+def crea_progetto(db: Session, versione, project_manager, autore=None, squadra=()):
+    """Apre un progetto su una versione, con il modello di fasi disponibile.
+
+    Se nel database non c'e' nessun modello di fasi attivo - succede su un
+    database appena migrato, senza scripts/seed.py - ne crea uno con due fasi:
+    il test deve poter girare comunque.
+    """
+    from app.models import Phase, PhaseTemplate
+    from app.services import projects
+
+    if autore is None:
+        autore = project_manager
+
+    modello = projects.modelli_di_fasi(db)
+    if modello:
+        scelto = modello[0]
+    else:
+        scelto = PhaseTemplate(
+            name=f"Modello di prova {uuid.uuid4().hex[:6]}",
+            description="Creato da un test.",
+            standards=["EN 50155"],
+            is_active=True,
+            version=1,
+        )
+        db.add(scelto)
+        db.flush()
+        for ordine, nome in enumerate(("Concept", "Sviluppo"), start=1):
+            db.add(
+                Phase(
+                    phase_template_id=scelto.id,
+                    name=nome,
+                    sort_order=ordine,
+                )
+            )
+        db.flush()
+
+    progetto = projects.apri_progetto(
+        db,
+        versione=versione,
+        project_manager=project_manager,
+        modello=scelto,
+        norme=["EN 50155"],
+        ingegneri=list(squadra),
+        lettori=[],
+        autore=autore,
+    )
+    db.flush()
+    return progetto

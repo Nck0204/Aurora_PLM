@@ -53,15 +53,13 @@ MENU_PRINCIPALE: tuple[VoceMenu, ...] = (
         etichetta="Prodotti",
         percorso="/prodotti",
         icona="prodotti",
-        attiva=False,
-        nota="sessione 5",
+        attiva=True,
     ),
     VoceMenu(
         etichetta="Progetti",
         percorso="/progetti",
         icona="progetti",
-        attiva=False,
-        nota="sessione 6",
+        attiva=True,
     ),
     VoceMenu(
         etichetta="Documenti",
@@ -76,6 +74,13 @@ MENU_PRINCIPALE: tuple[VoceMenu, ...] = (
         icona="posta",
         attiva=False,
         nota="sessione 10",
+    ),
+    VoceMenu(
+        etichetta="Clienti",
+        percorso="/clienti",
+        icona="clienti",
+        attiva=True,
+        solo_creatore=True,
     ),
     VoceMenu(
         etichetta="Utenti",

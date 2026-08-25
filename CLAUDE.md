@@ -103,6 +103,12 @@ difficile una soluzione, si cambia la soluzione, non la regola.
    Il file `.env` non entra in git; `.env.example` si', aggiornato ogni volta
    che si aggiunge un parametro.
 
+   Quando un parametro non e' una riga sola - un'espressione regolare con le
+   sue etichette, una tabella di corrispondenze - va in un file dentro
+   `config/`, e nel `.env` ci finisce il suo percorso. Quei file **entrano in
+   git**: non contengono segreti, contengono regole che l'azienda potrebbe
+   cambiare senza che si debba toccare il programma (D-038).
+
 ## 4. Struttura delle cartelle
 
 ```
@@ -135,6 +141,8 @@ aurora/
 │   ├── env.py             collegato a Base.metadata e al file .env
 │   └── versions/          una migrazione per file
 │
+├── config/                configurazione che non sta nel .env perche' non e'
+│                       una riga sola (la scomposizione dei codici prodotto)
 ├── docs/                  STATO.md, DECISIONI.md, MODELLO_DATI.md,
 │                       GUIDA_STILE.md
 ├── scripts/               procedure operative (installazione, manutenzione)
@@ -174,6 +182,15 @@ Dove mettere una cosa nuova:
 - **un colore, una spaziatura, un raggio** → una variabile in `:root`, in cima
   ad `app/static/css/aurora.css`. Mai un valore scritto dentro una regola o
   dentro un template: c'e' un test che lo verifica (D-033).
+- **una regola che l'azienda potrebbe cambiare** (come si legge un codice
+  prodotto) → un file in `config/`, con il suo percorso dichiarato in `.env`.
+  Il programma deve continuare a funzionare anche se quel file e' sbagliato o
+  manca: vedi D-038 e D-039;
+- **un elenco di scelte per un menu a tendina o un filtro** → si compone in
+  Python, nella rotta o nel servizio, e arriva al template gia' pronto. Un
+  template che trasforma un valore in un'etichetta contiene una regola, e le
+  regole non si provano con un test se stanno dentro l'HTML
+  (`docs/GUIDA_STILE.md`, sezione 5).
 
 ## 5. Convenzioni di codice
 
@@ -238,6 +255,10 @@ Tutti dalla radice del progetto (`aurora/`), con l'ambiente virtuale attivo:
   cambiare la password, creare un utente, caricare un documento (vedi D-036).
 - Usare SQLite, nemmeno "solo per provare".
 - Scrivere `DELETE FROM` su una tabella applicativa.
+- Rifiutare un codice prodotto perche' non si scompone: si accetta con
+  `code_parts` vuoto e una segnalazione visibile (D-039).
+- Confrontare due stati del ciclo di vita fuori da `app/services/lifecycle.py`:
+  il grafo delle transizioni sta li' e in nessun altro posto (D-042).
 - Mettere una password o un indirizzo di server dentro un file `.py`.
 - Modificare a mano una migrazione gia' applicata in produzione: se ne scrive
   una nuova.

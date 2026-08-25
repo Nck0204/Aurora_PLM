@@ -141,6 +141,15 @@ finiscono nello stesso spazio delle variabili con cui viene disegnato anche
 pagina si apriva con un errore che non diceva niente. Per questo il menu a
 tendina si chiama `tendina`.
 
+**La stessa trappola vale dalla parte di Python.** La funzione `pagina()` ha
+due parametri suoi, `nome` (il file del template) e `stato` (il codice HTTP):
+passarli come variabili di contesto - per far tornare a un modulo il nome
+scritto da chi lo stava compilando, per esempio - produce
+`pagina() got multiple values for argument 'nome'`, che non dice niente a chi
+lo legge. Si passa `nome_cliente`, `nome_prodotto`, `stato_scelto`. E' stato
+scoperto nella sessione 5, ed e' scritto anche nella docstring di `pagina()`,
+che e' il posto in cui si va a guardare.
+
 ---
 
 ## 5. I componenti
@@ -151,7 +160,7 @@ la prova.
 
 | File | Macro | A che serve |
 |---|---|---|
-| `icone.html` | `icona` | i simboli, disegnati a mano in SVG |
+| `icone.html` | `icona` | i ventuno simboli, disegnati a mano in SVG |
 | `pulsanti.html` | `pulsante`, `pulsante_collegamento`, `modulo_pulsante` | ogni azione |
 | `campi.html` | `campo`, `area_testo`, `tendina`, `spunta`, `scelta`, `csrf` | ogni campo di un modulo |
 | `tabella.html` | `tabella` | gli elenchi, con intestazione ferma e ordinamento |
@@ -166,6 +175,27 @@ la prova.
 | `descrizione.html` | `descrizione`, `voce` | la scheda di dettaglio etichetta/valore |
 | `area_file.html` | `area_file` | il caricamento dei documenti |
 | `vuoto.html` | `vuoto` | quando non c'e' niente da mostrare |
+
+### Gli elenchi di scelte si compongono in Python, non nei template
+
+Le opzioni di un menu a tendina, le voci di un filtro, le coppie
+(valore, etichetta) di una casella di scelta: **si costruiscono nella rotta o
+nel servizio e arrivano al template gia' pronte.** Il template le disegna e
+basta.
+
+Non e' pignoleria. Un template che sa trasformare `in_sviluppo` in
+"in sviluppo", o che sa mettere in fila identificatori e nomi, e' un template
+che contiene una regola; e le regole scritte dentro l'HTML non si possono ne'
+provare con un test ne' riusare da un'altra pagina. Nella sessione 5 le
+stesse due tendine (stato del ciclo di vita, fase corrente) compaiono in due
+pagine diverse e arrivano tutte e due da `projects.filtri_cruscotto()`: scritte
+due volte, alla prima modifica ne sarebbe rimasta indietro una.
+
+Dove guardare per copiare: `lifecycle.opzioni_stati()`,
+`projects.filtri_cruscotto()`, `_filtri_ricerca()` in `app/routers/products.py`
+- quest'ultima costruisce le tendine leggendo la configurazione, quindi il
+giorno in cui la regola dei codici avra' un elemento in piu' comparira' una
+tendina in piu' senza che nessuno tocchi un template.
 
 ### Le distinzioni che si sbagliano piu' spesso
 

@@ -1,0 +1,48 @@
+{# ===========================================================================
+   L'anteprima della scomposizione del codice.
+
+   E' un **pezzo di pagina**, non una pagina: niente <html>, niente <body>,
+   niente base.html. Lo chiede HTMX mentre si scrive il codice del prodotto e
+   lo infila dentro il riquadro dell'anteprima (vedi prodotti/nuovo.html).
+
+   Se lo script non arriva, questo frammento non viene mai chiesto e non manca
+   niente: il modulo funziona lo stesso e la scomposizione si vede dopo il
+   salvataggio, sulla scheda del prodotto (D-036).
+
+   Le tre cose che puo' dire, in ordine di quanto sono frequenti:
+
+     1. il codice si scompone -> gli elementi, uno per riga;
+     2. il codice non si scompone -> l'avviso che verra' accettato lo stesso;
+     3. la regola non e' utilizzabile -> il guasto del file di configurazione.
+   =========================================================================== #}
+{% from "components/descrizione.html" import descrizione, voce %}
+{% from "components/avvisi.html" import avviso %}
+
+{% if not regola.utilizzabile %}
+
+    {{ avviso(regola.problema ~ " I prodotti si creano lo stesso, ma il "
+              "codice non viene scomposto.",
+              variante="errore",
+              titolo="La regola di scomposizione non e' utilizzabile") }}
+
+{% elif not codice %}
+
+    <p class="campo-aiuto">
+        Scrivi il codice qui sopra: gli elementi riconosciuti compaiono qui
+        mentre scrivi.
+    </p>
+
+{% elif coppie %}
+
+    {% call descrizione(stretta=true) %}
+        {% for etichetta_elemento, valore in coppie %}
+            {{ voce(etichetta_elemento, valore, monospazio=true) }}
+        {% endfor %}
+    {% endcall %}
+
+{% else %}
+
+    {{ avviso(avviso_non_riconosciuto, variante="attenzione",
+              titolo="Codice non riconosciuto") }}
+
+{% endif %}

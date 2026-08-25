@@ -1,10 +1,13 @@
 {# ===========================================================================
-   Pagina iniziale.
+   Il cruscotto: la pagina che si apre la mattina.
 
-   Dice chi e' entrato, quante sessioni ha aperte e da dove si comincia. Non e'
-   ancora un cruscotto: i numeri veri - progetti in corso, documenti da
-   verificare, posta in quarantena - arriveranno quando ci saranno le tabelle
-   piene, nella sessione 12.
+   Risponde a una domanda sola - "a che punto sono i miei progetti?" - e le
+   risponde con una tabella in cima, senza riquadro intorno: il riquadro
+   serve a staccare una cosa dalle altre, e qui la cosa principale e' quella.
+
+   I progetti elencati sono **solo quelli che questa persona puo' vedere**. Il
+   filtro non e' qui: e' nell'interrogazione (app/services/projects.py). Il
+   template disegna quello che riceve e non decide niente.
 
    La conferma del cambio password e' una notifica temporanea e non un avviso
    in linea: e' la conferma di una cosa che l'utente ha appena fatto e ha gia'
@@ -17,8 +20,10 @@
 {% from "components/avvisi.html" import notifica %}
 {% from "components/riquadro.html" import riquadro %}
 {% from "components/descrizione.html" import descrizione, voce %}
-{% from "components/stato.html" import etichetta %}
-{% from "components/icone.html" import icona %}
+{% from "components/stato.html" import etichetta, etichetta_ciclo_vita %}
+{% from "components/tabella.html" import tabella %}
+{% from "components/ricerca.html" import ricerca %}
+{% from "components/vuoto.html" import vuoto %}
 
 {% block titolo %}Pagina iniziale{% endblock %}
 {% block sezione %}Pagina iniziale{% endblock %}
@@ -34,15 +39,83 @@
 
 <div class="testata">
     <div>
-        <h1>Benvenuto, {{ utente.first_name }}</h1>
+        <h1>Buon lavoro, {{ utente.first_name }}</h1>
         <p class="sottotitolo">
-            {{ app_name }} - gestione dei progetti e della documentazione
-            tecnica.
+            {% if totale_progetti %}
+                {{ totale_progetti }}
+                progett{{ "o" if totale_progetti == 1 else "i" }}
+                apert{{ "o" if totale_progetti == 1 else "i" }}
+                {{ "ti riguarda" if totale_progetti == 1 else "ti riguardano" }}.
+            {% else %}
+                Al momento non ci sono progetti aperti che ti riguardano.
+            {% endif %}
         </p>
     </div>
+    {% if utente.is_creatore %}
+    <div class="testata-azioni">
+        {{ pulsante_collegamento("Prodotti", "/prodotti", icona_nome="prodotti") }}
+    </div>
+    {% endif %}
 </div>
 
-<div class="griglia-riquadri">
+{% if totale_progetti %}
+
+    {# I filtri sono un modulo GET verso questa stessa pagina: la ricerca
+       fatta resta nell'indirizzo e si puo' mandare a un collega.
+       Le due tendine arrivano gia' composte dal servizio: le stesse due
+       compaiono anche in /progetti, e devono proporre le stesse voci con le
+       stesse parole (app/services/projects.py, filtri_cruscotto). #}
+    {{ ricerca("/", valore=q, nome="q", etichetta="Cerca fra i progetti",
+               segnaposto="Codice prodotto o cliente", filtri=filtri) }}
+
+    {% set colonne = [
+        {"etichetta": "Prodotto", "classe": "colonna-codice"},
+        {"etichetta": "Versione", "classe": "colonna-numero"},
+        {"etichetta": "Cliente"},
+        {"etichetta": "Fase corrente"},
+        {"etichetta": "Ciclo di vita"},
+        {"etichetta": "Responsabile"},
+    ] %}
+
+    {% call tabella(colonne,
+                    vuota=(progetti|length == 0),
+                    messaggio_vuoto="Nessun progetto con questi filtri. "
+                                    "Prova a scegliere «Qualunque stato».",
+                    riepilogo=(progetti|length ~ " progett" ~ ("o" if progetti|length == 1 else "i") ~ " su " ~ totale_progetti)) %}
+        {% for p in progetti %}
+        <tr>
+            <td class="colonna-codice">
+                <a href="/progetti/{{ p.id }}">{{ p.product_version.product.code }}</a>
+            </td>
+            <td class="colonna-numero">{{ p.product_version.version_number }}</td>
+            <td>{{ p.product_version.product.customer.name }}</td>
+            <td>
+                {% if p.current_phase %}
+                    {{ p.current_phase.name }}
+                {% else %}
+                    <span class="testo-tenue">&mdash;</span>
+                {% endif %}
+            </td>
+            <td>{{ etichetta_ciclo_vita(p.product_version.lifecycle_state) }}</td>
+            <td>{{ p.project_manager.full_name }}</td>
+        </tr>
+        {% endfor %}
+    {% endcall %}
+
+{% else %}
+
+    {{ vuoto("Nessun progetto da seguire",
+             "Qui compaiono i progetti a cui sei assegnato, con la fase in cui "
+             "si trovano e lo stato della versione di prodotto. Se ti aspettavi "
+             "di vederne qualcuno, chiedi di essere assegnato a chi lo ha aperto.",
+             azione=(pulsante_collegamento("Guarda i prodotti", "/prodotti",
+                                           variante="primario",
+                                           icona_nome="prodotti")),
+             icona_nome="progetti") }}
+
+{% endif %}
+
+<div class="griglia-riquadri margine-sopra">
 
     {% call riquadro("Il tuo profilo") %}
         {% call descrizione(stretta=true) %}
@@ -81,6 +154,8 @@
             {{ pulsante_collegamento("Cambia la tua password", "/cambio-password",
                                      icona_nome="chiave", largo=true) }}
             {% if utente.is_creatore %}
+                {{ pulsante_collegamento("Gestisci i clienti", "/clienti",
+                                         icona_nome="clienti", largo=true) }}
                 {{ pulsante_collegamento("Gestisci gli utenti", "/utenti",
                                          icona_nome="utenti", largo=true) }}
             {% endif %}

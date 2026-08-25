@@ -58,6 +58,16 @@ def pagina(
       sezione           il percorso della voce di menu da segnare come
                         corrente.
 
+    **Due nomi sono occupati e non si possono usare nel contesto.** Questa
+    funzione ha due parametri suoi, "nome" (il file del template) e "stato"
+    (il codice HTTP della risposta): passandoli come variabili di contesto -
+    per esempio per far tornare al modulo il nome scritto da chi lo stava
+    compilando - Python li assegnerebbe ai parametri e l'errore che ne esce
+    ("pagina() got multiple values for argument 'nome'") non dice niente a chi
+    lo legge. Si passa "nome_cliente", "nome_prodotto", "stato_scelto". E' la
+    stessa trappola dei nomi dei macro di Jinja spiegata in
+    docs/GUIDA_STILE.md, sezione 4.
+
     L'utente viene preso da request.state, dove lo ha lasciato la dipendenza
     utente_corrente (vedi app/dependencies.py). Cosi' i template non devono
     riceverlo esplicitamente da ogni rotta, e non capita la pagina in cui la

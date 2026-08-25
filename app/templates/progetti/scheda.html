@@ -1,0 +1,145 @@
+{# ===========================================================================
+   Scheda di un progetto.
+
+   In cima la barra delle fasi, che risponde in un colpo d'occhio alla domanda
+   che fanno tutti: "a che punto siamo?". Le fasi sono quelle del modello
+   congelato alla nascita del progetto, non quelle del modello di adesso.
+
+   Il passaggio di fase - richiesta e approvazione - e' lavoro della sessione
+   6: qui la fase corrente si legge e basta.
+   =========================================================================== #}
+{% extends "base.html" %}
+
+{% from "components/pulsanti.html" import pulsante_collegamento %}
+{% from "components/riquadro.html" import riquadro %}
+{% from "components/descrizione.html" import descrizione, voce %}
+{% from "components/stato.html" import etichetta, etichetta_ciclo_vita %}
+{% from "components/tabella.html" import tabella %}
+{% from "components/avanzamento.html" import avanzamento as barra_fasi %}
+{% from "components/avvisi.html" import notifica %}
+
+{% block titolo %}{{ prodotto.code }} v{{ versione.version_number }}{% endblock %}
+{% block sezione %}Progetti{% endblock %}
+
+{% block notifiche %}
+    {% if aperto %}
+        {{ notifica("Il progetto e' nella prima fase del modello scelto e la "
+                    "squadra e' stata assegnata.",
+                    variante="successo", titolo="Progetto aperto") }}
+    {% endif %}
+{% endblock %}
+
+{% block contenuto %}
+
+<div class="testata">
+    <div>
+        <h1>
+            <span class="mono">{{ prodotto.code }}</span>
+            versione {{ versione.version_number }}
+        </h1>
+        <p class="sottotitolo">
+            {{ prodotto.customer.name }} &middot;
+            responsabile {{ progetto.project_manager.full_name }} &middot;
+            {{ etichetta_ciclo_vita(versione.lifecycle_state) }}
+        </p>
+    </div>
+    <div class="testata-azioni">
+        {{ pulsante_collegamento("La versione", "/versioni/" ~ versione.id,
+                                 icona_nome="prodotti") }}
+    </div>
+</div>
+
+{% call riquadro("A che punto siamo") %}
+    {% if avanzamento %}
+        {{ barra_fasi(avanzamento) }}
+    {% else %}
+        <p class="campo-aiuto">
+            Il modello di fasi scelto non ha nessuna fase.
+        </p>
+    {% endif %}
+    <p class="campo-aiuto margine-sopra">
+        Le fasi sono quelle del modello
+        <strong>{{ progetto.phase_template.name }}
+        v{{ progetto.phase_template.version }}</strong>, congelato quando il
+        progetto e' stato aperto: se il modello verra' sostituito, questo
+        progetto continuera' a seguire queste. Il passaggio da una fase
+        all'altra arrivera' nella sessione 6.
+    </p>
+{% endcall %}
+
+<div class="griglia-riquadri">
+
+    {% call riquadro("Il progetto") %}
+        {% call descrizione(stretta=true) %}
+            {{ voce("Prodotto", prodotto.code, monospazio=true) }}
+            {{ voce("Versione", versione.version_number) }}
+            {{ voce("Cliente", prodotto.customer.name) }}
+            {{ voce("Responsabile", progetto.project_manager.full_name) }}
+            {{ voce("Fase corrente",
+                    progetto.current_phase.name if progetto.current_phase else none) }}
+            {{ voce("Ciclo di vita",
+                    etichetta_ciclo_vita(versione.lifecycle_state)) }}
+            {{ voce("Aperto il", progetto.opened_at.strftime("%d/%m/%Y")) }}
+            {{ voce("Chiuso il",
+                    progetto.closed_at.strftime("%d/%m/%Y")
+                    if progetto.closed_at else none, vuoto="in corso") }}
+        {% endcall %}
+    {% endcall %}
+
+    {% call riquadro("Norme applicabili") %}
+        {% if progetto.standards %}
+            <ul class="impila">
+                {% for norma in progetto.standards %}
+                    <li>{{ norma }}</li>
+                {% endfor %}
+            </ul>
+        {% else %}
+            <p class="campo-aiuto">
+                Non e' stata indicata nessuna norma applicabile.
+            </p>
+        {% endif %}
+        <p class="campo-aiuto margine-sopra">
+            Sono state copiate dentro il progetto quando e' stato aperto: da
+            allora non cambiano piu' da sole.
+        </p>
+    {% endcall %}
+
+</div>
+
+{# --- La squadra --- #}
+{% call riquadro("La squadra", nudo=true) %}
+
+    {% set colonne = [
+        {"etichetta": "Persona"},
+        {"etichetta": "Nome utente", "classe": "colonna-codice"},
+        {"etichetta": "Ruolo nel progetto"},
+        {"etichetta": "Assegnata il"},
+    ] %}
+
+    {% call tabella(colonne,
+                    vuota=(squadra|length == 0),
+                    messaggio_vuoto="Nessuno e' assegnato a questo progetto. "
+                                    "Non dovrebbe succedere: il project "
+                                    "manager entra all'apertura.",
+                    riepilogo=(squadra|length ~ " person"
+                               ~ ("a" if squadra|length == 1 else "e")
+                               ~ " assegnat" ~ ("a" if squadra|length == 1 else "e"))) %}
+        {% for a in squadra %}
+        <tr>
+            <td>{{ a.user.full_name }}</td>
+            <td class="colonna-codice">{{ a.user.username }}</td>
+            <td>
+                {% if a.project_role.value == "project_manager" %}
+                    {{ etichetta("project manager", variante="accento") }}
+                {% else %}
+                    {{ etichetta(a.project_role.value, pallino=false) }}
+                {% endif %}
+            </td>
+            <td>{{ a.created_at.strftime("%d/%m/%Y") }}</td>
+        </tr>
+        {% endfor %}
+    {% endcall %}
+
+{% endcall %}
+
+{% endblock %}

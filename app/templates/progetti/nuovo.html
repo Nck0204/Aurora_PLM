@@ -1,0 +1,134 @@
+{# ===========================================================================
+   Apertura di un progetto su una versione di prodotto.
+
+   Il legame e' uno a uno e nasce qui: per questo non esiste una pagina
+   "nuovo progetto" da cui scegliere dopo il prodotto. Ci si arriva sempre
+   dalla scheda di una versione, e la versione viaggia nel campo nascosto.
+
+   IL MODELLO DI FASI SI CONGELA. Quello che si sceglie adesso resta il
+   modello di questo progetto per tutta la sua vita, anche se piu' avanti
+   venisse sostituito da una versione nuova. Le norme si copiano dentro il
+   progetto e da li' si possono allargare o restringere (D-041).
+
+   Ingegneri e lettori sono caselle di spunta e non un menu a scelta
+   multipla: un menu in cui si tiene premuto Ctrl per scegliere piu' righe e'
+   il tipo di comando che meta' delle persone non sa che esista.
+   =========================================================================== #}
+{% extends "base.html" %}
+
+{% from "components/campi.html" import area_testo, tendina, spunta, csrf %}
+{% from "components/pulsanti.html" import pulsante, pulsante_collegamento %}
+{% from "components/riquadro.html" import riquadro %}
+{% from "components/descrizione.html" import descrizione, voce %}
+{% from "components/stato.html" import etichetta_ciclo_vita %}
+{% from "components/avvisi.html" import avviso %}
+
+{% block titolo %}Nuovo progetto{% endblock %}
+{% block sezione %}Progetti{% endblock %}
+
+{% block contenuto %}
+
+<div class="testata">
+    <div>
+        <h1>Apri un progetto</h1>
+        <p class="sottotitolo">
+            <span class="mono">{{ prodotto.code }}</span>
+            versione {{ versione.version_number }} &middot;
+            {{ prodotto.customer.name }}
+        </p>
+    </div>
+    <div class="testata-azioni">
+        {{ pulsante_collegamento("Annulla", "/versioni/" ~ versione.id,
+                                 icona_nome="freccia-sinistra") }}
+    </div>
+</div>
+
+{% if not modelli %}
+
+    {{ avviso("Non c'e' nessun modello di fasi attivo: senza, un progetto non "
+              "saprebbe quali fasi attraversare. I modelli iniziali si creano "
+              "con scripts/seed.py.",
+              variante="errore", titolo="Nessun modello di fasi") }}
+
+{% else %}
+
+<form method="post" action="/progetti/nuovo" class="modulo">
+    {{ csrf(request) }}
+    <input type="hidden" name="versione" value="{{ versione.id }}">
+
+    <div class="griglia-riquadri">
+
+        {% call riquadro("Il lavoro") %}
+
+            {% call descrizione(stretta=true) %}
+                {{ voce("Prodotto", prodotto.code, monospazio=true) }}
+                {{ voce("Versione", versione.version_number) }}
+                {{ voce("Cliente", prodotto.customer.name) }}
+                {{ voce("Ciclo di vita",
+                        etichetta_ciclo_vita(versione.lifecycle_state)) }}
+            {% endcall %}
+
+            {{ tendina("Project manager", "project_manager",
+                       opzioni=persone, obbligatorio=true,
+                       vuoto="Scegli il responsabile",
+                       aiuto="E' anche l'unico, oltre al creatore, che potra' "
+                             "cambiare lo stato del ciclo di vita di questa "
+                             "versione.") }}
+
+            {{ tendina("Modello di fasi", "modello",
+                       opzioni=modelli, obbligatorio=true,
+                       vuoto="Scegli il percorso da seguire",
+                       aiuto="Il modello scelto resta quello di questo "
+                             "progetto per sempre: se piu' avanti il modello "
+                             "verra' sostituito, i progetti gia' avviati non "
+                             "cambiano.") }}
+
+            {{ area_testo("Norme applicabili", "norme", valore=norme, righe=4,
+                          segnaposto="EN 50155&#10;EN 45545-2",
+                          aiuto="Una per riga. Lasciando la casella vuota si "
+                                "prendono quelle del modello scelto.") }}
+
+        {% endcall %}
+
+        {% call riquadro("La squadra",
+                         piede=pulsante("Apri il progetto", variante="primario")
+                               ~ pulsante_collegamento("Annulla",
+                                                       "/versioni/" ~ versione.id)) %}
+
+            <p class="campo-aiuto">
+                Chi non e' nella squadra non vede il progetto: non compare nel
+                suo cruscotto e non gli si apre nemmeno scrivendone
+                l'indirizzo. Il project manager scelto qui accanto entra da
+                solo, non serve spuntarlo.
+            </p>
+
+            <fieldset class="campo gruppo-campi margine-sopra">
+                <legend class="campo-etichetta">Ingegneri</legend>
+                {% for identificatore, nome in persone %}
+                    {{ spunta(nome, "ingegneri", valore=identificatore,
+                              id="ingegnere-" ~ loop.index) }}
+                {% endfor %}
+            </fieldset>
+
+            <fieldset class="campo gruppo-campi">
+                <legend class="campo-etichetta">Lettori</legend>
+                {% for identificatore, nome in persone %}
+                    {{ spunta(nome, "lettori", valore=identificatore,
+                              id="lettore-" ~ loop.index) }}
+                {% endfor %}
+            </fieldset>
+
+            <p class="campo-aiuto">
+                Chi risulta scelto in due gruppi tiene il ruolo piu' alto: una
+                persona ha un solo ruolo attivo per progetto, altrimenti il
+                calcolo dei permessi sarebbe ambiguo.
+            </p>
+
+        {% endcall %}
+
+    </div>
+</form>
+
+{% endif %}
+
+{% endblock %}

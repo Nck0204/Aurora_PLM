@@ -39,9 +39,13 @@ from app.dependencies import (
     RichiedeAutenticazione,
 )
 from app.routers import auth as router_auth
+from app.routers import customers as router_customers
 from app.routers import home as router_home
+from app.routers import products as router_products
+from app.routers import projects as router_projects
 from app.routers import style as router_style
 from app.routers import users as router_users
+from app.routers import versions as router_versions
 from app.services.cookies import applica_cookie
 from app.services.csrf import verifica_csrf
 from app.templating import templates
@@ -384,6 +388,10 @@ async def cambio_password_handler(
 # sovrappongono.
 app.include_router(router_home.router)
 app.include_router(router_auth.router)
+app.include_router(router_customers.router)
+app.include_router(router_products.router)
+app.include_router(router_versions.router)
+app.include_router(router_projects.router)
 app.include_router(router_users.router)
 app.include_router(router_style.router)
 

@@ -948,3 +948,248 @@ L'errore in HTML arriva solo a chi dichiara di accettare `text/html`; a un
 programma risponde un JSON. E' il comportamento che c'era gia' dalla sessione 1,
 e i test che guardano la pagina devono presentarsi come si presenta un browser -
 altrimenti ricevono il JSON e non capiscono perche'.
+
+---
+
+## D-038 — La scomposizione del codice prodotto sta in un file di configurazione
+
+**Data:** 25 agosto 2026 · **Stato:** attiva
+
+**Decisione.** La regola con cui si scompone un codice prodotto
+(`RMS1100-24-110SW`) non e' scritta nel programma. Sta in un file TOML
+indicato da `PRODUCT_CODE_CONFIG` nel file `.env`, che di partenza e'
+`config/codice_prodotto.toml`. Dentro ci sono due cose:
+
+- `espressione`, un'espressione regolare con **gruppi nominati**: ogni gruppo
+  e' un elemento del codice, e il nome del gruppo diventa la chiave dentro
+  `products.code_parts`;
+- `[etichette]`, il nome in italiano di ciascun gruppo, quello che si legge
+  nell'interfaccia.
+
+L'ordine in cui gli elementi vengono mostrati e' l'ordine dei gruppi **dentro
+l'espressione**, non quello delle etichette: e' l'ordine in cui compaiono nel
+codice, ed e' l'unico che una persona guardando `RMS1100-24-110SW` riconosce.
+
+L'ipotesi di partenza legge il codice come modello (`RMS`), potenza (`1100`),
+tensione di ingresso (`24`), tensione di uscita (`110`), variante (`SW`).
+
+**Motivazione.** Al momento in cui la sessione 5 e' stata fatta, **l'azienda
+non aveva ancora confermato** come vanno letti i codici. Scrivere la regola
+nel programma avrebbe voluto dire, il giorno della conferma, una modifica al
+codice e un rilascio; scrivendola in un file, quel giorno si cambia una riga
+di testo e si riavvia il server.
+
+La stessa scelta regge anche il caso piu' probabile di tutti: che la regola
+non sia una sola. Se domani i codici di una famiglia di prodotti si leggessero
+in un altro modo, l'espressione la si allarga senza toccare il programma.
+
+**Conseguenza.** Nessun template e nessuna rotta sa quanti sono gli elementi
+di un codice. I filtri della ricerca dei prodotti si costruiscono sugli
+elementi che la regola dichiara: se domani ce ne sara' uno in piu', comparira'
+una tendina in piu' senza che nessuno tocchi una riga di HTML.
+
+`products.riscomponi()` ricalcola `code_parts` con la regola in uso adesso.
+Non e' ancora richiamata da nessuna pagina - lo sara' con la pagina di
+diagnostica, sessione 11 - ma esiste perche' il giorno della conferma i
+prodotti gia' inseriti vanno riportati alla regola nuova, e la strada deve
+essere gia' aperta.
+
+---
+
+## D-039 — Un codice non riconosciuto si accetta, non si rifiuta
+
+**Data:** 25 agosto 2026 · **Stato:** attiva
+
+**Decisione.** Un codice prodotto che non corrisponde alla regola di
+scomposizione **viene accettato lo stesso**: il prodotto si crea con
+`code_parts` vuoto e chi lo ha inserito trova un avviso visibile che glielo
+dice. Non esiste, in nessun punto del programma, un controllo sulla forma di
+un codice prodotto.
+
+Vale anche per il file di configurazione: se manca, se non si legge o se
+contiene un'espressione sbagliata, Aurora **parte lo stesso** e si comporta
+come se nessun codice fosse riconoscibile. Il guasto finisce nel registro e
+compare come avviso in cima all'elenco dei prodotti e nel modulo di
+creazione, ma non ferma niente.
+
+**Motivazione.** E' un requisito esplicito dell'azienda, e la ragione per cui
+lo ha chiesto e' la stessa per cui la regola non e' confermata: **i codici
+veri sono gia' li'**, in anni di listini, e qualcuno di loro non seguira'
+nessuna regola. Un programma che li rifiuta e' un programma in cui quei
+prodotti non si possono inserire, e la conseguenza non e' che i codici
+migliorano: e' che quel prodotto resta su un foglio di calcolo.
+
+Sul file di configurazione rotto vale un ragionamento parallelo. La regola 8
+di CLAUDE.md vuole che un parametro obbligatorio mancante fermi l'avvio, ed e'
+giusto per la stringa di connessione al database: senza, il programma non fa
+niente comunque. Qui no: senza scomposizione Aurora perde **una comodita' di
+ricerca** e continua a custodire i documenti. Far cadere tutto il programma
+per un errore di battitura in un'espressione regolare vorrebbe dire che
+chiunque tocchi quel file puo' chiudere fuori l'azienda intera.
+
+**Conseguenza.** `product_codes.scomponi()` non solleva mai e non rifiuta mai:
+restituisce un dizionario, eventualmente vuoto. Il test
+`test_un_codice_non_riconosciuto_viene_accettato_lo_stesso` esiste apposta per
+impedire che qualcuno, in buona fede, aggiunga una validazione.
+
+---
+
+## D-040 — Un prodotto nasce sempre con la sua versione 1
+
+**Data:** 25 agosto 2026 · **Stato:** attiva
+
+**Decisione.** `products.crea_prodotto()` crea il prodotto **e** la sua
+versione 1, in una transazione sola, e restituisce tutti e due. Non esiste un
+modo di creare un prodotto senza versioni. La versione 1 non discende da
+niente (`derived_from_id` nullo) e parte da `in_sviluppo`.
+
+**Motivazione.** Un prodotto senza versioni non e' niente su cui si possa
+lavorare: non ci si apre un progetto, non ci si attaccano documenti, non ci si
+manda posta. Sarebbe una riga a meta', e le righe a meta' nel database sono
+quelle che sei mesi dopo fanno sbagliare un conteggio - "quanti prodotti
+abbiamo?" - senza che nessuno capisca perche'.
+
+**Conseguenza.** Il modulo di creazione di un prodotto non chiede niente sulla
+versione: non c'e' niente da chiedere. La versione 2 arriva sempre per
+derivazione, da una pagina diversa, e li' la motivazione e' obbligatoria.
+
+---
+
+## D-041 — Il modello di fasi si congela nel progetto
+
+**Data:** 25 agosto 2026 · **Stato:** attiva
+
+**Decisione.** Alla nascita, un progetto si tiene l'identificatore del modello
+di fasi scelto e **copia dentro di se'** le norme applicabili
+(`projects.standards`). Da quel momento nessuna modifica al modello tocca il
+progetto. Il progetto entra subito nella prima fase del modello.
+
+**Motivazione.** I modelli di fasi sono gia' immutabili per costruzione - una
+correzione diventa una versione nuova del modello, vedi
+`docs/MODELLO_DATI.md` 4.7 - quindi il solo legame basterebbe a garantire che
+le fasi non cambino. La copia serve per le **norme**, che invece sul singolo
+progetto si possono allargare o restringere: partono da quelle del modello e
+poi vivono di vita propria.
+
+Il principio e' quello dei documenti e delle versioni di prodotto: un progetto
+aperto due anni fa deve raccontare le fasi e le norme **di allora**. Se le
+leggesse dal modello di adesso, la sua storia parlerebbe di passaggi che al
+tempo non esistevano, e le approvazioni registrate risulterebbero riferite a
+fasi mai attraversate.
+
+**Conseguenza.** Un modello disattivato non si propone piu' per i progetti
+nuovi ma continua a valere per quelli che lo stanno usando. Il test
+`test_il_modello_di_fasi_resta_congelato_nel_progetto` disattiva il modello e
+verifica che il progetto non se ne accorga.
+
+Insieme al progetto viene scritta anche la riga di registro dell'**ingresso
+nella prima fase** (`project.phase_entered`). E' un fatto che succede adesso:
+se non lo si scrivesse, la storia delle fasi comincerebbe dal secondo
+passaggio e nessuno saprebbe piu' quando il progetto e' entrato nel primo. La
+richiesta e l'approvazione dei passaggi successivi sono lavoro della
+sessione 6.
+
+---
+
+## D-042 — Il grafo delle transizioni sta in un posto solo, e il superamento e' automatico
+
+**Data:** 25 agosto 2026 · **Stato:** attiva
+
+**Decisione.** Le transizioni ammesse fra gli stati del ciclo di vita di una
+versione sono dichiarate in **una tabella sola**, `TRANSIZIONI_AMMESSE` in
+`app/services/lifecycle.py`:
+
+```
+in sviluppo --> rilasciato --> in produzione
+                    |                |
+                    +--> superato <--+
+                             |
+      (da ogni stato) --> obsoleto
+```
+
+Non si torna mai indietro; a `superato` si arriva anche a mano; `obsoleto` e'
+l'unico stato terminale. Una transizione fuori dal grafo viene rifiutata con
+una frase italiana che dice **quali sono quelle possibili**.
+
+Sopra al grafo stanno tre regole:
+
+1. **Superamento automatico.** Quando una versione passa a `rilasciato`, la
+   versione precedente dello stesso prodotto passa da sola a `superato`, e
+   l'operazione viene registrata **come azione di sistema**: la riga di audit
+   ha `user_id` nullo.
+2. **Conferma prima di procedere.** Il passaggio si esegue da una pagina di
+   conferma - non da una finestra modale - che dice quale versione verra'
+   superata, con il suo numero e il suo stato di adesso.
+3. **`obsoleto` vuole una motivazione**, scritta a mano, che finisce in
+   `audit_logs.new_value`.
+
+Il cambio di stato e' riservato al **creatore** e al **project manager** del
+progetto aperto su quella versione. Una versione su cui non e' ancora stato
+aperto nessun progetto la muove solo il creatore, perche' non c'e' ancora
+nessun responsabile a cui la decisione appartenga.
+
+**Motivazione.** Sul grafo in un punto solo: le regole di passaggio sono la
+parte del programma che l'azienda cambiera' piu' spesso, ed e' anche quella
+che, sparsa in venti `if`, diventa impossibile da rileggere. Cosi' invece si
+apre un file, si guardano dieci righe e si sa tutto.
+
+Sull'autore nullo del superamento: chi ha premuto il pulsante ha **rilasciato
+la versione nuova**, non ha superato la vecchia. Scriverci il suo nome direbbe
+una cosa falsa, e fra un anno, leggendo il registro, non si distinguerebbe
+piu' una decisione presa da una persona da una conseguenza calcolata dal
+programma. E' esattamente il caso che `docs/MODELLO_DATI.md` prevedeva quando
+ha reso `audit_logs.user_id` facoltativo.
+
+Sulla conferma come pagina e non come finestra: rilasciare una versione ne
+cambia un'altra, e chi preme deve poter leggere prima che cosa succedera'. Una
+finestra modale ha bisogno di JavaScript per aprirsi; se non si aprisse,
+l'operazione partirebbe senza che nessuno abbia letto niente (D-036 e la
+regola in `docs/GUIDA_STILE.md`).
+
+**Conseguenza.** Il grafo vale **anche per le operazioni che fa il programma
+da solo**: se la versione precedente e' in uno stato da cui non si puo' andare
+a `superato` (per esempio gia' obsoleta), il superamento automatico la salta e
+la pagina di conferma lo dice. Senza questa regola, il programma avrebbe una
+strada per mettere una versione in uno stato che il grafo vieta, e il grafo
+smetterebbe di essere la verita'.
+
+Le pagine costruiscono i pulsanti su `stati_raggiungibili()`: non si propone
+mai un'operazione che verrebbe poi rifiutata, e cambiando il grafo cambiano
+anche i pulsanti senza toccare nessun template.
+
+---
+
+## D-043 — Chi non e' assegnato a un progetto non lo vede
+
+**Data:** 25 agosto 2026 · **Stato:** attiva
+
+**Decisione.** Il cruscotto e l'elenco dei progetti mostrano solo i progetti
+su cui chi guarda ha un'**assegnazione non revocata**. Il filtro e'
+nell'interrogazione (`_progetti_visibili()` in `app/services/projects.py`), non
+nel template. La stessa regola vale per la scheda del singolo progetto: chi non
+lo vedrebbe nell'elenco riceve un 403 anche scrivendone l'indirizzo.
+
+Il **creatore vede tutto**, perche' e' lui che apre i progetti e assegna le
+persone. Il **project manager e' anche un assegnato**: l'apertura del progetto
+gli scrive la sua riga in `assignments`.
+
+**Motivazione.** Sul filtro nell'interrogazione: un elenco che nasconde una
+riga che poi si apre scrivendone l'indirizzo non e' una protezione, e' una
+tenda. Le due strade devono dare la stessa risposta, e il modo per esserne
+certi e' che sia la stessa funzione a rispondere.
+
+Sul project manager assegnato: senza quella riga, "chi vede questo progetto"
+avrebbe due risposte - chi ha un'assegnazione, **piu'** il responsabile - e
+ogni interrogazione futura dovrebbe ricordarsi del secondo caso. E' lo stesso
+principio di D-032: **un controllo solo, sulla strada obbligata.**
+
+**Conseguenza.** Una persona ha al massimo un ruolo attivo per progetto: e' il
+vincolo dell'indice parziale su `assignments`, e `projects.assegna()` lo
+rispetta revocando quella precedente invece di aggiungerne una seconda. La
+riga revocata resta in tabella con la sua data: "chi aveva accesso a questo
+progetto in marzo" e' una domanda a cui si deve poter rispondere.
+
+Il 404 e il 403 restano distinti: "non esiste" e "esiste ma non e' tuo" sono
+due cose diverse. Nascondere la seconda dietro la prima sembra piu' prudente,
+ma manda chi ha davvero bisogno di quel progetto a cercare un guasto che non
+c'e', invece che a chiedere l'assegnazione.

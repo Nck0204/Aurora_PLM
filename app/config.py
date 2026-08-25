@@ -76,6 +76,16 @@ class Settings(BaseSettings):
     LOGIN_MAX_ATTEMPTS: int = 5
     LOGIN_WINDOW_MINUTES: int = 15
 
+    # File che dice come si scompone il codice parlante di un prodotto
+    # (RMS1100-24-110SW). E' un file TOML con l'espressione regolare e le
+    # etichette in italiano dei suoi gruppi. Sta fuori dal codice perche' la
+    # regola non e' ancora stata confermata dall'azienda: quando arrivera' la
+    # conferma si cambia il file, non il programma. Vedi D-038.
+    PRODUCT_CODE_CONFIG: Path = Path("config/codice_prodotto.toml")
+
+    # Quante righe per pagina negli elenchi lunghi (prodotti, progetti).
+    PAGE_SIZE: int = 25
+
     # Nome mostrato nell'interfaccia.
     APP_NAME: str = "Aurora"
 
@@ -111,6 +121,11 @@ class Settings(BaseSettings):
     def mail_local_dir(self) -> Path:
         """Percorso assoluto della cartella dei messaggi scritti su disco."""
         return _absolute(self.MAIL_LOCAL_PATH)
+
+    @property
+    def product_code_config(self) -> Path:
+        """Percorso assoluto del file di scomposizione dei codici prodotto."""
+        return _absolute(self.PRODUCT_CODE_CONFIG)
 
 
 # Unica istanza usata da tutto il programma: la configurazione si legge una

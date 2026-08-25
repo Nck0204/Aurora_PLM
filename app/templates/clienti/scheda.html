@@ -1,0 +1,216 @@
+{# ===========================================================================
+   Scheda di un cliente: dati modificabili, contatti, prodotti.
+
+   Tre moduli POST distinti nella stessa pagina, ciascuno con il suo gettone
+   CSRF (D-028). I contatti stanno qui e non in una pagina loro: sono pochi
+   per cliente e si guardano insieme ai suoi dati.
+
+   Il campo del nome del contatto si chiama "nome_contatto" e non "nome":
+   nella stessa pagina c'e' gia' il campo "nome" del cliente, e due moduli con
+   lo stesso nome di campo sono la premessa di una svista.
+   =========================================================================== #}
+{% extends "base.html" %}
+
+{% from "components/campi.html" import campo, area_testo, csrf %}
+{% from "components/pulsanti.html" import pulsante, pulsante_collegamento, modulo_pulsante %}
+{% from "components/riquadro.html" import riquadro %}
+{% from "components/tabella.html" import tabella %}
+{% from "components/stato.html" import etichetta, etichetta_ciclo_vita %}
+{% from "components/avvisi.html" import notifica, avviso %}
+
+{% block titolo %}{{ cliente.name }}{% endblock %}
+{% block sezione %}Clienti{% endblock %}
+
+{% block notifiche %}
+    {% if creato %}
+        {{ notifica("Adesso si possono creare i suoi prodotti.",
+                    variante="successo", titolo="Cliente creato") }}
+    {% elif salvato %}
+        {{ notifica("I dati del cliente sono stati aggiornati.",
+                    variante="successo", titolo="Salvato") }}
+    {% endif %}
+{% endblock %}
+
+{% block contenuto %}
+
+<div class="testata">
+    <div>
+        <h1>{{ cliente.name }}</h1>
+        <p class="sottotitolo">
+            Sigla <span class="codice">{{ cliente.code }}</span> &middot;
+            {{ prodotti|length }} prodott{{ "o" if prodotti|length == 1 else "i" }}
+        </p>
+    </div>
+    <div class="testata-azioni">
+        {{ pulsante_collegamento("Torna all'elenco", "/clienti",
+                                 icona_nome="freccia-sinistra") }}
+    </div>
+</div>
+
+{% if not cliente.is_active %}
+    {{ avviso("Questo cliente e' disattivato: non viene proposto per i "
+              "prodotti nuovi. I suoi prodotti e i suoi progetti restano dove "
+              "sono e continuano a funzionare.",
+              variante="attenzione", titolo="Cliente disattivato") }}
+{% endif %}
+
+<div class="griglia-riquadri">
+
+    {# --- I dati del cliente --- #}
+    <form method="post" action="/clienti/{{ cliente.id }}" class="modulo">
+        {{ csrf(request) }}
+
+        {% call riquadro("Dati del cliente",
+                         piede=pulsante("Salva", variante="primario")) %}
+
+            {{ campo("Nome", "nome", valore=cliente.name, obbligatorio=true,
+                     lunghezza_massima=160) }}
+
+            {{ campo("Sigla", "codice", valore=cliente.code, obbligatorio=true,
+                     monospazio=true, lunghezza_massima=20) }}
+
+            {{ area_testo("Note", "note", valore=cliente.notes or "", righe=4) }}
+
+        {% endcall %}
+    </form>
+
+    {# --- Una persona di riferimento in piu' --- #}
+    <form method="post" action="/clienti/{{ cliente.id }}/contatti" class="modulo">
+        {{ csrf(request) }}
+
+        {% call riquadro("Aggiungi una persona di riferimento",
+                         piede=pulsante("Aggiungi", icona_nome="piu")) %}
+
+            {{ campo("Nome e cognome", "nome_contatto", obbligatorio=true,
+                     lunghezza_massima=160) }}
+
+            {{ campo("Indirizzo di posta", "email", tipo="email",
+                     lunghezza_massima=255,
+                     aiuto="Non e' obbligatorio e non e' unico: la stessa "
+                           "casella puo' valere per piu' persone.") }}
+
+            {{ campo("Ruolo presso il cliente", "ruolo",
+                     lunghezza_massima=120,
+                     segnaposto="responsabile acquisti") }}
+
+        {% endcall %}
+    </form>
+
+</div>
+
+{# --- I contatti --- #}
+{% call riquadro("Persone di riferimento", nudo=true) %}
+
+    {% set colonne_contatti = [
+        {"etichetta": "Nome"},
+        {"etichetta": "Posta"},
+        {"etichetta": "Ruolo presso il cliente"},
+        {"etichetta": "Stato"},
+        {"etichetta": "Operazioni", "classe": "colonna-azioni"},
+    ] %}
+
+    {% call tabella(colonne_contatti,
+                    vuota=(contatti|length == 0),
+                    messaggio_vuoto="Nessuna persona di riferimento per questo "
+                                    "cliente: si aggiunge dal riquadro qui sopra.") %}
+        {% for p in contatti %}
+        <tr>
+            <td>{{ p.name }}</td>
+            <td>
+                {% if p.email %}{{ p.email }}
+                {% else %}<span class="testo-tenue">&mdash;</span>{% endif %}
+            </td>
+            <td>
+                {% if p.role %}{{ p.role }}
+                {% else %}<span class="testo-tenue">&mdash;</span>{% endif %}
+            </td>
+            <td>
+                {% if p.is_active %}
+                    {{ etichetta("attivo", variante="successo") }}
+                {% else %}
+                    {{ etichetta("disattivato", variante="errore") }}
+                {% endif %}
+            </td>
+            <td class="colonna-azioni">
+                <div class="fila-pulsanti spinge-a-destra">
+                    {% if p.is_active %}
+                        {{ modulo_pulsante(request,
+                                           "/contatti/" ~ p.id ~ "/disattiva",
+                                           "Disattiva", variante="pericolo",
+                                           misura="piccolo") }}
+                    {% else %}
+                        {{ modulo_pulsante(request,
+                                           "/contatti/" ~ p.id ~ "/riattiva",
+                                           "Riattiva", misura="piccolo",
+                                           icona_nome="spunta") }}
+                    {% endif %}
+                </div>
+            </td>
+        </tr>
+        {% endfor %}
+    {% endcall %}
+
+{% endcall %}
+
+{# --- I prodotti --- #}
+{% call riquadro("Prodotti di questo cliente", nudo=true) %}
+
+    {% set colonne_prodotti = [
+        {"etichetta": "Codice", "classe": "colonna-codice"},
+        {"etichetta": "Descrizione"},
+        {"etichetta": "Versioni", "classe": "colonna-numero"},
+        {"etichetta": "Ultima versione"},
+    ] %}
+
+    {% call tabella(colonne_prodotti,
+                    vuota=(prodotti|length == 0),
+                    messaggio_vuoto="Nessun prodotto per questo cliente.") %}
+        {% for prodotto in prodotti %}
+        <tr>
+            <td class="colonna-codice">
+                <a href="/prodotti/{{ prodotto.id }}">{{ prodotto.code }}</a>
+            </td>
+            <td>
+                {% if prodotto.description %}{{ prodotto.description }}
+                {% else %}<span class="testo-tenue">&mdash;</span>{% endif %}
+            </td>
+            <td class="colonna-numero">{{ prodotto.versions|length }}</td>
+            <td>
+                {% if prodotto.versions %}
+                    {% set ultima = prodotto.versions|last %}
+                    v{{ ultima.version_number }}
+                    {{ etichetta_ciclo_vita(ultima.lifecycle_state) }}
+                {% else %}
+                    <span class="testo-tenue">&mdash;</span>
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+    {% endcall %}
+
+{% endcall %}
+
+{# --- Fuori servizio --- #}
+{% call riquadro("Fuori servizio") %}
+    <p class="campo-aiuto">
+        Un cliente non si cancella: si disattiva. I prodotti, i progetti e la
+        corrispondenza che lo nominano devono restare leggibili anche dopo che
+        il rapporto e' finito.
+    </p>
+    <div class="fila-pulsanti margine-sopra">
+        {% if cliente.is_active %}
+            {{ modulo_pulsante(request,
+                               "/clienti/" ~ cliente.id ~ "/disattiva",
+                               "Disattiva il cliente", variante="pericolo",
+                               conferma="Disattivare " ~ cliente.name
+                                        ~ "? Non verra' piu' proposto per i "
+                                        "prodotti nuovi.") }}
+        {% else %}
+            {{ modulo_pulsante(request,
+                               "/clienti/" ~ cliente.id ~ "/riattiva",
+                               "Riattiva il cliente", icona_nome="spunta") }}
+        {% endif %}
+    </div>
+{% endcall %}
+
+{% endblock %}
