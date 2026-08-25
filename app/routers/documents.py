@@ -14,12 +14,16 @@
     GET  /documenti/{id}/versioni/{vid}/scarica    il file
     GET  /documenti/{id}/versioni/{vid}/avviso     l'avviso prima dello scarico
 
-**Chi vede che cosa lo decide app/services/permissions.py**, che legge la
-matrice (ruolo nel progetto x classificazione). Qui non si scrive nessuna
-regola di permesso: si chiede, e si risponde 403 con una frase italiana. Le
-due strade - l'elenco e la scheda - passano dalla stessa funzione, perche' un
-elenco che nasconde una riga che poi si apre scrivendone l'indirizzo non e'
-una protezione (D-043).
+**Chi vede che cosa lo decide permissions.puo()**, e in questo file non c'e'
+nemmeno una riga che lo stabilisca: si chiede con `permissions.pretendi()`,
+che risponde da sola con il codice giusto. Le due strade - l'elenco e la
+scheda - passano dalla stessa regola, perche' un elenco che nasconde una riga
+che poi si apre scrivendone l'indirizzo non e' una protezione (D-051).
+
+**Un identificativo che non si puo' vedere riceve un 404**, con lo stesso
+messaggio di uno che non esiste. Il 403 resta per le operazioni: chi il
+documento lo vede gia' e prova a cambiarne lo stato senza averne il permesso
+riceve una spiegazione, non un vicolo cieco.
 
 **Lo scarico di un file che non e' piu' valido passa da un avviso.** Se la
 versione di prodotto e' superata o obsoleta e il file non e' un PDF - dove la
@@ -66,22 +70,12 @@ logger = logging.getLogger("aurora.rotte.documenti")
 
 router = APIRouter(prefix="/documenti", tags=["documenti"])
 
-MESSAGGIO_DOCUMENTO_INESISTENTE = "Il documento richiesto non esiste."
-MESSAGGIO_NON_VISIBILE = (
-    "Questo documento appartiene a una classificazione che il tuo ruolo nel "
-    "progetto non puo' vedere."
-)
-MESSAGGIO_NON_CARICABILE = (
-    "Il tuo ruolo in questo progetto non permette di caricare documenti con "
-    "questa classificazione."
-)
-MESSAGGIO_NON_MODIFICABILE = (
-    "Il tuo ruolo in questo progetto non permette di cambiare lo stato di "
-    "questo documento ne' di ritirarlo."
-)
-MESSAGGIO_PROGETTO_INESISTENTE = (
-    "Il progetto in cui caricare il documento non esiste."
-)
+# I messaggi dei dinieghi stanno in permissions.py, perche' quello del 404
+# deve essere identico alla parola per quello di un documento che davvero non
+# esiste: se ogni rotta se lo scrivesse per conto suo, la differenza fra due
+# risposte finirebbe per dire che il documento c'e'.
+MESSAGGIO_DOCUMENTO_INESISTENTE = permissions.MESSAGGI_INESISTENTE[Document]
+MESSAGGIO_PROGETTO_INESISTENTE = permissions.MESSAGGI_INESISTENTE[Project]
 
 # Il parametro con cui la pagina dell'avviso dice "l'utente ha letto, procedi".
 PARAMETRO_AVVISATO = "avvisato"
@@ -93,7 +87,13 @@ PARAMETRO_AVVISATO = "avvisato"
 
 
 def _progetto_o_errore(db: Session, valore: str, utente: User) -> Project:
-    """Cerca il progetto e verifica che questa persona lo possa vedere."""
+    """Cerca il progetto e verifica che questa persona lo possa vedere.
+
+    Le due risposte negative sono la stessa: 404 sia quando il progetto non
+    esiste sia quando esiste e non lo si vede. Chi provasse gli indirizzi uno
+    per uno non riuscirebbe a distinguere i due casi, che e' esattamente lo
+    scopo.
+    """
     try:
         progetto = projects.trova_progetto(db, uuid.UUID(valore))
     except (ValueError, AttributeError):
@@ -104,28 +104,27 @@ def _progetto_o_errore(db: Session, valore: str, utente: User) -> Project:
             status_code=404, detail=MESSAGGIO_PROGETTO_INESISTENTE
         )
 
-    if not projects.puo_vedere(db, progetto, utente):
-        raise HTTPException(
-            status_code=403,
-            detail="Questo progetto non e' fra quelli a cui sei assegnato.",
-        )
-
+    permissions.pretendi(db, utente, permissions.Azione.VEDERE, progetto)
     return progetto
 
 
 def _documento_o_errore(
-    db: Session, document_id: uuid.UUID, utente: User
-) -> tuple[Document, permissions.Permessi]:
-    """Cerca il documento e calcola che cosa questa persona ci puo' fare.
+    db: Session, document_id: uuid.UUID, utente: User, azione=None
+) -> Document:
+    """Cerca il documento e pretende il permesso di fare quello che si vuole.
 
-    Restituisce il documento **insieme** ai permessi, perche' ogni pagina che
-    apre un documento ha bisogno di tutti e due e chiederli separatamente
-    vorrebbe dire due interrogazioni e la possibilita' di dimenticarne una.
+    "azione" e' quello che la rotta sta per fare: vedere se non si dice
+    niente, caricare per la versione nuova, modificare per il cambio di stato
+    e il ritiro. Chiedere il permesso **dell'operazione vera** invece che
+    del solo "vedere" e' quello che permette di scriverne uno per rotta e di
+    non doverne ricordare due.
 
-    Il 404 e il 403 restano distinti: "non esiste" e "esiste ma non lo puoi
-    vedere" sono due cose diverse, e nascondere la seconda dietro la prima
-    manda chi ha davvero bisogno di quel documento a cercare un guasto che non
-    c'e' invece che a chiedere il permesso.
+    Chi non lo puo' vedere riceve un 404 con lo stesso messaggio di un
+    documento che non esiste - compreso il caso del documento ritirato, che
+    resta in tabella ma per chi non e' creatore e' come se non ci fosse. Chi
+    lo vede ma non puo' fare quell'operazione riceve un 403 che gliela
+    spiega. La differenza la fa permissions.pretendi(), qui non c'e' nessuna
+    regola scritta.
     """
     documento = documents.trova_documento(db, document_id)
     if documento is None:
@@ -133,23 +132,10 @@ def _documento_o_errore(
             status_code=404, detail=MESSAGGIO_DOCUMENTO_INESISTENTE
         )
 
-    permessi = permissions.permessi(
-        db,
-        progetto=documento.project,
-        utente=utente,
-        classification_id=documento.classification_id,
+    permissions.pretendi(
+        db, utente, azione or permissions.Azione.VEDERE, documento
     )
-
-    if not permessi.vedere:
-        raise HTTPException(status_code=403, detail=MESSAGGIO_NON_VISIBILE)
-
-    # Un documento ritirato lo vede soltanto il creatore, nella sua sezione.
-    if documento.is_deleted and not utente.is_creatore:
-        raise HTTPException(
-            status_code=404, detail=MESSAGGIO_DOCUMENTO_INESISTENTE
-        )
-
-    return documento, permessi
+    return documento
 
 
 def _classificazione_scelta(
@@ -409,14 +395,17 @@ def carica(
     if classe is None:
         return rimostra("Scegli la classificazione del documento.")
 
-    permessi = permissions.permessi(
+    # Il menu a tendina propone gia' solo le classificazioni consentite, ma
+    # la richiesta puo' arrivare scritta a mano: si chiede il permesso sulla
+    # coppia (progetto, classificazione) scelta davvero.
+    permissions.pretendi(
         db,
-        progetto=progetto_scelto,
-        utente=utente,
-        classification_id=classe.id,
+        utente,
+        permissions.Azione.CARICARE,
+        permissions.BersaglioCaricamento(
+            progetto=progetto_scelto, classification_id=classe.id
+        ),
     )
-    if not permessi.caricare:
-        raise HTTPException(status_code=403, detail=MESSAGGIO_NON_CARICABILE)
 
     creati: list[Document] = []
     for singolo in scelti:
@@ -482,7 +471,7 @@ def scheda(
     bene: chi la apre vuole sapere che cosa e' cambiato e da chi, e poter
     scaricare qualunque versione, non solo l'ultima.
     """
-    documento, permessi = _documento_o_errore(db, document_id, utente)
+    documento = _documento_o_errore(db, document_id, utente)
 
     versione_prodotto = documents.versione_di_prodotto_di(documento)
     da_marchiare = watermark.serve_filigrana(versione_prodotto.lifecycle_state)
@@ -496,7 +485,17 @@ def scheda(
         versione_prodotto=versione_prodotto,
         versioni=documents.versioni_di(db, documento.id),
         corrente=documents.versione_corrente(documento),
-        permessi=permessi,
+        # I pulsanti della scheda: i tre permessi arrivano gia' decisi, il
+        # template li disegna e basta (D-051).
+        permessi=permissions.Permessi(
+            vedere=True,
+            caricare=permissions.puo(
+                db, utente, permissions.Azione.CARICARE, documento
+            ),
+            modificare=permissions.puo(
+                db, utente, permissions.Azione.MODIFICARE, documento
+            ),
+        ),
         stati_possibili=lifecycle.stati_documento_raggiungibili(documento.state),
         stato_definitivo=lifecycle.STATO_DOCUMENTO_DEFINITIVO,
         nome_stato=lifecycle.nome_stato_documento,
@@ -529,10 +528,9 @@ def mostra_versione(
     ripartira' da bozza. E' il punto in cui la regola dell'immutabilita' del
     rilasciato si spiega, invece di limitarsi a impedire qualcosa.
     """
-    documento, permessi = _documento_o_errore(db, document_id, utente)
-
-    if not permessi.caricare:
-        raise HTTPException(status_code=403, detail=MESSAGGIO_NON_CARICABILE)
+    documento = _documento_o_errore(
+        db, document_id, utente, permissions.Azione.CARICARE
+    )
 
     return pagina(
         request,
@@ -563,10 +561,9 @@ def aggiungi_versione(
     quello che rende vero il criterio di accettazione "la precedente resta
     scaricabile e identica all'originale".
     """
-    documento, permessi = _documento_o_errore(db, document_id, utente)
-
-    if not permessi.caricare:
-        raise HTTPException(status_code=403, detail=MESSAGGIO_NON_CARICABILE)
+    documento = _documento_o_errore(
+        db, document_id, utente, permissions.Azione.CARICARE
+    )
 
     def rimostra(messaggio: str) -> Response:
         return pagina(
@@ -648,10 +645,9 @@ def mostra_stato(
     La conferma del **rilascio** e' quella che conta: da li' in poi il file non
     si sostituisce piu'. La pagina lo scrive per esteso.
     """
-    documento, permessi = _documento_o_errore(db, document_id, utente)
-
-    if not permessi.modificare:
-        raise HTTPException(status_code=403, detail=MESSAGGIO_NON_MODIFICABILE)
+    documento = _documento_o_errore(
+        db, document_id, utente, permissions.Azione.MODIFICARE
+    )
 
     stato_nuovo = _stato_scelto(nuovo)
     if stato_nuovo is None:
@@ -686,10 +682,9 @@ def cambia_stato(
     db: Session = Depends(get_db),
 ) -> Response:
     """Esegue il cambio di stato, dopo che la conferma e' stata letta."""
-    documento, permessi = _documento_o_errore(db, document_id, utente)
-
-    if not permessi.modificare:
-        raise HTTPException(status_code=403, detail=MESSAGGIO_NON_MODIFICABILE)
+    documento = _documento_o_errore(
+        db, document_id, utente, permissions.Azione.MODIFICARE
+    )
 
     stato_nuovo = _stato_scelto(nuovo)
     if stato_nuovo is None:
@@ -747,10 +742,9 @@ def ritira(
     db: Session = Depends(get_db),
 ) -> Response:
     """Toglie il documento dagli elenchi. Non cancella niente."""
-    documento, permessi = _documento_o_errore(db, document_id, utente)
-
-    if not permessi.modificare:
-        raise HTTPException(status_code=403, detail=MESSAGGIO_NON_MODIFICABILE)
+    documento = _documento_o_errore(
+        db, document_id, utente, permissions.Azione.MODIFICARE
+    )
 
     progetto_id = documento.project_id
     documents.elimina(db, documento=documento, autore=utente, request=request)
@@ -829,7 +823,7 @@ def avviso_scarico(
     le uniche due cose che restano sono questa pagina e il nome del file, e si
     fanno tutte e due.
     """
-    documento, _ = _documento_o_errore(db, document_id, utente)
+    documento = _documento_o_errore(db, document_id, utente)
     versione = _versione_o_errore(db, documento, version_id)
     versione_prodotto = documents.versione_di_prodotto_di(documento)
 
@@ -871,7 +865,7 @@ def scarica(
     cosi' vale per tutti i modi in cui ci si arriva: il pulsante, un indirizzo
     copiato, un preferito salvato sei mesi fa.
     """
-    documento, _ = _documento_o_errore(db, document_id, utente)
+    documento = _documento_o_errore(db, document_id, utente)
     versione = _versione_o_errore(db, documento, version_id)
 
     versione_prodotto = documents.versione_di_prodotto_di(documento)

@@ -19,7 +19,11 @@ import pytest
 from sqlalchemy import select
 
 from app.models import AuditLog, GlobalRole, LifecycleState
-from app.services import lifecycle, products
+from app.services import lifecycle, permissions, products
+
+# Scorciatoia: l'azione con cui si chiede il permesso di muovere il ciclo di
+# vita di una versione. Scritta una volta per non ripeterla in tre test.
+PUO_MODIFICARE = permissions.Azione.MODIFICARE
 from tests.conftest import (
     PASSWORD_DI_PROVA,
     contenuto_leggibile,
@@ -347,13 +351,17 @@ def test_una_transizione_rifiutata_non_scrive_niente(db_session):
 
 
 # --- Chi puo' muovere gli stati ---------------------------------------------
+#
+# La regola non sta piu' in lifecycle.py: dalla sessione 7 risponde
+# permissions.puo(), come per ogni altro permesso di Aurora (D-051). La
+# risposta e' rimasta la stessa, ed e' questo che questi tre test verificano.
 
 
 def test_il_creatore_puo_sempre(db_session):
     creatore = crea_creatore(db_session, "prova.capo.permessi")
     _prodotto, versione = crea_prodotto(db_session, autore=creatore)
 
-    assert lifecycle.puo_cambiare_stato(versione, creatore)
+    assert permissions.puo(db_session, creatore, PUO_MODIFICARE, versione)
 
 
 def test_un_utente_qualunque_non_puo(db_session):
@@ -361,7 +369,7 @@ def test_un_utente_qualunque_non_puo(db_session):
     passante = crea_utente(db_session, username="prova.passante.uno")
     _prodotto, versione = crea_prodotto(db_session, autore=creatore)
 
-    assert not lifecycle.puo_cambiare_stato(versione, passante)
+    assert not permissions.puo(db_session, passante, PUO_MODIFICARE, versione)
 
 
 def test_il_project_manager_del_progetto_puo(db_session):
@@ -380,8 +388,8 @@ def test_il_project_manager_del_progetto_puo(db_session):
     )
     db_session.refresh(versione)
 
-    assert lifecycle.puo_cambiare_stato(versione, responsabile)
-    assert not lifecycle.puo_cambiare_stato(versione, ingegnere), (
+    assert permissions.puo(db_session, responsabile, PUO_MODIFICARE, versione)
+    assert not permissions.puo(db_session, ingegnere, PUO_MODIFICARE, versione), (
         "essere nella squadra non basta: serve essere il responsabile"
     )
 

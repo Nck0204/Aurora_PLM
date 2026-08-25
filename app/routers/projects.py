@@ -11,9 +11,14 @@ pagina "nuovo progetto" da cui scegliere il prodotto dopo. Il legame e' uno a
 uno e nasce insieme al progetto.
 
 Chi non e' assegnato a un progetto non lo vede nell'elenco e non ne apre la
-scheda: il controllo e' lo stesso nei due punti (projects.puo_vedere), perche'
+scheda: il controllo e' lo stesso nei due punti - `permissions.puo()` per la
+scheda, `permissions.filtro_progetti()` per l'elenco, che sono la stessa
+regola scritta due volte apposta perche' devono dire la stessa cosa - perche'
 un elenco che nasconde una riga che poi si apre scrivendone l'indirizzo non e'
 una protezione, e' una tenda.
+
+**Un progetto che non si puo' vedere risponde 404**, con lo stesso messaggio
+di uno che non esiste (D-051).
 """
 
 import logging
@@ -35,10 +40,7 @@ logger = logging.getLogger("aurora.rotte.progetti")
 
 router = APIRouter(prefix="/progetti", tags=["progetti"])
 
-MESSAGGIO_PROGETTO_INESISTENTE = "Il progetto richiesto non esiste."
-MESSAGGIO_PROGETTO_NON_VISIBILE = (
-    "Questo progetto non e' fra quelli a cui sei assegnato."
-)
+MESSAGGIO_PROGETTO_INESISTENTE = permissions.MESSAGGI_INESISTENTE[Project]
 
 
 def _progetto_visibile_o_errore(
@@ -46,18 +48,18 @@ def _progetto_visibile_o_errore(
 ) -> Project:
     """Cerca il progetto e verifica che questa persona lo possa vedere.
 
-    Il 404 e il 403 dicono due cose diverse e vanno tenuti distinti: "non
-    esiste" e "esiste ma non e' tuo". Nascondere la seconda dietro la prima
-    sembra piu' prudente, ma manda chi ha davvero bisogno di quel progetto a
-    cercare un guasto che non c'e', invece che a chiedere l'assegnazione.
+    Le due risposte negative sono volutamente **indistinguibili**: 404 sia
+    quando il progetto non esiste sia quando esiste e non e' di chi lo sta
+    chiedendo. Fino alla sessione 6 la seconda era un 403, e dire "esiste ma
+    non e' tuo" e' gia' dire qualcosa: che quel numero e' stato assegnato, che
+    quel lavoro e' aperto. Chi prova gli indirizzi uno per uno si costruisce
+    l'elenco dei progetti dell'azienda senza vederne nemmeno uno (D-051).
     """
     progetto = projects.trova_progetto(db, project_id)
     if progetto is None:
         raise HTTPException(status_code=404, detail=MESSAGGIO_PROGETTO_INESISTENTE)
 
-    if not projects.puo_vedere(db, progetto, utente):
-        raise HTTPException(status_code=403, detail=MESSAGGIO_PROGETTO_NON_VISIBILE)
-
+    permissions.pretendi(db, utente, permissions.Azione.VEDERE, progetto)
     return progetto
 
 
@@ -324,7 +326,7 @@ def scheda(
         documenti_del_progetto=documents.conta_documenti(
             db, utente, progetto.id
         ),
-        puo_caricare=bool(
-            permissions.classificazioni_caricabili(db, progetto, utente)
+        puo_caricare=permissions.puo(
+            db, utente, permissions.Azione.CARICARE, progetto
         ),
     )

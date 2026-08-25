@@ -26,7 +26,7 @@
     <div>
         <h1>Progetti</h1>
         <p class="sottotitolo">
-            {% if utente.is_creatore %}
+            {% if puo_amministrare %}
                 Tutti i progetti aperti. Un progetto si apre su una versione di
                 prodotto, dalla scheda della versione.
             {% else %}

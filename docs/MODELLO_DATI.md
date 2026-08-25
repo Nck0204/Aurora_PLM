@@ -257,7 +257,13 @@ precedente resta nella tabella.
 |---|---|---|
 | `name` | varchar(60) | `NN` `UQ`. Tecnico, Commerciale, Qualità, Amministrativo. |
 | `description` | text | |
-| `sort_order` | integer | `NN`. Ordine negli elenchi. |
+| `sort_order` | integer | `NN`. Ordine negli elenchi. Si cambia dalla pagina `/permessi/classificazioni`, spostando una voce di un posto per volta. |
+| `is_active` | boolean | `NN`, vero di partenza. Falso per le classi messe da parte (D-054, migrazione `b1c4e2af7d30`). |
+
+Una classificazione non si cancella: si **disattiva**, e solo se non e' addosso
+a nessun documento - ritirati compresi. Da quel momento non ne accetta di
+nuovi, quindi "disattivata" vuol dire "vuota per sempre", ed e' l'invariante
+per cui la griglia dei permessi puo' smettere di mostrarla (D-054).
 
 #### `permission_rules` — la matrice
 
@@ -275,15 +281,25 @@ che dice "no" e' una decisione, una casella che manca e' una dimenticanza, e a
 distanza di mesi non si distinguono. La matrice di partenza sta in
 `scripts/seed.py`.
 
-**Chi la legge**, dalla sessione 6: `app/services/permissions.py`, e nessun
-altro. Offre la stessa domanda in due forme - `permessi()` per un documento
-solo, `filtro_visibilita()` come condizione SQL per gli elenchi - e devono
-dare la stessa risposta, perche' un elenco che nasconde una riga che poi si
-apre scrivendone l'indirizzo non e' una protezione (D-048). Una casella che
-mancasse varrebbe **no**, e il fatto finirebbe nel registro.
+**Chi la legge**: `app/services/permissions.py`, e nessun altro. C'e' un test
+che lo verifica leggendo i sorgenti (`tests/test_permessi.py`). Offre la stessa
+domanda in due forme - `puo()` per un oggetto solo, `filtro_documenti()` come
+condizione SQL per gli elenchi - e devono dare la stessa risposta, perche' un
+elenco che nasconde una riga che poi si apre scrivendone l'indirizzo non e' una
+protezione (D-048, D-051). Una casella che mancasse varrebbe **no**, e il fatto
+finirebbe nel registro.
 
-**Chi la scrive**: per adesso solo `scripts/seed.py`. La pagina che la corregge
-dall'interfaccia non c'e' ancora.
+**Chi la scrive**, dalla sessione 7: la pagina `/permessi`, riservata al
+creatore, e `scripts/seed.py` per i valori di partenza. Ogni casella corretta
+diventa una riga di `audit_logs` con il valore precedente e quello successivo
+(`permission_rule.changed`), e ha effetto **immediato** su chi e' collegato in
+quel momento: i permessi si rileggono a ogni richiesta.
+
+**Due eccezioni alla matrice**, e sono entrambe volute: il **creatore** puo'
+tutto dappertutto, e il **project manager di un progetto** - quello scritto in
+`projects.project_manager_id` - puo' tutto sui documenti di quel progetto
+(D-053). Chi ha soltanto il *ruolo* di progetto `project_manager` segue invece
+la matrice, come tutti gli altri.
 
 ### 4.6 Documenti
 

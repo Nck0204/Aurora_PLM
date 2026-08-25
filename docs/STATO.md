@@ -1,6 +1,6 @@
 # Stato di avanzamento
 
-Ultimo aggiornamento: **25 agosto 2026**, fine della sessione 6.
+Ultimo aggiornamento: **25 agosto 2026**, fine della sessione 7.
 
 Il progetto e' diviso in 13 sessioni di lavoro. Questa tabella dice a che
 punto siamo. Va aggiornata **alla fine di ogni sessione**, prima del commit.
@@ -17,24 +17,316 @@ Stati possibili: `da fare` · `in corso` · `completata`
 | 2 | Modello dati R1 | **completata** | Diciannove tabelle come modelli SQLAlchemy, una migrazione Alembic, dati iniziali idempotenti, test del modello, `docs/MODELLO_DATI.md`. Dettaglio sotto. |
 | 3 | Accesso e gestione utenti | **completata** | Password con argon2id, accesso con sessione e "ricordami" rotante, blocco dopo cinque tentativi, cambio password obbligatorio al primo accesso, protezione CSRF, gestione utenti riservata al creatore, registro di audit. Dettaglio sotto. |
 | 4 | Sistema grafico | **completata** | Foglio di stile unico con tutti i valori in variabili, quindici componenti come macro Jinja2, barra laterale filtrata per ruolo, vetrina `/stile`, pagine di accesso e gestione utenti ristilate, pagine di errore. Dettaglio sotto. |
-| 4b | Anagrafiche | **in parte** | Clienti e contatti: fatti nella sessione 5 (elenco, creazione, modifica, disattivazione, riattivazione). Restano da fare la matrice dei permessi modificabile dall'interfaccia e il cambio di ruolo di un utente. La sessione 6 la matrice la **legge** (D-048), quindi funziona; e' la pagina che la corregge a mancare. |
+| 4b | Anagrafiche | **quasi** | Clienti e contatti: fatti nella sessione 5. La **matrice dei permessi modificabile** e la gestione delle classificazioni: fatte nella sessione 7 (`/permessi`). Resta soltanto il cambio di ruolo **globale** di un utente, in sospeso dalla sessione 3. |
 | 5 | Prodotti, versioni e progetti | **completata** | Clienti e contatti, prodotti con la scomposizione del codice configurabile, versioni e derivazioni, grafo del ciclo di vita con superamento automatico, apertura dei progetti, cruscotto iniziale. Dettaglio sotto. |
 | 6 | Archivio documenti | **completata** | Deposito per impronta SHA-256 con deduplicazione e scrittura atomica, caricamento con barra di avanzamento reale, versioni con nota obbligatoria, stato del documento e immutabilita' del rilasciato, ritiro logico con ripristino, scarico registrato, filigrana sui PDF delle versioni superate, permessi calcolati sulla matrice. Dettaglio sotto. |
-| 7 | Fasi e assegnazioni | da fare | L'apertura del progetto, la squadra e la scelta del modello di fasi sono state fatte nella sessione 5. Restano: passaggi di fase con richiesta e approvazione, modifica della squadra a progetto avviato, chiusura di un progetto. **Le sessioni 6 e 7 sono state invertite rispetto al piano della sessione 2**: l'azienda ha chiesto prima i documenti. |
-| 8 | Revisioni e approvazioni | da fare | Il ciclo bozza / in verifica / rilasciato / superato e' stato fatto nella sessione 6. Restano il flusso di **approvazione** con verificatore e approvatore distinti, la presa in carico (R2) e le notifiche a chi deve verificare. |
+| 7 | Regole di accesso | **completata** | Una funzione sola che decide tutti i permessi (`permissions.puo`), filtro a livello di interrogazione e di conteggio, 404 al posto del 403, matrice dei permessi modificabile con conferma e registro, gestione delle classificazioni, verifica degli accessi di una persona. Dettaglio sotto. |
+| 8 | Fasi, revisioni e approvazioni | da fare | Il ciclo bozza / in verifica / rilasciato / superato e' stato fatto nella sessione 6. Restano: **passaggi di fase** con richiesta e approvazione, modifica della squadra a progetto avviato, chiusura di un progetto, il flusso di **approvazione** con verificatore e approvatore distinti, la presa in carico (R2) e le notifiche a chi deve verificare. |
 | 9 | Interfaccia completa | da fare | Struttura di navigazione, ricerca, elenchi con filtri e paginazione, rifinitura del tema scuro. |
 | 10 | Notifiche e posta | da fare | Adattatore di posta doppio (locale/Graph), archiviazione dei messaggi, smistamento automatico e quarantena, allegati, modelli dei messaggi, notifiche. |
 | 11 | Lavori pianificati e manutenzione | da fare | APScheduler, controlli notturni, procedura di backup e di ripristino. |
 | 12 | Rapporti ed esportazioni | da fare | Cruscotto, rapporti di avanzamento, esportazione in CSV e PDF. |
 | 13 | Messa in produzione | da fare | Irrobustimento, prestazioni, installazione sul server aziendale, manuale d'uso, consegna. |
 
-> **Nota sul piano.** Il contenuto delle sessioni da 3 a 13 e' stato riscritto
+> **Nota sul piano.** Il piano si e' riordinato **due volte**, sempre su
+> richiesta dell'azienda: la 6 e la 7 sono state invertite (prima i documenti,
+> poi le fasi), e poi la 7 e' diventata le **regole di accesso**, con le fasi e
+> le approvazioni riunite nella 8. Le tredici sessioni restano tredici.
+>
+> Il contenuto delle sessioni da 3 a 13 era gia' stato riscritto
 > alla fine della sessione 2, dopo che il modello dati e' stato realizzato tutto
 > insieme invece che una tabella per sessione (vedi `docs/DECISIONI.md`, D-021).
 > Le sessioni successive non creano piu' tabelle: ci costruiscono sopra il
 > comportamento. Resta una **domanda aperta**: le tabelle di distinta base e
 > articoli sono del rilascio R3 e in questo piano non compaiono; va chiarito se
 > le 13 sessioni coprono il solo R1 o arrivano anche a R2 e R3.
+
+---
+
+## Sessione 7 — Regole di accesso · completata (25 agosto 2026)
+
+La sessione non ha aggiunto una funzione al programma: ne ha **tolte sei e ne
+ha messa una**. Fino a ieri Aurora decideva chi puo' fare che cosa in sei posti
+diversi - `permissions.permessi()`, `projects.puo_vedere()`,
+`lifecycle.puo_cambiare_stato()`, la dipendenza `richiedi_creatore`,
+`navigation.voci_visibili()` e una dozzina di `{% if utente.is_creatore %}`
+sparsi nei template. Da oggi lo decide `permissions.puo()`, e nessun altro.
+
+> **Nota sull'ordine delle sessioni.** Il piano metteva alla 7 le fasi e le
+> assegnazioni. L'azienda ha chiesto prima le **regole di accesso**: i
+> documenti della sessione 6 sono in linea, e finche' i permessi non si
+> correggono dall'interfaccia la matrice resta quella di `scripts/seed.py`. I
+> passaggi di fase restano da fare e si sono spostati alla 8. E' la seconda
+> volta che il piano si riordina, ed e' scritto qui perche' la tabella sopra
+> non lo racconta.
+
+> **Una migrazione, la prima dalla sessione 2.** `b1c4e2af7d30` aggiunge
+> `classifications.is_active`, perche' la sessione chiede di poter togliere una
+> classificazione e in Aurora "togliere" vuol dire disattivare (D-054). Tutto
+> il resto - la matrice, le assegnazioni, i documenti - c'era gia'.
+
+### Realizzato
+
+**La funzione centrale** (`app/services/permissions.py`) — tutto il programma
+fa una domanda sola:
+
+```python
+permissions.puo(db, utente, Azione.VEDERE, documento)
+```
+
+Quattro azioni (`VEDERE`, `CARICARE`, `MODIFICARE`, `AMMINISTRARE`) e cinque
+tipi di oggetto: un documento, un **bersaglio di caricamento** (progetto piu'
+classificazione, per il documento che ancora non esiste), un progetto, una
+versione di prodotto e la sentinella `AMMINISTRAZIONE` per le sezioni riservate
+al creatore. Su un oggetto che non conosce risponde **no** e lo scrive nel
+registro: chi ne aggiungera' uno se ne accorge perche' la pagina non si apre,
+non perche' si apre a tutti.
+
+Il modello e' quello della sessione, in tre righe:
+
+| Chi | Che cosa puo' |
+|---|---|
+| il **creatore** | tutto, dappertutto |
+| il **project manager del progetto** (`projects.project_manager_id`) | tutto sui documenti di quel progetto, qualunque cosa dica la matrice (D-053) |
+| chi e' **assegnato** al progetto | quello che dice la casella della matrice all'incrocio fra il suo ruolo li' dentro e la classificazione del documento |
+| tutti gli altri | niente |
+
+L'eccezione del project manager vale per **il responsabile di quel progetto**,
+non per chiunque abbia il ruolo di progetto `project_manager`: altrimenti la
+riga `project_manager` della griglia non deciderebbe piu' niente e chi la
+corregge lo farebbe a vuoto. C'e' un test per ciascuno dei due casi.
+
+**Le sei regole che sono sparite.** Non sono state spostate per ordine: una
+regola di accesso dentro un file che parla d'altro e' una regola che nessuno
+rilegge quando cambiano le altre.
+
+| Dov'era | Dov'e' adesso |
+|---|---|
+| `projects.puo_vedere()` | `puo(..., VEDERE, progetto)` |
+| `lifecycle.puo_cambiare_stato()` | `puo(..., MODIFICARE, versione)` |
+| `permissions.permessi()` / `filtro_visibilita()` | `puo()` / `filtro_documenti()` |
+| il confronto di ruolo dentro `richiedi_creatore` | `puo(..., AMMINISTRARE, AMMINISTRAZIONE)` |
+| `navigation.voci_visibili()`, che guardava `is_creatore` | riceve la risposta gia' fatta |
+| dodici `{% if utente.is_creatore %}` nei template | la variabile `puo_amministrare`, calcolata una volta per richiesta |
+| il `join` sulle assegnazioni dentro `_progetti_visibili()` | `permissions.filtro_progetti()` |
+
+**Gli elenchi filtrano nell'interrogazione, e i conteggi con loro.**
+`filtro_documenti()` e `filtro_progetti()` sono la stessa regola di `puo()`
+scritta come condizione SQL: due `EXISTS` correlati che si portano dentro tutto
+quello che serve, cosi' chi li usa non deve aggiungere nessuna `join` e non li
+puo' sbagliare. Il conteggio passa dallo stesso filtro dell'elenco: un
+documento nascosto che comparisse nel totale direbbe il numero esatto delle
+cose che non si dovrebbero sapere.
+
+**404 e non 403** (D-052) — chiedendo un documento, un progetto o una versione
+che non si ha il permesso di vedere, Aurora risponde 404 con lo stesso
+messaggio, parola per parola, che darebbe per un identificativo inventato. Il
+403 resta per il caso diverso: l'oggetto si vede gia' e manca il permesso per
+quella operazione. La distinzione la fa `pretendi()`, in un punto solo, e i
+messaggi stanno in `permissions.py` proprio perche' i due 404 devono essere
+identici: due frasi scritte in due posti finiscono per differire di una
+virgola, e quella virgola dice tutto. Questo **supera l'ultimo paragrafo di
+D-043**, che aveva scelto il 403.
+
+**La matrice si corregge** (`/permessi`, `app/routers/permissions.py`) — la
+griglia ruolo per classificazione con le tre spunte, riservata al creatore. Il
+salvataggio e' **in due passi**: la prima richiesta non scrive niente e mostra
+l'elenco di quello che cambierebbe, casella per casella, com'era e come
+diventa; la seconda scrive. E' una pagina di conferma e non una finestra
+modale, per la ragione di D-042. Ogni casella cambiata diventa una riga di
+`audit_logs` con il valore precedente e quello successivo.
+
+Le spunte hanno accanto un campo nascosto con lo stesso nome piu' `.c`. Non e'
+un ornamento: il browser invia una casella di spunta **solo quando e'
+spuntata**, quindi da dodici caselle di cui tre segnate arrivano tre campi e le
+nove mancanti non si distinguono da nove caselle che non c'erano. Il campo
+nascosto dice "questa casella era nella pagina", la spunta dice "ed era
+segnata".
+
+**Le classificazioni si amministrano** (`/permessi/classificazioni`) —
+creazione, rinomina, ordinamento su e giu' di un posto per volta,
+disattivazione e riattivazione.
+
+- una classificazione **nasce chiusa a tutti**: il servizio le scrive tutte e
+  tre le caselle della matrice a falso nella stessa transazione. Crearla e poi
+  aprirle vorrebbe dire che fra i due momenti - due richieste, con una persona
+  in mezzo che potrebbe andare a pranzo - la classe esiste senza regole;
+- **non si disattiva quello che e' in uso**: la colonna "Documenti" dice
+  quanti ce l'hanno addosso, ritirati compresi, e finche' quel numero non e'
+  zero il pulsante non c'e'. Anche la richiesta scritta a mano viene rifiutata;
+- una classificazione disattivata **non accetta caricamenti nuovi**. Le due
+  regole insieme danno l'invariante di D-054: disattivata vuol dire vuota per
+  sempre, ed e' per questo che la griglia dei permessi puo' smettere di
+  mostrarla senza nascondere niente.
+
+**L'effetto e' immediato** — non c'e' nessuna copia in memoria di niente: ogni
+richiesta rilegge la matrice dal database, come `app/dependencies.py` rilegge
+l'utente invece di fidarsi del cookie. Una casella corretta vale dalla pagina
+successiva per tutti quelli che sono collegati in quel momento.
+
+**La verifica degli accessi** (`GET /utenti/{id}/accessi`, dal pulsante nella
+riga dell'elenco utenti) — per ogni progetto a cui una persona e' assegnata: il
+suo ruolo, se e' il responsabile, e una riga per classificazione con i tre
+permessi. Serve a controllare la configurazione **senza entrare come lei**,
+cosa che del resto non si potrebbe fare - le password non si rileggono - e che
+comunque scriverebbe nel registro delle operazioni il nome sbagliato.
+
+Le risposte le da' `puo()`, una per casella, esattamente come le darebbe a una
+pagina vera. Se questa pagina ricalcolasse i permessi per conto suo sarebbe la
+seconda regola del programma, e una pagina che serve a controllare che le
+regole siano giuste non puo' essere l'unica a usarne una diversa.
+
+**Grafica** — una variante nuova della tabella dati, `tabella--matrice`
+(sezione 26 di `aurora.css`): intestazione su due piani, prima colonna ferma
+mentre si scorre di lato, gruppi di tre colonne separati da una riga verticale.
+Tre icone nuove - `permessi` (un lucchetto), `freccia-su`, `freccia-giu` - in
+vetrina su `/stile`, che adesso ne mostra ventisei. E un parametro in piu' su
+`modulo_pulsante`, `nome`/`valore`, per le due direzioni dello spostamento che
+sono la stessa rotta.
+
+**La barra laterale** — "Permessi" si accende, riservata al creatore. Restano
+spente Posta (sessione 10) e Diagnostica (11).
+
+### Verificato
+
+**Test automatici: 300, tutti superati** (erano 237 alla fine della sessione
+6). I 63 nuovi stanno in `tests/test_permessi.py`, diviso in nove sezioni come
+e' divisa la sessione.
+
+| Criterio di accettazione | Come e' stato verificato | Esito |
+|---|---|---|
+| Test per ogni combinazione ruolo x classificazione x azione, sul diniego diretto e sull'assenza dagli elenchi | `test_la_casella_della_matrice_decide` e `test_l_elenco_dice_la_stessa_cosa_della_scheda`, generati con `parametrize` su tre ruoli, tre azioni e le due direzioni | superato |
+| Un ingegnere non vede i documenti Commerciali: ne' in elenco, ne' in ricerca, ne' tramite indirizzo diretto | `test_un_ingegnere_non_vede_i_documenti_commerciali`, che percorre le tre strade piu' lo scarico, e la prova a mano sul server vero | superato |
+| Modifico la matrice mentre un utente e' connesso: effetto immediato senza riconnettersi | `test_la_matrice_corretta_ha_effetto_senza_riconnettersi`, con due finti browser, e la prova a mano con due sessioni HTTP aperte insieme | superato |
+| Cerco in tutto il codice le verifiche di permesso: esistono solo tramite la funzione centrale | quattro test che **leggono i sorgenti** invece del comportamento | superato |
+| 404 e non 403, con la risposta indistinguibile da quella di un identificativo inventato | `test_l_accesso_diretto_a_un_documento_non_visibile_risponde_404`, che confronta i due corpi carattere per carattere | superato |
+| Salvataggio con conferma e registrazione del valore precedente e successivo | `test_il_salvataggio_passa_da_una_conferma_e_registra_prima_e_dopo` | superato |
+| Classificazione in uso non disattivabile | `test_una_classificazione_in_uso_non_si_disattiva`, piu' la prova a mano con la richiesta costruita a mano | superato |
+
+I quattro test che leggono i sorgenti meritano una riga a parte, perche' non
+provano un comportamento: proteggono la **forma** del programma, che e' la
+regola piu' importante della sessione, e le regole di forma senza un test
+durano fino alla prossima fretta.
+
+- `test_nessun_file_legge_la_matrice_fuori_da_permissions`
+- `test_il_ruolo_globale_si_guarda_solo_dove_si_decide`
+- `test_nessun_template_contiene_una_verifica_di_permesso`
+- `test_le_rotte_chiedono_i_permessi_alla_funzione_centrale`
+
+**Prova nel browser**, con il server avviato e il database di sviluppo:
+
+| Passo | Esito |
+|---|---|
+| `/permessi` mostra 36 spunte, che sono la matrice di `seed.py` carattere per carattere | superato |
+| Cambio una casella e premo Salva: la conferma elenca **solo** quella, com'era e come diventa, e non ha scritto niente | superato |
+| Applico: la casella cambia, il registro ha `prima: can_view False` e `dopo: can_view True` con il mio nome e l'indirizzo IP | superato |
+| Creo una classificazione: nasce in fondo, con tutte e tre le caselle chiuse | superato |
+| La sposto in su: scambia il posto con la vicina, e la griglia dei permessi segue | superato |
+| Provo a disattivare "Tecnico" (6 documenti) con una richiesta scritta a mano | superato: 400 e la frase che spiega perche' |
+| Disattivo quella di prova (0 documenti): sparisce dalla griglia, resta nell'elenco come "disattivata" | superato |
+| Creo un utente, un prodotto, un progetto con lui ingegnere, e due documenti - uno Tecnico e uno Commerciale | superato |
+| Entro come l'ingegnere: l'elenco dice "1 documento trovato", c'e' lo schema e non c'e' l'offerta | superato |
+| Cerco l'offerta per titolo | superato: non la trova |
+| Apro l'indirizzo dell'offerta | superato: 404, e la risposta e' **identica** a quella di un identificativo inventato |
+| Scarico l'offerta scrivendo l'indirizzo della sua versione | superato: 404 |
+| Con l'ingegnere collegato, apro dall'altra sessione la casella (ingegnere, Commerciale, visualizza) | superato: 404 -> 200 senza che lui abbia fatto niente |
+| Richiudo la casella | superato: 200 -> 404, sempre senza riconnettersi |
+| La barra laterale dell'ingegnere | superato: quattro voci, nessuna delle cinque riservate |
+| Le cinque sezioni riservate scrivendone l'indirizzo | superato: 403 tutte e cinque |
+| `/utenti/{id}/accessi` dell'ingegnere | superato: "3 su 4", Commerciale tutto "no" |
+| `/utenti/{id}/accessi` del project manager | superato: 4 su 4 e la spiegazione dell'eccezione |
+| Nessuno scorrimento orizzontale della pagina a 1280 e a 1024 pixel; a 1024 la griglia scorre dentro il suo riquadro e la colonna dei ruoli resta ferma | superato |
+| Nessun errore nella consolle del browser, nessun errore non gestito nel registro | superato |
+
+### Difetti trovati e corretti durante la sessione
+
+1. **La condizione SQL non stava in piedi: "returned no FROM clauses due to
+   auto-correlation".** Il filtro dei documenti contiene un `EXISTS` su
+   `projects` per riconoscere il responsabile, e gli elenchi dei documenti
+   uniscono gia' `projects` per mostrare il prodotto. SQLAlchemy, vedendo la
+   stessa tabella dentro e fuori, la correlava via da tutte e due e lasciava la
+   sottointerrogazione senza niente da cui leggere.
+
+   La medicina e' `.correlate(Document)`, che dice esplicitamente **quale**
+   tabella viene da fuori. E' scritto li' accanto con il motivo, perche' e' il
+   genere di riga che al primo riordino qualcuno toglie pensando che non serva.
+
+2. **`puo(creatore, AMMINISTRARE, documento)` rispondeva di no.** Il creatore
+   veniva riconosciuto dentro ciascuna regola, una per tipo di oggetto, e la
+   regola dei documenti traduceva l'azione in una casella della matrice -
+   dove "amministrare" non esiste. Il creatore e' ora riconosciuto **in cima a
+   `puo()`**, una riga sola: ripetere il controllo dentro ogni regola vuol dire
+   che il giorno in cui se ne aggiunge una lo si puo' dimenticare, e quella
+   dimenticanza chiuderebbe fuori proprio chi amministra il programma.
+
+3. **Il caricamento su una classificazione vietata rispondeva 404.** La regola
+   del 404 e' "non rivelare che l'oggetto esiste", ma un bersaglio di
+   caricamento non e' un oggetto: e' un progetto piu' una classificazione, e
+   nessuno dei due e' un segreto. Adesso risponde 403 con la spiegazione di
+   quale permesso manca. E' la prova che la regola del 404 va applicata a
+   quello che ha un'identita' da nascondere, non a tutto.
+
+4. **La griglia mostrava anche le classificazioni disattivate.** Era stato
+   scritto con l'idea che potessero essere ancora addosso a dei documenti
+   vecchi - ma non possono: si disattivano solo quando non lo sono. Trovata
+   l'invariante, e' emerso il buco che la reggeva: **niente vietava di caricare
+   su una classificazione disattivata** costruendo la richiesta a mano. Chiuso
+   quello, la griglia ha potuto smettere di mostrarle (D-054).
+
+5. **Il test della ricerca cercava il titolo nella pagina.** La pagina della
+   ricerca riscrive nella casella quello che si e' cercato, quindi il titolo
+   dell'offerta compariva - non nella riga di un risultato, ma nel campo. Il
+   test cerca adesso il **collegamento** al documento, che c'e' solo se la riga
+   c'e'. Vale come regola per i test futuri sugli elenchi filtrati.
+
+### Scelte prese durante la sessione
+
+Quattro decisioni nuove in `docs/DECISIONI.md`, dalla D-051 alla D-054, e due
+vecchie corrette:
+
+- **D-051**, un solo punto decide i permessi, ed e' verificato leggendo i
+  sorgenti;
+- **D-052**, quello che non si puo' vedere risponde 404 - che **supera in
+  parte D-043**, dove il 403 era stato scelto con l'argomento opposto;
+- **D-053**, il project manager puo' tutto sui documenti del suo progetto;
+- **D-054**, una classificazione si disattiva, e solo se non e' in uso.
+
+**D-048 e' segnata come estesa da D-051**: diceva la cosa giusta per i
+documenti, e questa sessione l'ha allargata a tutto il programma.
+
+### Rimasto in sospeso per le sessioni successive
+
+- **Il cambio di ruolo globale di un utente non si fa.** E' in sospeso dalla
+  sessione 3 e non e' stato chiesto da questa: la matrice governa i ruoli di
+  **progetto**, che sono un'altra cosa. Chi deve diventare creatore, per
+  adesso, lo si cambia sul database.
+
+- **La squadra di un progetto avviato non si modifica dall'interfaccia.** Le
+  assegnazioni si danno all'apertura del progetto (sessione 5) e si revocano
+  solo dal codice. E' la parte della sessione 7 originale che si e' spostata
+  alla 8 insieme ai passaggi di fase, ed e' la ragione per cui la verifica a
+  mano di oggi ha dovuto aprire un progetto nuovo invece di aggiungere una
+  persona a quello che c'era.
+
+- **Nessuna colonna nuova nella matrice.** I permessi restano tre: visualizza,
+  carica, modifica. "Approva" arrivera' con il flusso di approvazione della
+  sessione 8, e sara' una colonna in piu' con la sua migrazione.
+
+- **La verifica accessi non dice il perche' di un "no".** Dice che una persona
+  non vede una classificazione, non se e' perche' la casella e' chiusa o
+  perche' manca del tutto. Con la matrice modificabile dall'interfaccia le
+  caselle non mancano piu', quindi il caso e' raro; se dovesse servire, il
+  registro lo scrive gia'.
+
+- **Sul database di sviluppo restano i dati di questa verifica**: l'utente
+  `piero.bertoli` (ingegnere, password cambiata al primo accesso), il prodotto
+  `CVT2200-48-24DC` con la sua versione 1, il progetto aperto su di lei con
+  Piero ingegnere, e due documenti - uno Tecnico e uno Commerciale. Piu' la
+  classificazione "Prova sessione 7", **disattivata**. Non si cancellano
+  (regola 5) e fanno comodo: sono il primo caso vero con due persone e due
+  classificazioni diverse, ed e' quello che serve per provare le sessioni
+  successive. Come `prova.sessione5`, `piero.bertoli` non deve esistere sul
+  server aziendale: va disattivato prima della messa in produzione.
 
 ---
 
@@ -269,11 +561,10 @@ da rileggere prima di toccare i documenti:
 
 ### Rimasto in sospeso per le sessioni successive
 
-- **La matrice dei permessi non si modifica dall'interfaccia.** Questa
+- ~~**La matrice dei permessi non si modifica dall'interfaccia.** Questa
   sessione la **legge** - ed e' la prima che la usa davvero - ma la pagina che
-  la corregge non c'e'. Fino ad allora la matrice e' quella scritta da
-  `scripts/seed.py`. Insieme a lei resta il cambio di ruolo di un utente:
-  sono in sospeso dalla sessione 3.
+  la corregge non c'e'.~~ **Fatto nella sessione 7**: `/permessi`. Resta il
+  cambio di ruolo **globale** di un utente, in sospeso dalla sessione 3.
 
 - **La presa in carico (check-out) non si fa.** Le colonne
   `checked_out_by_id` e `checked_out_at` esistono in `documents` e nessuna

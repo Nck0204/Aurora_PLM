@@ -38,6 +38,28 @@ interrotto, e non lo riferisce nessuna riga del database.
 e' un elenco di documenti che non si aprono. In produzione conviene un disco
 dedicato.
 
+## Chi vede che cosa
+
+Un utente accede a un documento se e' il **creatore**, se e' il **project
+manager** del progetto a cui il documento appartiene, oppure se e' **assegnato**
+a quel progetto e la matrice dei permessi consente al suo ruolo quell'operazione
+su quella classificazione.
+
+La matrice si corregge da <http://localhost:8000/permessi> (serve il ruolo di
+creatore): una riga per ruolo di progetto, tre spunte per classificazione. Il
+salvataggio passa da una conferma che elenca che cosa cambia, e ogni casella
+corretta finisce nel registro delle operazioni con il valore precedente e
+quello successivo. **Ha effetto subito**, anche su chi e' collegato in quel
+momento: nessuno deve uscire e rientrare.
+
+Per sapere che cosa vede una persona senza entrare con le sue credenziali:
+dall'elenco degli utenti, il pulsante **Verifica accessi**.
+
+Nel codice la regola sta in un punto solo, `app/services/permissions.py`, e ci
+si arriva sempre con `permissions.puo(db, utente, azione, oggetto)`. Non ci sono
+controlli di permesso da nessun'altra parte, nemmeno nei template: c'e' un test
+che lo verifica leggendo i sorgenti.
+
 ## Se nessuno riesce piu' a entrare
 
 Le password non si recuperano: nel database c'e' solo l'impronta argon2. Se ne

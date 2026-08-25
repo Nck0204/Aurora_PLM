@@ -947,9 +947,11 @@ def test_chi_non_e_assegnato_non_vede_i_documenti(client, db_session):
     trovati, totale = documents.cerca_documenti(db_session, estraneo)
     assert documento.id not in {trovato.id for trovato in trovati}
 
+    # 404 e non 403: chi non e' assegnato non deve nemmeno poter dedurre
+    # che quell'identificativo corrisponda a un documento (D-051).
     entra(client, estraneo.username, PASSWORD_DI_PROVA)
     risposta = client.get(f"/documenti/{documento.id}")
-    assert risposta.status_code == 403
+    assert risposta.status_code == 404
 
 
 def test_il_lettore_vede_ma_non_carica(db_session):
@@ -976,16 +978,19 @@ def test_il_lettore_vede_ma_non_carica(db_session):
     )
     db_session.flush()
 
-    permessi = permissions.permessi(
-        db_session,
-        progetto=progetto,
-        utente=lettore,
-        classification_id=classe.id,
+    bersaglio = permissions.BersaglioCaricamento(
+        progetto=progetto, classification_id=classe.id
     )
 
-    assert permessi.vedere is True
-    assert permessi.caricare is False
-    assert permessi.modificare is False
+    assert permissions.puo(
+        db_session, lettore, permissions.Azione.VEDERE, bersaglio
+    )
+    assert not permissions.puo(
+        db_session, lettore, permissions.Azione.CARICARE, bersaglio
+    )
+    assert not permissions.puo(
+        db_session, lettore, permissions.Azione.MODIFICARE, bersaglio
+    )
 
     # E infatti l'elenco glielo mostra.
     trovati, _ = documents.cerca_documenti(
@@ -1011,16 +1016,9 @@ def test_il_creatore_vede_tutto(db_session):
     )
     assert documento.id in {trovato.id for trovato in trovati}
 
-    permessi = permissions.permessi(
-        db_session,
-        progetto=progetto,
-        utente=creatore,
-        classification_id=documento.classification_id,
-    )
-    assert (permessi.vedere, permessi.caricare, permessi.modificare) == (
-        True,
-        True,
-        True,
+    assert all(
+        permissions.puo(db_session, creatore, azione, documento)
+        for azione in permissions.Azione
     )
 
 

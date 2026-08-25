@@ -1,0 +1,186 @@
+{# ===========================================================================
+   LE CLASSIFICAZIONI DEI DOCUMENTI. Riservata al creatore.
+
+   Creazione, rinomina, ordinamento e disattivazione. E' la meta' anagrafica
+   della pagina dei permessi: la matrice dice che cosa puo' fare ciascun ruolo
+   su ciascuna classe, questa dice quali sono le classi.
+
+   NON SI CANCELLA NIENTE (regola 5 di CLAUDE.md). Una classificazione che non
+   serve piu' si disattiva: sparisce dai menu a tendina e dai filtri, la riga
+   resta con le sue caselle della matrice e si puo' riattivare.
+
+   E NON SI DISATTIVA QUELLO CHE E' IN USO. La colonna "Documenti" dice quanti
+   ce l'hanno addosso: finche' quel numero non e' zero il pulsante non c'e',
+   perche' togliere la classificazione a un documento vorrebbe dire lasciarlo
+   senza la riga che dice chi lo puo' vedere.
+   =========================================================================== #}
+{% extends "base.html" %}
+
+{% from "components/campi.html" import campo, area_testo, csrf %}
+{% from "components/pulsanti.html" import pulsante, pulsante_collegamento, modulo_pulsante %}
+{% from "components/riquadro.html" import riquadro %}
+{% from "components/tabella.html" import tabella %}
+{% from "components/avvisi.html" import avviso %}
+{% from "components/stato.html" import etichetta %}
+
+{% block titolo %}Classificazioni{% endblock %}
+{% block sezione %}Permessi{% endblock %}
+
+{% block contenuto %}
+
+<div class="testata">
+    <div>
+        <h1>Classificazioni</h1>
+        <p class="sottotitolo">
+            Le classi di riservatezza dei documenti. Sono l'asse su cui gira
+            la matrice dei permessi.
+        </p>
+    </div>
+    <div class="testata-azioni">
+        {{ pulsante_collegamento("Matrice dei permessi", "/permessi",
+                                 icona_nome="permessi") }}
+    </div>
+</div>
+
+{% if errore %}
+    {{ avviso(errore, variante="errore") }}
+{% endif %}
+
+{% set colonne = [
+    {"etichetta": "Ordine", "classe": "colonna-numero"},
+    {"etichetta": "Nome"},
+    {"etichetta": "Descrizione"},
+    {"etichetta": "Documenti", "classe": "colonna-numero",
+     "titolo": "Quanti documenti hanno questa classificazione, ritirati compresi"},
+    {"etichetta": "Stato"},
+    {"etichetta": "Operazioni", "classe": "colonna-azioni"},
+] %}
+
+{% call tabella(colonne,
+                vuota=(classificazioni|length == 0),
+                messaggio_vuoto="Nessuna classificazione. Senza almeno una, "
+                                "nessun documento si puo' caricare.") %}
+    {% for classe in classificazioni %}
+    <tr>
+        <td class="colonna-numero">{{ loop.index }}</td>
+        <td>{{ classe.name }}</td>
+        <td>{{ classe.description or "" }}</td>
+        <td class="colonna-numero">{{ usi.get(classe.id, 0) }}</td>
+        <td>
+            {% if classe.is_active %}
+                {{ etichetta("attiva", variante="successo") }}
+            {% else %}
+                {{ etichetta("disattivata", variante="neutra") }}
+            {% endif %}
+        </td>
+        <td class="colonna-azioni">
+            <div class="fila-pulsanti spinge-a-destra">
+                {# Su e giu' sono due moduli POST perche' cambiano i dati:
+                   un collegamento lo seguirebbero anche i programmi che
+                   scandagliano le pagine (D-028). #}
+                {{ modulo_pulsante(request,
+                                   "/permessi/classificazioni/" ~ classe.id ~ "/sposta",
+                                   "Su",
+                                   misura="piccolo",
+                                   icona_nome="freccia-su",
+                                   titolo="Sposta in su",
+                                   nome="verso", valore="su") }}
+                {{ modulo_pulsante(request,
+                                   "/permessi/classificazioni/" ~ classe.id ~ "/sposta",
+                                   "Giu'",
+                                   misura="piccolo",
+                                   icona_nome="freccia-giu",
+                                   titolo="Sposta in giu'",
+                                   nome="verso", valore="giu") }}
+
+                {% if classe.is_active %}
+                    {% if usi.get(classe.id, 0) == 0 %}
+                        {{ modulo_pulsante(request,
+                                           "/permessi/classificazioni/" ~ classe.id ~ "/disattiva",
+                                           "Disattiva",
+                                           variante="pericolo",
+                                           misura="piccolo",
+                                           conferma="Disattivare «" ~ classe.name
+                                                    ~ "»? Sparira' dai menu a "
+                                                    "tendina. Non viene "
+                                                    "cancellato niente e si "
+                                                    "puo' riattivare.") }}
+                    {% endif %}
+                {% else %}
+                    {{ modulo_pulsante(request,
+                                       "/permessi/classificazioni/" ~ classe.id ~ "/riattiva",
+                                       "Riattiva",
+                                       misura="piccolo",
+                                       icona_nome="spunta") }}
+                {% endif %}
+            </div>
+        </td>
+    </tr>
+    {% endfor %}
+{% endcall %}
+
+<div class="griglia-riquadri margine-sopra">
+
+    {# --- Creazione --- #}
+    <form method="post" action="/permessi/classificazioni" class="modulo">
+        {{ csrf(request) }}
+
+        {% call riquadro("Aggiungi una classificazione",
+                         piede=pulsante("Crea la classificazione",
+                                        variante="primario",
+                                        icona_nome="piu")) %}
+
+            {{ campo("Nome", "nome", valore=nome_scritto, obbligatorio=true,
+                     lunghezza_massima=60,
+                     aiuto="Come compare nel menu a tendina del caricamento.") }}
+
+            {{ area_testo("Descrizione", "descrizione",
+                          valore=descrizione_scritta, righe=3,
+                          aiuto="Che cosa ci finisce dentro. Serve a chi "
+                                "carica un documento e deve scegliere.") }}
+
+            {{ avviso("Nasce chiusa a tutti: le sue tre caselle della matrice
+                      partono con i permessi a falso, per tutti e tre i ruoli.
+                      Vanno aperte dalla matrice, e finche' non lo si fa quei
+                      documenti li vedranno soltanto il project manager del
+                      progetto e chi ha il ruolo di creatore.",
+                      variante="attenzione",
+                      titolo="I permessi non si aprono da soli") }}
+
+        {% endcall %}
+    </form>
+
+    {# --- Rinomina --- #}
+    {% for classe in classificazioni %}
+    <form method="post"
+          action="/permessi/classificazioni/{{ classe.id }}/rinomina"
+          class="modulo">
+        {{ csrf(request) }}
+
+        {% call riquadro("Modifica «" ~ classe.name ~ "»",
+                         piede=pulsante("Salva", variante="primario")) %}
+
+            {# L'identificativo del campo porta dentro quello della
+               classificazione: in questa pagina i moduli sono tanti quante le
+               classi, e due campi con lo stesso id romperebbero il legame fra
+               etichetta e casella su tutti tranne il primo. #}
+            {{ campo("Nome", "nome", valore=classe.name,
+                     id="nome-" ~ classe.id,
+                     obbligatorio=true, lunghezza_massima=60) }}
+
+            {{ area_testo("Descrizione", "descrizione",
+                          id="descrizione-" ~ classe.id,
+                          valore=classe.description or "", righe=2) }}
+
+            <p class="campo-aiuto">
+                Rinominare e' sicuro: i documenti puntano alla classificazione,
+                non al suo nome. Cambia l'etichetta, non chi vede che cosa.
+            </p>
+
+        {% endcall %}
+    </form>
+    {% endfor %}
+
+</div>
+
+{% endblock %}

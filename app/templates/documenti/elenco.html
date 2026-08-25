@@ -66,7 +66,7 @@
                                      "/documenti/nuovo?progetto=" ~ progetto_scelto.id,
                                      variante="primario", icona_nome="carica") }}
         {% endif %}
-        {% if utente.is_creatore %}
+        {% if puo_amministrare %}
             {{ pulsante_collegamento("Ritirati", "/documenti/ritirati",
                                      icona_nome="cartella-vuota") }}
         {% endif %}

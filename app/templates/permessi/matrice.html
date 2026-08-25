@@ -1,0 +1,143 @@
+{# ===========================================================================
+   LA MATRICE DEI PERMESSI. Riservata al creatore.
+
+   Una riga per ruolo di progetto, un gruppo di tre spunte per ogni
+   classificazione: visualizza, carica, modifica. E' la pagina che governa chi
+   vede che cosa dentro tutta Aurora.
+
+   PERCHE' LE SPUNTE HANNO UN CAMPO NASCOSTO ACCANTO. Il browser invia una
+   casella di spunta soltanto quando e' spuntata: da un modulo con dodici
+   caselle di cui tre segnate arrivano tre campi, e le nove mancanti non si
+   distinguono da nove caselle che non c'erano. Il campo nascosto con lo stesso
+   nome piu' ".c" arriva sempre e dice "questa casella era nella pagina"; la
+   spunta dice "ed era segnata". La rotta legge i due insieme (vedi
+   _scelte_dal_modulo in app/routers/permissions.py).
+
+   IL SALVATAGGIO PORTA A UNA CONFERMA, non scrive. E' l'unica pagina di
+   Aurora in cui un clic distratto cambia i permessi di tutte le persone su
+   tutti i progetti in corso.
+   =========================================================================== #}
+{% extends "base.html" %}
+
+{% from "components/campi.html" import csrf %}
+{% from "components/pulsanti.html" import pulsante, pulsante_collegamento %}
+{% from "components/riquadro.html" import riquadro %}
+{% from "components/avvisi.html" import avviso, notifica %}
+{% from "components/stato.html" import etichetta %}
+
+{% block titolo %}Permessi{% endblock %}
+{% block sezione %}Permessi{% endblock %}
+
+{% block contenuto %}
+
+<div class="testata">
+    <div>
+        <h1>Matrice dei permessi</h1>
+        <p class="sottotitolo">
+            Che cosa puo' fare ciascun ruolo di progetto sui documenti di
+            ciascuna classificazione.
+        </p>
+    </div>
+    <div class="testata-azioni">
+        {{ pulsante_collegamento("Classificazioni", "/permessi/classificazioni",
+                                 icona_nome="documenti") }}
+    </div>
+</div>
+
+{% if salvate %}
+    {{ notifica(salvate ~ " casell" ~ ("a corretta" if salvate == 1 else "e corrette")
+                ~ ". L'effetto e' gia' attivo per tutti.") }}
+{% endif %}
+
+{% call avviso("", variante="informazione",
+               titolo="Come si legge questa griglia") %}
+    <p>
+        I permessi valgono <strong>dentro un progetto</strong>: chi non e'
+        assegnato a un progetto non ha nessun ruolo li' dentro, quindi non vede
+        nessuno dei suoi documenti, qualunque cosa dica questa griglia.
+    </p>
+    <p class="margine-sopra">
+        Fanno eccezione il <strong>project manager</strong> di un progetto, che
+        puo' tutto sui documenti del progetto di cui risponde, e chi ha il
+        ruolo di <strong>creatore</strong>, che puo' tutto dappertutto.
+    </p>
+{% endcall %}
+
+<form method="post" action="/permessi" class="modulo">
+    {{ csrf(request) }}
+
+    {% call riquadro("Ruolo per classificazione",
+                     nudo=true,
+                     piede=pulsante("Salva i permessi", variante="primario")
+                           ~ pulsante_collegamento("Annulla", "/permessi")) %}
+
+    <div class="tabella-contenitore">
+        <table class="tabella tabella--matrice">
+            <thead>
+                <tr>
+                    <th scope="col" rowspan="2">Ruolo nel progetto</th>
+                    {% for classe in classificazioni %}
+                    <th scope="col" colspan="{{ colonne_permessi|length }}"
+                        class="matrice-classe">{{ classe.name }}</th>
+                    {% endfor %}
+                </tr>
+                <tr>
+                    {% for classe in classificazioni %}
+                        {% for colonna, nome_permesso in colonne_permessi %}
+                        <th scope="col" class="matrice-permesso">
+                            {{ nome_permesso }}
+                        </th>
+                        {% endfor %}
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for ruolo in ruoli %}
+                <tr>
+                    <th scope="row">{{ nomi_ruoli[ruolo] }}</th>
+                    {% for casella in caselle if casella.project_role == ruolo %}
+                        {% for colonna, nome_permesso in colonne_permessi %}
+                        <td class="matrice-casella">
+                            {# Il campo nascosto arriva sempre; la spunta solo
+                               se e' segnata. Vedi la spiegazione in cima. #}
+                            <input type="hidden"
+                                   name="{{ casella.nome_campo }}:{{ colonna }}.c"
+                                   value="1">
+                            <input type="checkbox"
+                                   id="{{ casella.nome_campo }}:{{ colonna }}"
+                                   name="{{ casella.nome_campo }}:{{ colonna }}"
+                                   value="si"
+                                   {% if casella|attr(colonna) %}checked{% endif %}
+                                   aria-label="{{ nomi_ruoli[ruolo] }}, {{ casella.classificazione.name }}, {{ nome_permesso }}">
+                        </td>
+                        {% endfor %}
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    {% endcall %}
+</form>
+
+{% call riquadro("Che cosa vuol dire ciascun permesso") %}
+    <dl class="descrizione descrizione--righe">
+        {% for nome_permesso, spiegazione in significato %}
+        <dt>{{ nome_permesso }}</dt>
+        <dd>{{ spiegazione }}</dd>
+        {% endfor %}
+    </dl>
+
+    <p class="campo-aiuto margine-sopra">
+        Una casella corretta ha effetto <strong>subito</strong>, anche su chi
+        e' collegato in questo momento: i permessi si rileggono a ogni pagina,
+        non si tengono in memoria. Nessuno deve uscire e rientrare.
+    </p>
+    <p class="campo-aiuto">
+        Ogni casella cambiata viene registrata nel registro delle operazioni
+        con il valore precedente e quello successivo.
+    </p>
+{% endcall %}
+
+{% endblock %}

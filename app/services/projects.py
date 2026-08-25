@@ -20,6 +20,12 @@ costruito sulle sue assegnazioni non revocate. Non e' un filtro grafico: la
 riga che non gli spetta non esce nemmeno dal database. Il creatore fa
 eccezione e li vede tutti, perche' e' lui che li apre e che assegna le
 persone.
+
+**La regola non e' scritta qui.** Chi vede un progetto lo decide
+`permissions.puo()`, come per qualunque altro permesso di Aurora, e la
+condizione SQL degli elenchi e' `permissions.filtro_progetti()`, che e' la
+stessa regola riscritta (D-051). Qui si mette il filtro
+nell'interrogazione, non si stabilisce che cosa filtri.
 """
 
 import logging
@@ -41,7 +47,7 @@ from app.models import (
     ProjectRole,
     User,
 )
-from app.services import audit, lifecycle
+from app.services import audit, lifecycle, permissions
 
 logger = logging.getLogger("aurora.progetti")
 
@@ -119,26 +125,16 @@ def utente_assegnato(db: Session, project_id: uuid.UUID, user_id: uuid.UUID) -> 
     )
 
 
-def puo_vedere(db: Session, progetto: Project, utente: User) -> bool:
-    """Dice se questa persona puo' aprire la scheda di questo progetto.
-
-    E' la stessa regola del cruscotto, scritta per un progetto solo: chi non
-    lo vedrebbe nell'elenco non lo apre nemmeno scrivendone l'indirizzo a
-    mano. Le due strade devono dire la stessa cosa, altrimenti l'elenco
-    diventa una tenda invece che una porta chiusa.
-    """
-    if utente.is_creatore:
-        return True
-    return utente_assegnato(db, progetto.id, utente.id)
-
-
 def _progetti_visibili(utente: User) -> Select[tuple[Project]]:
     """L'interrogazione di partenza del cruscotto, gia' ristretta all'utente.
 
-    Il creatore vede tutto. Gli altri vedono i progetti su cui hanno
-    un'assegnazione non revocata: l'unione con assignments e' il filtro, e non
-    c'e' nessun modo di dimenticarselo, perche' senza di essa
-    l'interrogazione non sta nemmeno in piedi.
+    Il filtro e' `permissions.filtro_progetti()`, cioe' la stessa regola che
+    risponde quando si apre la scheda di un progetto solo. Qui non si decide
+    niente: si mette la condizione, e la si mette in un punto solo, cosi' chi
+    parte da questa funzione non se la puo' dimenticare.
+
+    Restituisce None per il creatore, che vede tutto: in quel caso
+    all'interrogazione non si aggiunge nessuna condizione.
     """
     interrogazione = (
         select(Project)
@@ -146,15 +142,11 @@ def _progetti_visibili(utente: User) -> Select[tuple[Project]]:
         .join(Product, ProductVersion.product_id == Product.id)
     )
 
-    if utente.is_creatore:
-        return interrogazione
+    filtro = permissions.filtro_progetti(utente)
+    if filtro is not None:
+        interrogazione = interrogazione.where(filtro)
 
-    return interrogazione.join(
-        Assignment,
-        (Assignment.project_id == Project.id)
-        & (Assignment.user_id == utente.id)
-        & (Assignment.revoked_at.is_(None)),
-    )
+    return interrogazione
 
 
 def cruscotto(

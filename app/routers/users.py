@@ -3,6 +3,7 @@
     GET  /utenti                       elenco degli utenti, con stato e ruolo
     GET  /utenti/nuovo                 modulo di creazione
     POST /utenti/nuovo                 crea l'utente e mostra la sua password
+    GET  /utenti/{id}/accessi          a che cosa questa persona ha accesso
     POST /utenti/{id}/reimposta        assegna una password nuova
     POST /utenti/{id}/disattiva        toglie l'utente dal servizio
     POST /utenti/{id}/riattiva         lo rimette in servizio
@@ -34,7 +35,8 @@ from sqlalchemy.orm import Session
 from app.db import get_db
 from app.dependencies import richiedi_creatore
 from app.models import GlobalRole, User
-from app.services import auth, users
+from app.routers import permissions as router_permessi
+from app.services import auth, permissions, users
 from app.templating import pagina
 
 logger = logging.getLogger("aurora.rotte.utenti")
@@ -48,6 +50,12 @@ router = APIRouter(
 )
 
 MESSAGGIO_UTENTE_INESISTENTE = "L'utente richiesto non esiste."
+
+# I nomi in italiano dei ruoli di progetto, per la pagina di verifica degli
+# accessi. Sono gli stessi della griglia dei permessi, e si leggono da li':
+# due elenchi di etichette per gli stessi tre valori divergono alla prima
+# rinomina.
+NOMI_RUOLI_PROGETTO = router_permessi.NOMI_RUOLI
 
 
 def _utente_o_404(db: Session, user_id: uuid.UUID) -> User:
@@ -73,7 +81,15 @@ def elenco(request: Request, db: Session = Depends(get_db)) -> Response:
     # accorgersi che una persona e' entrata da qualche parte e non e' uscita.
     sessioni = {u.id: auth.conta_sessioni_attive(db, u.id) for u in elencati}
 
-    return pagina(request, "utenti/elenco.html", utenti=elencati, sessioni=sessioni)
+    return pagina(
+        request,
+        "utenti/elenco.html",
+        utenti=elencati,
+        sessioni=sessioni,
+        # L'etichetta del ruolo arriva gia' composta: nel template non ci
+        # sono ne' condizioni sul ruolo ne' scelte di tinta (D-051).
+        ruoli={u.id: users.ruolo_mostrato(u) for u in elencati},
+    )
 
 
 # --- Creazione --------------------------------------------------------------
@@ -152,8 +168,46 @@ def crea_nuovo(
         request,
         "utenti/password.html",
         utente_creato=utente,
+        ruolo=users.ruolo_mostrato(utente),
         password=password,
         appena_creato=True,
+    )
+
+
+# --- Verifica degli accessi -------------------------------------------------
+
+
+@router.get("/{user_id}/accessi")
+def accessi(
+    request: Request,
+    user_id: uuid.UUID,
+    db: Session = Depends(get_db),
+) -> Response:
+    """A quali progetti e classificazioni questa persona ha accesso.
+
+    Serve a controllare la configurazione **senza entrare come lei**, cosa che
+    del resto non si potrebbe fare: le password non si rileggono, e anche
+    potendo, ogni riga che quella sessione scrivesse nel registro delle
+    operazioni porterebbe il nome sbagliato.
+
+    Le risposte le da' permissions.puo(), una casella per volta, esattamente
+    come le darebbe alle pagine vere. Una pagina che serve a verificare che le
+    regole siano giuste non puo' essere l'unica a usarne una diversa (D-051).
+    """
+    utente = _utente_o_404(db, user_id)
+
+    return pagina(
+        request,
+        "utenti/accessi.html",
+        persona=utente,
+        ruolo=users.ruolo_mostrato(utente),
+        accessi=permissions.verifica_accessi(db, utente),
+        # Il creatore vede tutto per definizione: la pagina lo scrive invece
+        # di far dedurre a chi guarda che l'elenco dei progetti sia tutto.
+        vede_tutto=permissions.puo(
+            db, utente, permissions.Azione.AMMINISTRARE, permissions.AMMINISTRAZIONE
+        ),
+        nomi_ruoli=NOMI_RUOLI_PROGETTO,
     )
 
 
@@ -182,6 +236,7 @@ def reimposta(
         request,
         "utenti/password.html",
         utente_creato=utente,
+        ruolo=users.ruolo_mostrato(utente),
         password=password,
         appena_creato=False,
     )
@@ -252,4 +307,5 @@ def _elenco_con_errore(request: Request, db: Session, messaggio: str) -> Respons
         errore=messaggio,
         utenti=elencati,
         sessioni=sessioni,
+        ruoli={u.id: users.ruolo_mostrato(u) for u in elencati},
     )

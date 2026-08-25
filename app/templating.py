@@ -25,6 +25,7 @@ from app.navigation import (
     voci_visibili,
 )
 from app.services.csrf import token_csrf
+from app.services.users import ruolo_mostrato
 
 templates = Jinja2Templates(directory=PROJECT_ROOT / "app" / "templates")
 
@@ -44,7 +45,7 @@ def pagina(
 ) -> Response:
     """Compone una pagina HTML aggiungendo il contesto comune a tutte.
 
-    Il contesto comune e' di cinque voci:
+    Il contesto comune e' di sette voci:
 
       app_name          il nome del programma, che compare nel titolo della
                         finestra e nella barra laterale;
@@ -56,7 +57,15 @@ def pagina(
                         (vedi app/navigation.py). Il template le disegna e
                         basta: non decide chi puo' vedere che cosa;
       sezione           il percorso della voce di menu da segnare come
-                        corrente.
+                        corrente;
+      puo_amministrare  se chi guarda puo' aprire le sezioni riservate. E'
+                        gia' la risposta di permissions.puo(), calcolata da
+                        app/dependencies.py: i template la usano per sapere
+                        se disegnare un pulsante, **non** per decidere se
+                        qualcuno ha diritto a qualcosa. Quella decisione e'
+                        gia' stata presa (D-051);
+      ruolo_utente      il nome del ruolo globale di chi guarda, per la barra
+                        in cima. E' testo da mostrare, non un permesso.
 
     **Due nomi sono occupati e non si possono usare nel contesto.** Questa
     funzione ha due parametri suoi, "nome" (il file del template) e "stato"
@@ -75,12 +84,22 @@ def pagina(
     passarlo.
     """
     utente = getattr(request.state, "utente", None)
+    puo_amministrare = bool(getattr(request.state, "puo_amministrare", False))
 
     contesto.setdefault("app_name", settings.APP_NAME)
     contesto.setdefault("utente", utente)
-    contesto.setdefault("voci_menu", voci_visibili(MENU_PRINCIPALE, utente))
+    contesto.setdefault("puo_amministrare", puo_amministrare)
     contesto.setdefault(
-        "voci_menu_servizio", voci_visibili(MENU_SERVIZIO, utente)
+        "ruolo_utente",
+        ruolo_mostrato(utente).testo if utente is not None else None,
+    )
+    contesto.setdefault(
+        "voci_menu",
+        voci_visibili(MENU_PRINCIPALE, utente, puo_amministrare),
+    )
+    contesto.setdefault(
+        "voci_menu_servizio",
+        voci_visibili(MENU_SERVIZIO, utente, puo_amministrare),
     )
     contesto.setdefault("sezione", sezione_corrente(request.url.path))
 

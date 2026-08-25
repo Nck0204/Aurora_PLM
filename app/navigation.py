@@ -10,8 +10,13 @@ va scritto in un posto in cui si aggiorna cancellando una riga.
 
 **Nascondere una voce non protegge niente.** Il controllo che conta e' la
 dipendenza dichiarata sulla rotta (`richiedi_login`, `richiedi_creatore` in
-app/dependencies.py): quello e' il lucchetto. Il menu si limita a non mostrare
-le porte che non si aprirebbero comunque, cosi' nessuno ci va a sbattere.
+app/dependencies.py), che a sua volta chiede a `permissions.puo()`: quello e'
+il lucchetto. Il menu si limita a non mostrare le porte che non si aprirebbero
+comunque, cosi' nessuno ci va a sbattere.
+
+Per la stessa ragione qui dentro **non si guarda il ruolo di nessuno**: la
+risposta arriva gia' fatta da chi l'ha chiesta a `permissions.puo()`, e questo
+file la usa e basta (D-051).
 
 Quando una sezione viene realizzata si toglie `attiva=False` dalla sua voce e
 si mette il percorso giusto. E' l'unica modifica necessaria: la barra laterale
@@ -89,6 +94,13 @@ MENU_PRINCIPALE: tuple[VoceMenu, ...] = (
         solo_creatore=True,
     ),
     VoceMenu(
+        etichetta="Permessi",
+        percorso="/permessi",
+        icona="permessi",
+        attiva=True,
+        solo_creatore=True,
+    ),
+    VoceMenu(
         etichetta="Diagnostica",
         percorso="/diagnostica",
         icona="diagnostica",
@@ -112,21 +124,25 @@ MENU_SERVIZIO: tuple[VoceMenu, ...] = (
 
 
 def voci_visibili(
-    voci: tuple[VoceMenu, ...], utente: User | None
+    voci: tuple[VoceMenu, ...],
+    utente: User | None,
+    puo_amministrare: bool = False,
 ) -> list[VoceMenu]:
     """Le voci che questo utente puo' vedere.
 
     Chi non e' entrato non vede niente: la barra laterale esiste solo dentro
     il programma, e le pagine di accesso non ce l'hanno.
+
+    "puo_amministrare" arriva gia' calcolato da app/dependencies.py, che l'ha
+    chiesto a permissions.puo(). Qui non si guarda nessun ruolo apposta: se
+    questa funzione decidesse per conto suo chi e' creatore, sarebbe la
+    seconda regola di accesso del programma, e la prima volta che cambia
+    l'altra questa resterebbe indietro.
     """
     if utente is None:
         return []
 
-    return [
-        voce
-        for voce in voci
-        if not voce.solo_creatore or utente.is_creatore
-    ]
+    return [voce for voce in voci if not voce.solo_creatore or puo_amministrare]
 
 
 def sezione_corrente(percorso: str) -> str | None:

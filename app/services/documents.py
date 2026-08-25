@@ -199,9 +199,14 @@ def _visibili(utente: User) -> Select[tuple[Document]]:
     """L'interrogazione di partenza degli elenchi, gia' ristretta all'utente.
 
     Toglie i documenti ritirati e applica il filtro dei permessi
-    (app/services/permissions.py). E' l'unico punto in cui i due filtri
+    (permissions.filtro_documenti). E' l'unico punto in cui i due filtri
     vengono messi: chi parte da qui non se li puo' dimenticare, che e' lo
     stesso principio di _progetti_visibili() nella sessione 5 (D-043).
+
+    Il filtro dei permessi e' la stessa regola di permissions.puo(), scritta
+    come SQL: cosi' l'elenco e la scheda non possono divergere, e il conteggio
+    che sta sopra l'elenco conta esattamente le righe che l'elenco mostra
+    (D-051).
     """
     interrogazione = (
         select(Document)
@@ -209,7 +214,7 @@ def _visibili(utente: User) -> Select[tuple[Document]]:
         .where(Document.deleted_at.is_(None))
     )
 
-    filtro = permissions.filtro_visibilita(utente)
+    filtro = permissions.filtro_documenti(utente)
     if filtro is not None:
         interrogazione = interrogazione.where(filtro)
 

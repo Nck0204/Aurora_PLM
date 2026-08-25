@@ -1,0 +1,146 @@
+{# ===========================================================================
+   VERIFICA DEGLI ACCESSI DI UNA PERSONA. Riservata al creatore.
+
+   A quali progetti e a quali classificazioni questa persona ha accesso, e con
+   quali permessi. Serve a controllare la configurazione **senza entrare come
+   lei**: le password non si rileggono, e anche potendo, ogni riga scritta nel
+   registro delle operazioni da quella sessione porterebbe il nome sbagliato.
+
+   LE RISPOSTE ARRIVANO DA permissions.puo(), una per casella, come le
+   riceverebbero le pagine vere. Una pagina che serve a verificare che le
+   regole siano giuste non puo' essere l'unica a usarne una diversa (D-051).
+   Qui dentro non c'e' nessun calcolo: si disegna quello che la rotta ha gia'
+   chiesto.
+   =========================================================================== #}
+{% extends "base.html" %}
+
+{% from "components/pulsanti.html" import pulsante_collegamento %}
+{% from "components/riquadro.html" import riquadro %}
+{% from "components/tabella.html" import tabella %}
+{% from "components/descrizione.html" import descrizione, voce %}
+{% from "components/stato.html" import etichetta, etichetta_utente %}
+{% from "components/avvisi.html" import avviso %}
+{% from "components/vuoto.html" import vuoto %}
+
+{% block titolo %}Accessi di {{ persona.full_name }}{% endblock %}
+{% block sezione %}Utenti{% endblock %}
+
+{% block contenuto %}
+
+<div class="testata">
+    <div>
+        <h1>Accessi di {{ persona.full_name }}</h1>
+        <p class="sottotitolo">
+            Che cosa questa persona vede e puo' fare, progetto per progetto e
+            classificazione per classificazione.
+        </p>
+    </div>
+    <div class="testata-azioni">
+        {{ pulsante_collegamento("Torna agli utenti", "/utenti",
+                                 icona_nome="freccia-sinistra") }}
+    </div>
+</div>
+
+{% call riquadro("La persona") %}
+    {% call descrizione() %}
+        {{ voce("Nome e cognome", persona.full_name) }}
+        {{ voce("Nome utente", persona.username, monospazio=true) }}
+        {{ voce("Ruolo globale", etichetta(ruolo.testo, variante=ruolo.variante)) }}
+        {{ voce("Stato", etichetta_utente(persona)) }}
+        {{ voce("Progetti assegnati", accessi|length) }}
+    {% endcall %}
+{% endcall %}
+
+{% if vede_tutto %}
+    {% call avviso("", variante="attenzione",
+                   titolo="Questa persona ha il ruolo di creatore") %}
+        <p>
+            Vede <strong>tutti</strong> i progetti e <strong>tutti</strong> i
+            documenti di Aurora, compresi quelli ritirati, e puo' farci
+            qualunque cosa. La matrice dei permessi non la riguarda.
+        </p>
+        <p class="margine-sopra">
+            L'elenco qui sotto e' quello dei progetti su cui ha
+            un'assegnazione o di cui e' responsabile: non e' il limite di
+            quello che vede.
+        </p>
+    {% endcall %}
+{% endif %}
+
+{% if accessi %}
+
+    {% for accesso in accessi %}
+
+    {% set titolo_progetto = accesso.progetto.product_version.product.code
+                             ~ " · versione "
+                             ~ accesso.progetto.product_version.version_number %}
+
+    {% call riquadro(titolo_progetto,
+                     azioni=pulsante_collegamento("Apri il progetto",
+                                                  "/progetti/" ~ accesso.progetto.id,
+                                                  misura="piccolo",
+                                                  icona_nome="progetti")) %}
+
+        {% call descrizione() %}
+            {{ voce("Ruolo nel progetto",
+                    nomi_ruoli[accesso.ruolo] if accesso.ruolo else none) }}
+            {{ voce("Responsabile del progetto",
+                    etichetta("si", variante="accento")
+                    if accesso.e_responsabile else "no") }}
+            {{ voce("Classificazioni che vede",
+                    accesso.documenti_visibili ~ " su " ~ accesso.righe|length) }}
+        {% endcall %}
+
+        {% if accesso.e_responsabile %}
+            {{ avviso("E' il project manager di questo progetto, quindi puo'
+                      tutto sui suoi documenti qualunque cosa dica la matrice.
+                      Chi risponde di un progetto risponde anche delle offerte
+                      e dei contratti che ci stanno dentro.",
+                      variante="informazione") }}
+        {% endif %}
+
+        {% set colonne = [
+            {"etichetta": "Classificazione"},
+            {"etichetta": "Visualizza"},
+            {"etichetta": "Carica"},
+            {"etichetta": "Modifica"},
+        ] %}
+
+        {% call tabella(colonne,
+                        vuota=(accesso.righe|length == 0),
+                        messaggio_vuoto="Nessuna classificazione attiva.") %}
+            {% for riga in accesso.righe %}
+            <tr>
+                <td>{{ riga.classificazione.name }}</td>
+                <td>{{ etichetta("si", variante="successo")
+                       if riga.vedere else etichetta("no", variante="neutra") }}</td>
+                <td>{{ etichetta("si", variante="successo")
+                       if riga.caricare else etichetta("no", variante="neutra") }}</td>
+                <td>{{ etichetta("si", variante="successo")
+                       if riga.modificare else etichetta("no", variante="neutra") }}</td>
+            </tr>
+            {% endfor %}
+        {% endcall %}
+
+    {% endcall %}
+
+    {% endfor %}
+
+{% elif not vede_tutto %}
+
+    {{ vuoto("Nessun accesso",
+             "Questa persona non e' assegnata a nessun progetto e non e'
+             responsabile di nessuno, quindi non vede nessun documento di
+             Aurora. Le assegnazioni si danno dalla scheda di un progetto.",
+             icona_nome="cartella-vuota") }}
+
+{% endif %}
+
+<p class="testo-tenue testo-piccolo margine-sopra">
+    Questa pagina non e' una copia dei permessi: e' il risultato di averli
+    chiesti uno per uno alla stessa funzione a cui li chiedono le pagine vere.
+    Se qui c'e' scritto «no», quella persona riceve un 404 anche scrivendo
+    l'indirizzo del documento a mano.
+</p>
+
+{% endblock %}

@@ -29,8 +29,10 @@ l'azienda ha chiesto per prime:
      nel registro di audit **come azione di sistema**, cioe' senza autore
      (audit_logs.user_id resta nullo: vedi docs/MODELLO_DATI.md, 4.9).
 
-  3. **Chi puo' cambiare stato**: il creatore e il project manager del
-     progetto aperto su quella versione. Nessun altro.
+  3. **Chi puo' cambiare stato** non si decide piu' qui: lo decide
+     permissions.puo(), come ogni altro permesso di Aurora (D-051). La
+     risposta e' la stessa di prima - il creatore e il project manager del
+     progetto aperto su quella versione - ma sta scritta in un posto solo.
 
 La conferma che l'utente vede prima di rilasciare - "attenzione, la versione
 1 passera' a superato" - la costruisce la rotta usando le stesse due funzioni
@@ -193,29 +195,18 @@ def stati_raggiungibili(da: LifecycleState) -> tuple[LifecycleState, ...]:
 
 
 # ---------------------------------------------------------------------------
-#  2. CHI PUO' CAMBIARE STATO
+#  2. CHI PUO' CAMBIARE STATO: NON E' PIU' AFFARE DI QUESTO FILE
 # ---------------------------------------------------------------------------
-
-
-def puo_cambiare_stato(versione: ProductVersion, utente: User) -> bool:
-    """Vero per il creatore e per il project manager del progetto.
-
-    Il progetto e' quello aperto su **questa** versione: il legame e' uno a
-    uno (projects.product_version_id e' unico). Una versione su cui non e'
-    ancora stato aperto nessun progetto la muove solo il creatore, perche'
-    non c'e' ancora nessun responsabile a cui la decisione appartenga.
-    """
-    if utente.is_creatore:
-        return True
-
-    progetto = versione.project
-    return progetto is not None and progetto.project_manager_id == utente.id
-
-
-MESSAGGIO_NON_AUTORIZZATO = (
-    "Il ciclo di vita di una versione lo cambiano il project manager del suo "
-    "progetto e chi ha il ruolo di creatore."
-)
+#
+# Fino alla sessione 6 qui c'era puo_cambiare_stato(), che rispondeva "il
+# creatore e il project manager del progetto". Dalla sessione 7 quella
+# risposta la da' permissions.puo(db, utente, Azione.MODIFICARE, versione),
+# come ogni altro permesso di Aurora (D-051).
+#
+# Non e' stato spostato per ordine: e' che una regola di accesso in piu' in un
+# file che parla d'altro e' una regola che nessuno rilegge quando cambiano le
+# altre. Qui restano i grafi delle transizioni, che sono il mestiere di questo
+# file e non hanno niente a che vedere con chi ha il permesso di percorrerle.
 
 
 # ---------------------------------------------------------------------------

@@ -1161,7 +1161,8 @@ anche i pulsanti senza toccare nessun template.
 
 ## D-043 — Chi non e' assegnato a un progetto non lo vede
 
-**Data:** 25 agosto 2026 · **Stato:** attiva
+**Data:** 25 agosto 2026 · **Stato:** attiva, tranne l'ultimo paragrafo,
+**superato da D-052**
 
 **Decisione.** Il cruscotto e l'elenco dei progetti mostrano solo i progetti
 su cui chi guarda ha un'**assegnazione non revocata**. Il filtro e'
@@ -1189,10 +1190,16 @@ rispetta revocando quella precedente invece di aggiungerne una seconda. La
 riga revocata resta in tabella con la sua data: "chi aveva accesso a questo
 progetto in marzo" e' una domanda a cui si deve poter rispondere.
 
-Il 404 e il 403 restano distinti: "non esiste" e "esiste ma non e' tuo" sono
+~~Il 404 e il 403 restano distinti: "non esiste" e "esiste ma non e' tuo" sono
 due cose diverse. Nascondere la seconda dietro la prima sembra piu' prudente,
 ma manda chi ha davvero bisogno di quel progetto a cercare un guasto che non
-c'e', invece che a chiedere l'assegnazione.
+c'e', invece che a chiedere l'assegnazione.~~
+
+**Superato da D-052** (25 agosto 2026, sessione 7): un progetto che non si puo'
+vedere risponde **404**, con lo stesso messaggio di uno che non esiste. Il
+ragionamento qui sopra vale per chi si e' perso, ma non per chi prova gli
+indirizzi uno per uno: per lui la differenza fra le due risposte e' l'elenco
+dei progetti dell'azienda.
 
 ---
 
@@ -1357,7 +1364,7 @@ deduplicazione lo riusa.
 
 ## D-048 — I permessi sui documenti si leggono dalla matrice, in un posto solo
 
-**Data:** 25 agosto 2026 · **Stato:** attiva
+**Data:** 25 agosto 2026 · **Stato:** attiva, **estesa da D-051**
 
 **Decisione.** Chi puo' vedere, caricare e modificare un documento lo dice la
 casella di `permission_rules` all'incrocio fra il **ruolo che la persona ha in
@@ -1384,10 +1391,16 @@ caricamento, propone **solo** le classificazioni con cui quella persona puo'
 davvero caricare: proporne una con cui il caricamento verrebbe poi rifiutato
 vuol dire far perdere a qualcuno l'attesa di un file da 300 MB.
 
-**La matrice non si modifica dall'interfaccia.** Questa sessione la legge e
+~~**La matrice non si modifica dall'interfaccia.** Questa sessione la legge e
 basta: la pagina che la corregge e' rimasta in sospeso dalla sessione 3 ed e'
 segnata in `docs/STATO.md`. Fino ad allora la matrice e' quella scritta da
-`scripts/seed.py`.
+`scripts/seed.py`.~~
+
+**Fatto nella sessione 7**: la matrice si corregge da `/permessi`, con una
+conferma e una riga di registro per casella. Nella stessa sessione D-051 ha
+allargato il principio di questa decisione a **tutti** i permessi di Aurora, e
+`permessi()` e `filtro_visibilita()` sono diventate `puo()`, `pretendi()`,
+`filtro_documenti()` e `filtro_progetti()`.
 
 ---
 
@@ -1445,3 +1458,174 @@ una chiave esterna: togliendo una voce dal file, i documenti che l'avevano
 continuano a mostrare il loro tipo, semplicemente non lo si puo' piu' scegliere
 per un documento nuovo. E' la regola generale del modello - un dato scritto nel
 database si mostra sempre, anche quando non lo si sa piu' spiegare.
+
+---
+
+## D-051 — Un solo punto decide i permessi: `permissions.puo()`
+
+**Data:** 25 agosto 2026 · **Stato:** attiva
+
+**Decisione.** Tutte le domande di permesso di Aurora passano da una funzione
+sola:
+
+```python
+permissions.puo(db, utente, Azione.VEDERE, documento)
+```
+
+Non ci sono altre strade. La funzione tratta cinque tipi di oggetto - un
+documento, un bersaglio di caricamento (progetto + classificazione), un
+progetto, una versione di prodotto e la sentinella `AMMINISTRAZIONE` per le
+sezioni riservate al creatore - e su un oggetto che non conosce risponde
+**no**, scrivendolo nel registro.
+
+Da questa decisione discendono quattro cose:
+
+- `projects.puo_vedere()` e `lifecycle.puo_cambiare_stato()` **non esistono
+  piu'**: erano la stessa domanda posta in due file che parlano d'altro;
+- `richiedi_creatore` non confronta piu' un ruolo: chiede a `puo()`;
+- `navigation.voci_visibili()` non guarda piu' il ruolo di nessuno: riceve la
+  risposta gia' fatta;
+- **nei template non c'e' piu' nessuna verifica di permesso.** Le pagine
+  ricevono booleani gia' decisi (`puo_amministrare`, `permessi.caricare`) e li
+  usano per sapere se disegnare un pulsante.
+
+`filtro_documenti()` e `filtro_progetti()` sono la stessa regola scritta come
+condizione SQL per gli elenchi, e stanno nello stesso file a poche righe di
+distanza.
+
+**Motivazione.** Le regole di accesso sbagliate non si vedono. Un elenco che
+mostra una riga di troppo sembra un elenco normale, e chi lo guarda non ha modo
+di accorgersene: non c'e' nessuna schermata rossa, nessun errore nel registro,
+nessun utente che si lamenta - anzi, chi ne approfitta sta zitto. E' l'esatto
+contrario di un difetto di calcolo, che salta fuori il primo giorno.
+
+L'unica difesa contro un difetto che non si vede e' che la regola stia in un
+punto solo, dove si legge tutta insieme e dove un test la puo' esercitare in
+tutte le sue combinazioni. Con la regola sparsa in sei file, la domanda "chi
+vede i documenti commerciali?" ha sei risposte che si possono contraddire, e
+nessun modo di accorgersene se non provandole tutte.
+
+Sulle due forme - `puo()` e i filtri SQL - vale quello che diceva gia' D-048:
+sono due scritture della stessa domanda, e devono partire dalla stessa tabella
+nello stesso file, dove chi cambia una si accorge dell'altra. La sessione 7
+aggiunge la verifica: `tests/test_permessi.py` le confronta su tutte le
+combinazioni di ruolo, classificazione e azione, e controlla anche il
+**conteggio** - un documento nascosto che comparisse nel totale direbbe il
+numero esatto delle cose che non si dovrebbero sapere.
+
+Sui template: un `{% if utente.is_creatore %}` dentro una pagina e' la peggiore
+delle verifiche di permesso, perche' non protegge niente - la rotta si apre lo
+stesso scrivendone l'indirizzo - e sembra che protegga. Toglierli tutti serve
+anche a un secondo scopo: quello che resta in un template si legge come
+disegno, e un `{% if %}` che riapparisse si noterebbe.
+
+**Conseguenza.** Quattro test di `tests/test_permessi.py` non guardano il
+comportamento ma **leggono i sorgenti**: nessun file fuori da `permissions.py`
+interroga `permission_rules`, nessuna rotta guarda `is_creatore` o
+`global_role`, nessun template contiene una di quelle parole, e ogni router che
+tocca i permessi nomina `permissions`. Sono test di forma, e le regole di forma
+senza un test durano fino alla prossima fretta.
+
+L'etichetta del ruolo globale, dove va **mostrata**, si compone in
+`users.ruolo_mostrato()`: e' testo e un colore, non un permesso, e passa dal
+servizio per la stessa regola di CLAUDE.md per cui un menu a tendina si compone
+in Python.
+
+---
+
+## D-052 — Quello che non si puo' vedere risponde 404, non 403
+
+**Data:** 25 agosto 2026 · **Stato:** attiva · **supera in parte D-043**
+
+**Decisione.** Chiedendo un documento, un progetto o una versione che la
+persona **non ha il permesso di vedere**, Aurora risponde **404** con lo stesso
+messaggio, parola per parola, che avrebbe dato per un identificativo
+inesistente. Il **403** resta per il caso diverso: l'oggetto lo si vede gia' e
+manca il permesso per quella operazione - cambiarne lo stato, caricare una
+versione, ritirarlo. La distinzione la fa `permissions.pretendi()`, in un punto
+solo.
+
+Un bersaglio di caricamento riceve sempre 403 e mai 404: e' un progetto piu'
+una classificazione, e nessuno dei due e' un segreto.
+
+**Motivazione.** D-043 aveva scelto il 403 anche per il primo caso, con
+l'argomento che "non esiste" e "esiste ma non e' tuo" sono due cose diverse e
+che nasconderle una dietro l'altra manda chi ha davvero bisogno di quel
+documento a cercare un guasto invece che a chiedere il permesso. L'argomento e'
+giusto per chi si e' perso, ma non regge davanti a chi non si e' perso affatto:
+il 403 e' una risposta che **conferma**. Chi prova mille identificativi di fila
+e guarda quali rispondono 403 e quali 404 si costruisce l'elenco di quello che
+non deve sapere - quali codici sono stati assegnati, quanti progetti sono
+aperti, quando ne nasce uno nuovo - senza vederne nemmeno uno.
+
+Il messaggio dev'essere identico e non soltanto simile, ed e' il motivo per cui
+sta in `permissions.py` e non nelle rotte: due frasi scritte in due posti
+diversi finiscono per differire di una virgola, e quella virgola dice tutto.
+
+**Conseguenza.** Il paragrafo finale di D-043 e' superato. Chi ha davvero
+bisogno di un documento che riceve 404 lo scoprira' chiedendo, e chi lo
+amministra ha la pagina di **verifica accessi** (`/utenti/{id}/accessi`) per
+rispondergli senza dover entrare con le sue credenziali.
+
+---
+
+## D-053 — Il project manager puo' tutto sui documenti del suo progetto
+
+**Data:** 25 agosto 2026 · **Stato:** attiva
+
+**Decisione.** Chi e' scritto in `projects.project_manager_id` ha accesso
+completo a **tutti** i documenti di quel progetto, qualunque cosa dica la
+matrice. L'eccezione vale per il **responsabile di quel progetto**, non per
+chiunque abbia il ruolo di progetto `project_manager`: per quest'ultimo decide
+la matrice, come per tutti gli altri.
+
+**Motivazione.** Il responsabile di un progetto risponde di tutto quello che
+c'e' dentro, comprese le offerte, i contratti e la corrispondenza commerciale.
+Una matrice che gli nascondesse un documento del suo progetto sarebbe una
+matrice sbagliata, e il modo di scoprirlo sarebbe una telefonata il giorno in
+cui serve il documento.
+
+Sulla distinzione fra "il responsabile" e "chi ha quel ruolo": se bastasse
+avere il ruolo `project_manager` in un progetto per passare sopra le caselle,
+la riga `project_manager` della griglia non deciderebbe piu' niente, e chi la
+corregge lo farebbe a vuoto senza che nessuno glielo dica. Una casella che non
+governa niente e' peggio di una casella che manca.
+
+**Conseguenza.** L'eccezione e' scritta due volte, come tutte le regole di
+accesso: dentro `puo()` e dentro `filtro_documenti()`, dove diventa il primo
+dei due `EXISTS`. C'e' un test che verifica che le due scritture concordino, e
+uno che verifica che un secondo project manager assegnato al progetto segua
+invece la matrice.
+
+---
+
+## D-054 — Una classificazione si disattiva, e solo se non e' in uso
+
+**Data:** 25 agosto 2026 · **Stato:** attiva
+
+**Decisione.** `classifications` prende la colonna `is_active` (migrazione
+`b1c4e2af7d30`). Una classificazione che non serve piu' si **disattiva**:
+sparisce dai menu a tendina e dai filtri, la riga resta in tabella con le sue
+caselle della matrice, e si puo' riattivare. Non si cancella, come niente in
+Aurora (regola 5 di CLAUDE.md).
+
+La disattivazione e' **rifiutata** se almeno un documento ha quella
+classificazione, ritirati compresi. E una classificazione disattivata **non
+accetta caricamenti nuovi**, nemmeno da una richiesta scritta a mano.
+
+**Motivazione.** La classificazione e' meta' della coppia che decide chi vede
+un documento: toglierla a un documento vorrebbe dire lasciarlo senza la riga
+che risponde a quella domanda, e un documento di cui non si sa piu' chi lo puo'
+vedere e' un documento che nessuno sa piu' se mostrare.
+
+Le due regole insieme danno un'invariante che vale la pena di scrivere:
+**disattivata vuol dire vuota per sempre**. Si disattiva solo quello che non e'
+in uso, e da quel momento non ci finisce dentro piu' niente. E' questa
+invariante che permette alla griglia dei permessi di smettere di mostrare le
+classificazioni disattivate senza nascondere niente: le loro caselle non
+governano piu' nessun documento, e non ne governeranno.
+
+**Conseguenza.** I documenti ritirati si contano insieme agli altri quando si
+guarda se una classificazione e' in uso. Un ritirato non e' sparito, e' solo
+fuori dagli elenchi: se lo si ripristinasse e la sua classificazione non ci
+fosse piu', si ricadrebbe esattamente nel caso che questa decisione evita.

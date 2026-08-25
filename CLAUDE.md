@@ -128,6 +128,7 @@ aurora/
 │   ├── config.py          lettura del file .env
 │   ├── db.py              engine, sessione, Base, get_db
 │   ├── dependencies.py    utente_corrente, richiedi_login, richiedi_creatore
+│   │                   (richiedi_creatore chiede a permissions.puo)
 │   ├── templating.py      motore Jinja2 e funzione pagina()
 │   ├── navigation.py      le voci della barra laterale, filtrate per ruolo
 │   ├── models/            tabelle del database (una classe per tabella)
@@ -194,10 +195,21 @@ Dove mettere una cosa nuova:
   dentro una rotta: il nome originale sul filesystem, il limite dei 260
   caratteri di Windows e la scrittura interrotta sono tre problemi gia'
   risolti li' (D-004, D-047);
-- **un permesso su un documento** → si chiede a
-  `app/services/permissions.py`, che legge la matrice. Non si scrive un
-  controllo dentro una rotta: le due strade - il documento singolo e l'elenco
-  - devono dare la stessa risposta (D-048);
+- **un permesso, di qualunque genere** → si chiede a
+  `permissions.puo(db, utente, azione, oggetto)`, che e' **l'unico punto del
+  programma in cui un permesso viene deciso** (D-051). Non si scrive un
+  controllo dentro una rotta, non si confronta un ruolo dentro un servizio,
+  non si mette un `{% if %}` dentro un template: le tre strade - il singolo
+  oggetto, l'elenco e il pulsante disegnato - devono dare la stessa risposta,
+  e ci sono quattro test che leggono i sorgenti per verificarlo
+  (`tests/test_permessi.py`).
+  Nelle rotte si usa `permissions.pretendi(...)`, che risponde da sola con il
+  codice giusto: **404** se la persona non puo' nemmeno vedere l'oggetto - con
+  lo stesso messaggio di uno che non esiste (D-052) - e **403** se lo vede gia'
+  e le manca solo il permesso per quella operazione.
+  Per gli elenchi c'e' la stessa regola scritta come condizione SQL,
+  `filtro_documenti()` e `filtro_progetti()`: il filtro va
+  nell'interrogazione, mai nel template, e vale **anche per i conteggi**;
 - **una regola che l'azienda potrebbe cambiare** (come si legge un codice
   prodotto, quali sono i tipi di documento) → un file in `config/`, con il suo
   percorso dichiarato in `.env`.
@@ -277,6 +289,12 @@ Tutti dalla radice del progetto (`aurora/`), con l'ambiente virtuale attivo:
   ne carica un'altra (D-045). C'e' un test che lo verifica.
 - Rifiutare un codice prodotto perche' non si scompone: si accetta con
   `code_parts` vuoto e una segnalazione visibile (D-039).
+- **Decidere un permesso fuori da `app/services/permissions.py`.** Niente
+  `if utente.is_creatore` dentro una rotta o un servizio, niente
+  `{% if utente.is_creatore %}` dentro un template, niente interrogazione di
+  `permission_rules` da un altro file. La domanda si fa con `permissions.puo()`
+  e la risposta arriva al template come un booleano gia' deciso (D-051). Ci
+  sono quattro test che lo verificano leggendo i sorgenti.
 - Confrontare due stati del ciclo di vita fuori da `app/services/lifecycle.py`:
   i grafi delle transizioni stanno li' e in nessun altro posto. Sono **due**:
   quello di una versione di prodotto e quello di un documento (D-042, D-044).

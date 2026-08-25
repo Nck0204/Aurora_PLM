@@ -51,7 +51,7 @@
             {% endif %}
         </p>
     </div>
-    {% if utente.is_creatore %}
+    {% if puo_amministrare %}
     <div class="testata-azioni">
         {{ pulsante_collegamento("Prodotti", "/prodotti", icona_nome="prodotti") }}
     </div>
@@ -122,8 +122,7 @@
             {{ voce("Nome e cognome", utente.full_name) }}
             {{ voce("Nome utente", utente.username, monospazio=true) }}
             {{ voce("Posta", utente.email) }}
-            {{ voce("Ruolo", etichetta(utente.global_role.value,
-                                       variante="accento" if utente.is_creatore else "neutra")) }}
+            {{ voce("Ruolo", etichetta(ruolo.testo, variante=ruolo.variante)) }}
         {% endcall %}
     {% endcall %}
 
@@ -153,7 +152,7 @@
         <div class="impila">
             {{ pulsante_collegamento("Cambia la tua password", "/cambio-password",
                                      icona_nome="chiave", largo=true) }}
-            {% if utente.is_creatore %}
+            {% if puo_amministrare %}
                 {{ pulsante_collegamento("Gestisci i clienti", "/clienti",
                                          icona_nome="clienti", largo=true) }}
                 {{ pulsante_collegamento("Gestisci gli utenti", "/utenti",

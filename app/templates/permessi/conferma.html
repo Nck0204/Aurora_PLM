@@ -1,0 +1,101 @@
+{# ===========================================================================
+   CONFERMA DELLA CORREZIONE DEI PERMESSI. Riservata al creatore.
+
+   E' UNA PAGINA E NON UNA FINESTRA MODALE, come tutte le conferme di Aurora
+   (D-042): una finestra ha bisogno di JavaScript per aprirsi, e se non si
+   aprisse l'operazione partirebbe senza che nessuno abbia letto niente.
+
+   QUI SI LEGGE CHE COSA CAMBIA, casella per casella, com'era e come diventa.
+   Non "sei sicuro?", che e' la domanda a cui tutti rispondono di si' senza
+   leggere: l'elenco esatto delle caselle toccate, con il nome del ruolo e
+   della classificazione per esteso.
+
+   I cambiamenti viaggiano in campi nascosti e non in una variabile di
+   sessione: cosi' quello che viene scritto e' esattamente quello che e' stato
+   mostrato.
+   =========================================================================== #}
+{% extends "base.html" %}
+
+{% from "components/campi.html" import csrf %}
+{% from "components/pulsanti.html" import pulsante, pulsante_collegamento %}
+{% from "components/riquadro.html" import riquadro %}
+{% from "components/tabella.html" import tabella %}
+{% from "components/avvisi.html" import avviso %}
+
+{% block titolo %}Conferma la correzione dei permessi{% endblock %}
+{% block sezione %}Permessi{% endblock %}
+
+{% block contenuto %}
+
+<div class="testata">
+    <div>
+        <h1>Conferma la correzione dei permessi</h1>
+        <p class="sottotitolo">
+            {{ cambiamenti|length }}
+            casell{{ "a" if cambiamenti|length == 1 else "e" }}
+            cambi{{ "a" if cambiamenti|length == 1 else "ano" }}.
+        </p>
+    </div>
+</div>
+
+<form method="post" action="/permessi/applica" class="modulo">
+    {{ csrf(request) }}
+    {% for riga in nascosti %}
+    <input type="hidden" name="cambiamento" value="{{ riga }}">
+    {% endfor %}
+
+    {% call riquadro("Che cosa stai per cambiare",
+                     nudo=true,
+                     piede=pulsante("Applica la correzione", variante="primario")
+                           ~ pulsante_collegamento("Annulla", "/permessi")) %}
+
+        {% set colonne = [
+            {"etichetta": "Ruolo nel progetto"},
+            {"etichetta": "Classificazione"},
+            {"etichetta": "Permesso"},
+            {"etichetta": "Prima"},
+            {"etichetta": "Dopo"},
+        ] %}
+
+        {% call tabella(colonne) %}
+            {% for cambiamento in cambiamenti %}
+                {% for colonna, nome_permesso in colonne_permessi %}
+                    {% if cambiamento.prima[colonna] != cambiamento.dopo[colonna] %}
+                    <tr>
+                        <td>{{ nomi_ruoli[cambiamento.project_role] }}</td>
+                        <td>{{ cambiamento.classificazione.name }}</td>
+                        <td>{{ nome_permesso }}</td>
+                        <td class="cambiamento-prima">
+                            {{ "si" if cambiamento.prima[colonna] else "no" }}
+                        </td>
+                        <td class="cambiamento-dopo">
+                            {{ "si" if cambiamento.dopo[colonna] else "no" }}
+                        </td>
+                    </tr>
+                    {% endif %}
+                {% endfor %}
+            {% endfor %}
+        {% endcall %}
+
+    {% endcall %}
+
+    {% call avviso("", variante="attenzione",
+                   titolo="Ha effetto subito, su tutti i progetti") %}
+        <p>
+            I permessi non sono di una persona: sono del <strong>ruolo</strong>.
+            Cambiando una casella cambia quello che possono fare tutte le
+            persone che hanno quel ruolo, su tutti i progetti in corso.
+        </p>
+        <p class="margine-sopra">
+            L'effetto e' immediato anche per chi e' collegato in questo
+            momento: i permessi si rileggono a ogni pagina. Nessuno deve uscire
+            e rientrare, e nessuno riceve un avviso.
+        </p>
+        <p class="margine-sopra">
+            Ogni casella cambiata finisce nel registro delle operazioni con il
+            tuo nome, il valore precedente e quello successivo.
+        </p>
+    {% endcall %}
+</form>
+
+{% endblock %}

@@ -1,6 +1,6 @@
 """Tabella "classifications": le classi di riservatezza dei documenti."""
 
-from sqlalchemy import Integer, String, Text
+from sqlalchemy import Boolean, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db import Base
@@ -17,6 +17,11 @@ class Classification(Base, UuidPrimaryKeyMixin, TimestampMixin):
     del progetto su cui lavora, e questa e' la riga di codice che lo decide.
 
     Le classificazioni sono poche e stabili: si aggiungono, non si cancellano.
+    Quella che non serve piu' si **disattiva** (is_active): sparisce dai menu a
+    tendina e dai filtri, ma la riga resta con le sue caselle della matrice.
+    Cancellarla vorrebbe dire lasciare senza regola i documenti che ce
+    l'hanno addosso, ed e' il motivo per cui la pagina che le amministra si
+    rifiuta di disattivare una classificazione ancora in uso.
     """
 
     __tablename__ = "classifications"
@@ -26,6 +31,12 @@ class Classification(Base, UuidPrimaryKeyMixin, TimestampMixin):
 
     # Ordine con cui compaiono negli elenchi e nei menu a tendina.
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+    # Falso per le classificazioni messe da parte. Non si cancella niente:
+    # regola 5 di CLAUDE.md.
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="true"
+    )
 
     def __repr__(self) -> str:
         return f"<Classification {self.name}>"

@@ -176,10 +176,11 @@ la prova.
 
 | File | Macro | A che serve |
 |---|---|---|
-| `icone.html` | `icona` | i ventitre' simboli, disegnati a mano in SVG |
+| `icone.html` | `icona` | i ventisei simboli, disegnati a mano in SVG |
 | `pulsanti.html` | `pulsante`, `pulsante_collegamento`, `modulo_pulsante` | ogni azione |
 | `campi.html` | `campo`, `area_testo`, `tendina`, `spunta`, `scelta`, `csrf` | ogni campo di un modulo |
 | `tabella.html` | `tabella` | gli elenchi, con intestazione ferma e ordinamento |
+| `tabella.html` (variante `tabella--matrice`) | — | la griglia dei permessi: intestazione su due piani, prima colonna ferma |
 | `stato.html` | `etichetta_ciclo_vita`, `etichetta_documento`, `etichetta`, `etichetta_utente` | le pillole colorate degli stati |
 | `riquadro.html` | `riquadro` | il contenitore di tutto |
 | `dialogo.html` | `dialogo`, `pulsante_apri`, `pulsante_chiudi` | le conferme modali |
@@ -192,6 +193,37 @@ la prova.
 | `area_file.html` | `area_file` | il caricamento dei documenti |
 | `barra_caricamento.html` | `barra_caricamento` | quanti byte sono partiti, mentre partono |
 | `vuoto.html` | `vuoto` | quando non c'e' niente da mostrare |
+
+### Nei template non si decide chi puo' fare che cosa
+
+Un `{% if utente.is_creatore %}` dentro una pagina non e' una protezione: la
+rotta si apre lo stesso scrivendone l'indirizzo, e intanto sembra che protegga.
+Le pagine ricevono la risposta **gia' decisa** - `puo_amministrare`,
+`permessi.caricare`, `puo_cambiare_stato` - e la usano soltanto per sapere se
+disegnare un pulsante. Chi decide e' `permissions.puo()`, e nessun altro
+(D-051, CLAUDE.md sezione 8). C'e' un test che legge tutti i template e diventa
+rosso se ci ricompare `is_creatore`, `global_role` o `permission_rules`.
+
+Vale anche per il nome di un ruolo mostrato in una pagina: non e' un permesso,
+ma si compone lo stesso in Python (`users.ruolo_mostrato()`), per la regola qui
+sotto e perche' cosi' nei template non resta niente che assomigli a una
+verifica.
+
+### La griglia della matrice dei permessi
+
+`tabella--matrice` e' l'unica variante della tabella dati, e sta nella sezione
+26 di `aurora.css`. Ha due cose che la tabella normale non ha: l'intestazione
+su **due piani** - la classificazione sopra, i suoi tre permessi sotto - e la
+prima colonna **ferma** mentre si scorre di lato, con il suo fondo opaco. Con
+sei classificazioni la griglia esce dallo schermo, e una riga di spunte senza
+il nome del ruolo davanti non si legge.
+
+Le celle contengono un comando invece che un dato, ed e' il motivo per cui non
+sono una tabella normale con dentro tre `spunta`: la casella di spunta dei
+moduli porta con se' etichetta, aiuto e margini, che in una griglia di
+trentasei quadretti sarebbero trentasei etichette di troppo. Qui l'etichetta e'
+l'intestazione della colonna, e ogni casella ha il suo `aria-label` per esteso
+("Ingegnere, Commerciale, visualizza").
 
 ### Gli elenchi di scelte si compongono in Python, non nei template
 

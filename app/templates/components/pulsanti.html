@@ -93,14 +93,22 @@
    Per un'azione che merita una domanda prima di essere eseguita si passa
    conferma="Testo della domanda": il browser chiede conferma da solo. Senza
    JavaScript la domanda non compare e l'azione si esegue: e' voluto, perche'
-   nessuna delle azioni di Aurora e' irreparabile - non si cancella niente. #}
+   nessuna delle azioni di Aurora e' irreparabile - non si cancella niente.
+
+   "nome" e "valore" finiscono sul pulsante e viaggiano con il modulo. Servono
+   quando la stessa rotta accetta due varianti della stessa operazione e non
+   vale la pena di darle due indirizzi:
+
+       {% raw %}{{ modulo_pulsante(request, indirizzo ~ "/sposta", "Su",
+                          icona_nome="freccia-su", nome="verso",
+                          valore="su") }}{% endraw %} #}
 {% macro modulo_pulsante(request, azione, etichetta, variante="secondario",
                          misura="normale", icona_nome=none, conferma=none,
-                         titolo=none, in_linea=true) -%}
+                         titolo=none, in_linea=true, nome=none, valore=none) -%}
 <form method="post" action="{{ azione }}"{% if in_linea %} class="modulo-in-linea"{% endif %}>
     <input type="hidden" name="csrf" value="{{ token_csrf(request) }}">
     {{ pulsante(etichetta, tipo="submit", variante=variante, misura=misura,
-                icona_nome=icona_nome, titolo=titolo) }}
+                icona_nome=icona_nome, titolo=titolo, nome=nome, valore=valore) }}
     {%- if conferma %}
     {# La domanda di conferma la fa il modulo, non il pulsante: cosi' scatta
        anche quando si invia con Invio da tastiera. #}

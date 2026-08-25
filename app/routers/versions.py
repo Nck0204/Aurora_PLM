@@ -30,7 +30,7 @@ from sqlalchemy.orm import Session
 from app.db import get_db
 from app.dependencies import richiedi_login
 from app.models import LifecycleState, ProductVersion, User
-from app.services import lifecycle, product_codes, products, projects
+from app.services import lifecycle, permissions, product_codes, products, projects
 from app.templating import pagina
 
 logger = logging.getLogger("aurora.rotte.versioni")
@@ -41,13 +41,12 @@ MESSAGGIO_VERSIONE_INESISTENTE = "La versione richiesta non esiste."
 
 # Chi puo' creare una versione derivata e' chi puo' muoverne il ciclo di vita:
 # il project manager del progetto e il creatore. E' la stessa regola, e passa
-# per la stessa funzione (lifecycle.puo_cambiare_stato), perche' le due
-# operazioni sono la stessa decisione presa in due momenti - "questo lavoro va
-# avanti cosi'" - e due regole separate finirebbero per allontanarsi.
-MESSAGGIO_NON_PUO_DERIVARE = (
-    "Una versione nuova la creano il project manager del progetto e chi ha il "
-    "ruolo di creatore."
-)
+# per la stessa domanda - permissions.puo(..., MODIFICARE, versione) - perche'
+# le due operazioni sono la stessa decisione presa in due momenti ("questo
+# lavoro va avanti cosi'") e due regole separate finirebbero per allontanarsi.
+#
+# Il messaggio del diniego sta in permissions.py insieme alla regola: qui non
+# c'e' niente da decidere.
 
 
 def _versione_o_404(db: Session, version_id: uuid.UUID) -> ProductVersion:
@@ -118,7 +117,11 @@ def _contesto_scheda(db: Session, versione: ProductVersion, utente: User) -> dic
             else None
         ),
         "stati_possibili": lifecycle.stati_raggiungibili(versione.lifecycle_state),
-        "puo_cambiare_stato": lifecycle.puo_cambiare_stato(versione, utente),
+        # Il template disegna i pulsanti del ciclo di vita solo se la
+        # risposta e' si': la decisione arriva gia' presa (D-051).
+        "puo_cambiare_stato": permissions.puo(
+            db, utente, permissions.Azione.MODIFICARE, versione
+        ),
         "nome_stato": lifecycle.nome_stato,
     }
 
@@ -180,8 +183,7 @@ def mostra_deriva(
     """
     versione = _versione_o_404(db, version_id)
 
-    if not lifecycle.puo_cambiare_stato(versione, utente):
-        raise HTTPException(status_code=403, detail=MESSAGGIO_NON_PUO_DERIVARE)
+    permissions.pretendi(db, utente, permissions.Azione.MODIFICARE, versione)
 
     return pagina(
         request,
@@ -205,8 +207,7 @@ def deriva(
     """Crea la versione derivata e porta sulla sua scheda."""
     versione = _versione_o_404(db, version_id)
 
-    if not lifecycle.puo_cambiare_stato(versione, utente):
-        raise HTTPException(status_code=403, detail=MESSAGGIO_NON_PUO_DERIVARE)
+    permissions.pretendi(db, utente, permissions.Azione.MODIFICARE, versione)
 
     def rimostra(messaggio: str) -> Response:
         return pagina(
@@ -279,10 +280,7 @@ def conferma_stato(
     """
     versione = _versione_o_404(db, version_id)
 
-    if not lifecycle.puo_cambiare_stato(versione, utente):
-        raise HTTPException(
-            status_code=403, detail=lifecycle.MESSAGGIO_NON_AUTORIZZATO
-        )
+    permissions.pretendi(db, utente, permissions.Azione.MODIFICARE, versione)
 
     nuovo_stato = _stato_o_400(nuovo)
 
@@ -345,10 +343,7 @@ def cambia_stato(
     """
     versione = _versione_o_404(db, version_id)
 
-    if not lifecycle.puo_cambiare_stato(versione, utente):
-        raise HTTPException(
-            status_code=403, detail=lifecycle.MESSAGGIO_NON_AUTORIZZATO
-        )
+    permissions.pretendi(db, utente, permissions.Azione.MODIFICARE, versione)
 
     nuovo_stato = _stato_o_400(nuovo)
 

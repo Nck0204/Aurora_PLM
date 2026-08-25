@@ -7,7 +7,10 @@ Sono tre, e ogni rotta di Aurora ne usa una:
                       entrato sia a chi non lo e'.
   richiedi_login      pretende che l'utente sia entrato. Si occupa anche di
                       dirottare al cambio password chi deve cambiarla.
-  richiedi_creatore   pretende, oltre all'accesso, il ruolo di creatore.
+  richiedi_creatore   pretende, oltre all'accesso, il permesso di
+                      amministrare Aurora. Chi ce l'ha lo dice
+                      permissions.puo(), come per ogni altro permesso: qui
+                      non c'e' nessun confronto fra ruoli (D-051).
 
 Sono in fila: richiedi_creatore chiama richiedi_login, che chiama
 utente_corrente. FastAPI esegue ciascuna **una volta sola** per richiesta anche
@@ -43,8 +46,8 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.db import get_db
-from app.models import GlobalRole, SessionKind, User, UserSession
-from app.services import audit, auth
+from app.models import SessionKind, User, UserSession
+from app.services import audit, auth, permissions
 from app.services.cookies import (
     COOKIE_RICORDAMI,
     COOKIE_SESSIONE,
@@ -70,9 +73,9 @@ PERCORSI_PERMESSI_SENZA_CAMBIO = frozenset(
     {PERCORSO_CAMBIO_PASSWORD, "/esci", "/esci-ovunque"}
 )
 
-MESSAGGIO_NON_CREATORE = (
-    "Questa sezione e' riservata a chi ha il ruolo di creatore."
-)
+MESSAGGIO_NON_CREATORE = permissions.MESSAGGI_NEGATO[
+    permissions.Azione.AMMINISTRARE
+]
 
 # Durata del cookie "ricordami" in secondi, che e' l'unita' che vuole il
 # browser. Il valore in giorni sta nel file .env.
@@ -145,10 +148,16 @@ def utente_corrente(
     che e' spiacevole, ma e' anche il modo in cui ci si accorge del furto.
 
     L'utente riconosciuto viene lasciato in request.state, dove lo trovano la
-    funzione pagina() per la barra in cima e il registro di audit.
+    funzione pagina() per la barra in cima e il registro di audit. Insieme a
+    lui ci si lascia **il permesso di amministrare**, calcolato da
+    permissions.puo(): le pagine ne hanno bisogno per sapere se disegnare le
+    voci e i pulsanti delle sezioni riservate, e calcolarlo qui vuol dire
+    calcolarlo una volta sola, con la funzione giusta, invece che con un
+    `{% if %}` dentro ogni template (D-051).
     """
     request.state.utente = None
     request.state.sessione = None
+    request.state.puo_amministrare = False
 
     # 1. La strada normale: il cookie di sessione.
     gettone = request.cookies.get(COOKIE_SESSIONE, "")
@@ -157,6 +166,7 @@ def utente_corrente(
         sessione, utente = trovato
         request.state.sessione = sessione
         request.state.utente = utente
+        request.state.puo_amministrare = _puo_amministrare(db, utente)
         return utente
 
     # 2. La sessione non c'e' piu' (browser chiuso, sessione scaduta o
@@ -223,9 +233,17 @@ def _rinnova_da_ricordami(
     ricreata = auth.trova_sessione(db, nuova_sessione, SessionKind.SESSIONE)
     request.state.sessione = ricreata[0] if ricreata is not None else None
     request.state.utente = utente
+    request.state.puo_amministrare = _puo_amministrare(db, utente)
 
     logger.info("Sessione rinnovata dal 'ricordami' per '%s'", utente.username)
     return utente
+
+
+def _puo_amministrare(db: Session, utente: User) -> bool:
+    """Scorciatoia per non ripetere quattro nomi lunghi in tre punti."""
+    return permissions.puo(
+        db, utente, permissions.Azione.AMMINISTRARE, permissions.AMMINISTRAZIONE
+    )
 
 
 def richiedi_login(
@@ -250,14 +268,23 @@ def richiedi_login(
     return utente
 
 
-def richiedi_creatore(utente: User = Depends(richiedi_login)) -> User:
-    """Pretende, oltre all'accesso, il ruolo globale di creatore.
+def richiedi_creatore(
+    utente: User = Depends(richiedi_login),
+    db: Session = Depends(get_db),
+) -> User:
+    """Pretende, oltre all'accesso, il permesso di amministrare Aurora.
 
-    Il ruolo si legge dalla riga dell'utente appena riletta dal database, non
-    da qualcosa scritto nel cookie: se a una persona viene tolto il ruolo di
-    creatore, lo perde alla prima pagina che apre.
+    La domanda la fa permissions.puo(), che e' l'unico posto in cui i permessi
+    di Aurora si decidono. Qui non si confronta nessun ruolo: questa
+    dipendenza traduce un "no" in un 403, e basta.
+
+    Il permesso si ricalcola a ogni richiesta sulla riga dell'utente appena
+    riletta dal database, non su qualcosa scritto nel cookie: se a una persona
+    viene tolto il ruolo di creatore, lo perde alla prima pagina che apre.
     """
-    if utente.global_role is not GlobalRole.CREATORE:
+    if not permissions.puo(
+        db, utente, permissions.Azione.AMMINISTRARE, permissions.AMMINISTRAZIONE
+    ):
         logger.warning(
             "'%s' ha provato ad aprire una pagina da creatore", utente.username
         )

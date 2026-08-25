@@ -59,17 +59,18 @@
         <td>{{ u.last_name }} {{ u.first_name }}</td>
         <td class="colonna-codice">{{ u.username }}</td>
         <td>{{ u.email }}</td>
-        <td>
-            {% if u.is_creatore %}
-                {{ etichetta(u.global_role.value, variante="accento") }}
-            {% else %}
-                <span class="testo-tenue">{{ u.global_role.value }}</span>
-            {% endif %}
-        </td>
+        <td>{{ etichetta(ruoli[u.id].testo, variante=ruoli[u.id].variante) }}</td>
         <td>{{ etichetta_utente(u) }}</td>
         <td class="colonna-numero">{{ sessioni.get(u.id, 0) }}</td>
         <td class="colonna-azioni">
             <div class="fila-pulsanti spinge-a-destra">
+                {# "Verifica accessi" e' un collegamento e non un modulo
+                   perche' non cambia niente: apre una pagina che guarda. #}
+                {{ pulsante_collegamento("Verifica accessi",
+                                         "/utenti/" ~ u.id ~ "/accessi",
+                                         misura="piccolo",
+                                         icona_nome="permessi") }}
+
                 {{ modulo_pulsante(request,
                                    "/utenti/" ~ u.id ~ "/reimposta",
                                    "Nuova password",

@@ -10,8 +10,10 @@ vede nell'elenco non lo apre nemmeno scrivendone l'indirizzo.
     pytest tests/test_progetti.py -v
 """
 
+import uuid
+
 from app.models import GlobalRole, LifecycleState, ProjectRole
-from app.services import lifecycle, projects
+from app.services import lifecycle, permissions, projects
 from tests.conftest import (
     PASSWORD_DI_PROVA,
     contenuto_leggibile,
@@ -219,7 +221,9 @@ def test_chi_e_stato_revocato_non_vede_piu(db_session):
     db_session.flush()
 
     assert progetto.id not in [p.id for p in projects.cruscotto(db_session, tecnico)]
-    assert not projects.puo_vedere(db_session, progetto, tecnico)
+    assert not permissions.puo(
+        db_session, tecnico, permissions.Azione.VEDERE, progetto
+    )
 
 
 # --- I filtri del cruscotto -------------------------------------------------
@@ -325,7 +329,13 @@ def test_un_estraneo_non_trova_il_progetto_nel_cruscotto(client, db_session):
 def test_un_estraneo_non_apre_il_progetto_nemmeno_scrivendo_l_indirizzo(
     client, db_session
 ):
-    """L'elenco e' una porta chiusa, non una tenda."""
+    """L'elenco e' una porta chiusa, non una tenda.
+
+    E la porta chiusa non ha nemmeno il campanello: 404 e non 403, con lo
+    stesso messaggio di un progetto che non esiste. Chi provasse gli
+    identificativi uno per uno non riuscirebbe a distinguere i progetti veri
+    da quelli inventati (D-051).
+    """
     creatore = crea_utente(
         db_session, username="prova.capo.porta", ruolo=GlobalRole.CREATORE
     )
@@ -341,8 +351,13 @@ def test_un_estraneo_non_apre_il_progetto_nemmeno_scrivendo_l_indirizzo(
 
     risposta = client.get(f"/progetti/{progetto.id}")
 
-    assert risposta.status_code == 403
-    assert "non e' fra quelli a cui sei assegnato" in contenuto_leggibile(risposta)
+    assert risposta.status_code == 404
+    assert "Il progetto richiesto non esiste" in contenuto_leggibile(risposta)
+
+    # E la risposta e' indistinguibile da quella di un progetto inventato.
+    inventato = client.get(f"/progetti/{uuid.uuid4()}")
+    assert inventato.status_code == 404
+    assert contenuto_leggibile(inventato) == contenuto_leggibile(risposta)
 
 
 def test_si_apre_un_progetto_dall_interfaccia(client, db_session):

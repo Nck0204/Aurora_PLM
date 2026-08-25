@@ -324,7 +324,7 @@
 {% endcall %}
 {% endif %}
 
-{% if documento.is_deleted and utente.is_creatore %}
+{% if documento.is_deleted and puo_amministrare %}
 {% call riquadro("Ripristina il documento") %}
     <p class="campo-aiuto">
         Torna negli elenchi ordinari esattamente com'era: stesso stato, stesse

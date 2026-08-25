@@ -19,6 +19,7 @@ va persa prima di essere usata, non si recupera: se ne assegna un'altra.
 import logging
 import re
 import uuid
+from dataclasses import dataclass
 
 from fastapi import Request
 from sqlalchemy import func, select
@@ -323,3 +324,40 @@ def elenco_utenti(db: Session, solo_attivi: bool = False) -> list[User]:
 def trova_utente(db: Session, user_id: uuid.UUID) -> User | None:
     """Cerca un utente per identificatore. None se non esiste."""
     return db.get(User, user_id)
+
+
+# --- Il ruolo, come si mostra -----------------------------------------------
+
+
+@dataclass(frozen=True)
+class RuoloMostrato:
+    """Il ruolo globale di una persona, gia' pronto da disegnare.
+
+    Sono due stringhe: il testo dell'etichetta e la variante di tinta con cui
+    disegnarla. Il calcolo si fa qui e non dentro il template per la regola di
+    CLAUDE.md sui menu a tendina - "un template che trasforma un valore in
+    un'etichetta contiene una regola" - e per una seconda ragione, che riguarda
+    questa sessione: dentro un template un `{% if utente.is_creatore %}` non si
+    distingue a colpo d'occhio da una verifica di permesso, e la regola della
+    sessione 7 e' che di verifiche di permesso nei template non ce ne siano
+    (D-051). Togliendole tutte, quello che resta si legge.
+
+    **Questo non e' un permesso**: e' il nome del ruolo e il colore con cui
+    scriverlo. Chi puo' fare che cosa lo dice permissions.puo().
+    """
+
+    testo: str
+    variante: str
+
+
+def ruolo_mostrato(utente: User) -> RuoloMostrato:
+    """L'etichetta del ruolo globale di una persona.
+
+    Il creatore si distingue con la tinta d'accento perche' in un elenco di
+    trenta righe uguali dev'essere possibile trovare in un colpo d'occhio chi
+    amministra il programma.
+    """
+    return RuoloMostrato(
+        testo=utente.global_role.value,
+        variante="accento" if utente.global_role is GlobalRole.CREATORE else "neutra",
+    )

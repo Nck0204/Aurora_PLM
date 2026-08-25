@@ -25,7 +25,7 @@ from sqlalchemy.orm import Session
 from app.db import get_db
 from app.dependencies import richiedi_login
 from app.models import User
-from app.services import auth, projects
+from app.services import auth, projects, users
 from app.templating import pagina
 
 router = APIRouter(tags=["pagine"])
@@ -59,6 +59,9 @@ def home(
         request,
         "home.html",
         password_cambiata=bool(password_cambiata),
+        # L'etichetta del ruolo, gia' composta: il template non guarda il
+        # ruolo di nessuno (D-051).
+        ruolo=users.ruolo_mostrato(utente),
         sessioni_attive=auth.conta_sessioni_attive(db, utente.id),
         progetti=visibili,
         totale_progetti=projects.conta_progetti_visibili(db, utente),

@@ -179,7 +179,7 @@
             versione ne ha al massimo uno: il progetto e' il lavoro che si fa
             su di lei.
         </p>
-        {% if utente.is_creatore %}
+        {% if puo_amministrare %}
         <div class="fila-pulsanti margine-sopra">
             {{ pulsante_collegamento("Apri un progetto",
                                      "/progetti/nuovo?versione=" ~ versione.id,

@@ -36,7 +36,7 @@
             lavoro si apre sulle versioni, non sui prodotti.
         </p>
     </div>
-    {% if utente.is_creatore %}
+    {% if puo_amministrare %}
     <div class="testata-azioni">
         {{ pulsante_collegamento("Nuovo prodotto", "/prodotti/nuovo",
                                  variante="primario", icona_nome="piu") }}
@@ -125,7 +125,7 @@
                                            "/prodotti/nuovo",
                                            variante="primario",
                                            icona_nome="piu")
-                     if utente.is_creatore else none),
+                     if puo_amministrare else none),
              icona_nome="prodotti") }}
 
 {% endif %}

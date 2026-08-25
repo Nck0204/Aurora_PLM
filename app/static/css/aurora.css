@@ -2147,3 +2147,94 @@ fieldset.gruppo-campi legend {
         transition: none;
     }
 }
+
+
+/* ==========================================================================
+   26. LA GRIGLIA DELLA MATRICE DEI PERMESSI
+   Una variante della tabella dati (sezione 15) per la pagina /permessi: le
+   righe sono i tre ruoli di progetto, le colonne sono le classificazioni
+   divise in tre spunte ciascuna.
+
+   E' l'unica tabella di Aurora con l'intestazione su due piani - la
+   classificazione sopra, i tre permessi sotto - e l'unica in cui le celle
+   contengono un comando invece che un dato. Per questo ha una sezione sua
+   invece di infilare tre eccezioni dentro quella della tabella normale.
+
+   I gruppi di tre colonne sono separati da una riga verticale: senza,
+   dodici spunte in fila diventano dodici spunte in fila, e nessuno sa piu'
+   quale appartiene a quale classe.
+   ========================================================================== */
+
+.tabella--matrice thead th {
+    text-align: center;
+}
+
+/* La prima colonna, quella dei ruoli, resta ferma mentre si scorre di lato:
+   con sei classificazioni la griglia esce dallo schermo, e una riga di spunte
+   senza il nome del ruolo davanti non si legge. */
+.tabella--matrice thead th:first-child,
+.tabella--matrice tbody th {
+    position: sticky;
+    left: 0;
+    z-index: 2;
+    text-align: left;
+    white-space: nowrap;
+    background-color: var(--colore-superficie-sollevata);
+    padding: var(--spazio-3) var(--spazio-4);
+    border-right: 1px solid var(--colore-bordo);
+}
+
+.tabella--matrice tbody th {
+    font-weight: 600;
+    color: var(--colore-testo);
+    font-size: var(--testo-normale);
+    border-bottom: 1px solid var(--colore-bordo-tenue);
+}
+
+/* Il nome della classificazione, sopra il suo gruppo di tre permessi. */
+.matrice-classe {
+    border-left: 1px solid var(--colore-bordo);
+    text-transform: none;
+    font-size: var(--testo-normale);
+    color: var(--colore-testo);
+}
+
+/* Le tre intestazioni piccole sotto: visualizza, carica, modifica. */
+.matrice-permesso {
+    font-weight: 500;
+    padding-left: var(--spazio-2);
+    padding-right: var(--spazio-2);
+}
+
+/* La prima delle tre riprende la riga verticale del gruppo, cosi' la
+   separazione fra classificazioni corre da cima a fondo della griglia. */
+.matrice-permesso:nth-of-type(3n + 1),
+.matrice-casella:nth-of-type(3n + 1) {
+    border-left: 1px solid var(--colore-bordo);
+}
+
+.matrice-casella {
+    text-align: center;
+    padding: var(--spazio-3) var(--spazio-2);
+}
+
+/* Il quadratino e' piccolo, ma il bersaglio da premere non deve esserlo:
+   quaranta e passa pixel di lato anche su uno schermo tattile. */
+.matrice-casella input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    margin: var(--spazio-2);
+    accent-color: var(--colore-accento);
+    cursor: pointer;
+}
+
+/* Nella pagina di conferma: com'era prima, com'e' dopo. */
+.cambiamento-prima {
+    color: var(--colore-testo-tenue);
+    text-decoration: line-through;
+}
+
+.cambiamento-dopo {
+    color: var(--colore-testo);
+    font-weight: 600;
+}
