@@ -1,0 +1,81 @@
+{# ===========================================================================
+   L'avviso mostrato prima di scaricare un file non piu' valido.
+
+   PERCHE' ESISTE. Il documento appartiene a una versione di prodotto superata
+   o obsoleta, e il file non e' un PDF: la filigrana, che sui PDF si stampa
+   sopra, qui non si puo' applicare senza rovinare il file. Restano due sole
+   cose che possono uscire da Aurora insieme al documento: questa pagina, che
+   la persona legge adesso, e l'avvertenza dentro il nome del file, che
+   resta anche dopo.
+
+   PERCHE' NON E' UNA FINESTRA MODALE. Perche' e' un avviso che deve essere
+   letto: se lo script non arrivasse, una finestra non si aprirebbe e il file
+   partirebbe lo stesso, che e' esattamente quello che questa pagina serve a
+   evitare (docs/GUIDA_STILE.md, sezione 5).
+
+   IL DIROTTAMENTO NON STA NEI COLLEGAMENTI ma nella rotta dello scarico: cosi'
+   vale per tutti i modi in cui ci si arriva, compreso un indirizzo copiato o
+   un preferito salvato sei mesi fa.
+   =========================================================================== #}
+{% extends "base.html" %}
+
+{% from "components/pulsanti.html" import pulsante_collegamento %}
+{% from "components/riquadro.html" import riquadro %}
+{% from "components/descrizione.html" import descrizione, voce %}
+{% from "components/stato.html" import etichetta_ciclo_vita %}
+{% from "components/avvisi.html" import avviso %}
+
+{% block titolo %}Attenzione prima di scaricare{% endblock %}
+{% block sezione %}Documenti{% endblock %}
+
+{% block contenuto %}
+
+<div class="testata">
+    <div>
+        <h1>Attenzione prima di scaricare</h1>
+        <p class="sottotitolo">{{ documento.title }}</p>
+    </div>
+</div>
+
+<div class="colonna-stretta">
+
+{% call avviso("", variante="attenzione",
+               titolo="Questo file appartiene a una versione superata") %}
+    <p>
+        Il documento appartiene alla versione
+        {{ versione_prodotto.version_number }} di
+        <span class="mono">{{ prodotto.code }}</span>, che adesso e'
+        {{ etichetta_ciclo_vita(versione_prodotto.lifecycle_state) }}.
+        <strong>Non usarlo per la produzione.</strong>
+    </p>
+    <p class="margine-sopra">
+        Il file non e' un PDF, quindi non gli si puo' stampare sopra la
+        filigrana senza rovinarlo. Per questo l'avvertenza viene messa nel
+        <strong>nome del file</strong>: e' l'unica cosa che resta attaccata al
+        documento dopo che e' uscito da Aurora.
+    </p>
+{% endcall %}
+
+{% call riquadro("Il file che stai per scaricare") %}
+    {% call descrizione(stretta=true) %}
+        {{ voce("Versione del documento", versione.version_number) }}
+        {{ voce("Nome originale", versione.original_filename) }}
+        {{ voce("Nome con cui verra' salvato", nome_scaricato,
+                monospazio=true) }}
+        {{ voce("Dimensione", peso(versione.size_bytes)) }}
+        {{ voce("Impronta SHA-256", versione.storage_hash, monospazio=true) }}
+    {% endcall %}
+
+    <div class="fila-pulsanti margine-sopra">
+        {{ pulsante_collegamento("Ho letto, scarica il file",
+               "/documenti/" ~ documento.id ~ "/versioni/" ~ versione.id
+               ~ "/scarica?avvisato=1",
+               variante="primario", icona_nome="scarica") }}
+        {{ pulsante_collegamento("Torna al documento",
+                                 "/documenti/" ~ documento.id) }}
+    </div>
+{% endcall %}
+
+</div>
+
+{% endblock %}

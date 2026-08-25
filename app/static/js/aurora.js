@@ -7,7 +7,9 @@
      1. le notifiche temporanee, che devono sparire da sole;
      2. le finestre di dialogo, che devono aprirsi e chiudersi;
      3. l'area di trascinamento dei file, che deve accorgersi del
-        trascinamento.
+        trascinamento;
+     4. la barra di avanzamento del caricamento, che deve dire a che punto
+        sono i byte partiti.
 
    REGOLA CHE VALE PER TUTTO QUESTO FILE. Niente di quello che c'e' qui dentro
    e' indispensabile. Con JavaScript spento - o quando questo file non arriva
@@ -233,5 +235,160 @@
                 mostraFileScelti(area);
             });
         })(aree[a]);
+    }
+
+    /* ----------------------------------------------------------------------
+       4. Barra di avanzamento del caricamento
+
+       IL PROBLEMA. Un modulo che manda un file da 300 MB, inviato nel modo
+       normale, non da' nessun segno di vita finche' non ha finito: chi ha
+       premuto non sa se sta succedendo qualcosa, e dopo venti secondi preme
+       di nuovo.
+
+       LA SOLUZIONE. Si intercetta l'invio e si manda lo stesso modulo con una
+       XMLHttpRequest, che a differenza del modulo normale avvisa a ogni
+       blocco di byte partito. Il server non se ne accorge: gli arriva lo
+       stesso multipart/form-data, con lo stesso gettone CSRF dentro.
+
+       SENZA JAVASCRIPT NON CAMBIA NIENTE. Questo pezzo si aggancia solo ai
+       moduli che dichiarano data-carica-con-avanzamento; se lo script non
+       arriva, quei moduli si inviano da soli come sempre e la barra resta
+       nascosta. Caricare un documento non dipende da uno script (D-036).
+
+       PERCHE' XMLHttpRequest E NON fetch(). fetch() non sa dire quanti byte
+       ha spedito: l'avanzamento in salita non fa parte della sua interfaccia.
+       E' l'unico posto di Aurora in cui la libreria vecchia fa una cosa che
+       la nuova non sa fare.
+       -------------------------------------------------------------------- */
+
+    function percentuale(evento) {
+        if (!evento.lengthComputable || !evento.total) {
+            return null;
+        }
+        return Math.round((evento.loaded / evento.total) * 100);
+    }
+
+    function aggiornaBarra(barra, valore, testo) {
+        var traccia = barra.querySelector("[role=progressbar]");
+        var riempimento = barra.querySelector("[data-barra-riempimento]");
+        var scritta = barra.querySelector("[data-barra-testo]");
+
+        if (valore !== null && riempimento) {
+            riempimento.style.width = valore + "%";
+        }
+        if (valore !== null && traccia) {
+            traccia.setAttribute("aria-valuenow", String(valore));
+        }
+        if (scritta) {
+            scritta.textContent = testo;
+        }
+    }
+
+    function pesoTotale(modulo) {
+        var totale = 0;
+        var campi = modulo.querySelectorAll("input[type=file]");
+        for (var i = 0; i < campi.length; i++) {
+            var scelti = campi[i].files || [];
+            for (var j = 0; j < scelti.length; j++) {
+                totale += scelti[j].size;
+            }
+        }
+        return totale;
+    }
+
+    function mostraRisposta(testo) {
+        /* La risposta e' una pagina intera: il modulo rimostrato con il suo
+           messaggio di errore in italiano. La si scrive al posto di quella di
+           adesso. Non e' elegante, ma e' l'unico modo di far leggere il
+           messaggio del server senza riscrivere in JavaScript la pagina che
+           il server sa gia' comporre. Succede solo quando il caricamento
+           viene rifiutato. */
+        document.open();
+        document.write(testo);
+        document.close();
+    }
+
+    var moduli = document.querySelectorAll("[data-carica-con-avanzamento]");
+    for (var m = 0; m < moduli.length; m++) {
+        (function (modulo) {
+            var barra = modulo.querySelector("[data-barra-caricamento]");
+            if (!barra || typeof window.FormData !== "function") {
+                return;
+            }
+
+            modulo.addEventListener("submit", function (evento) {
+                if (pesoTotale(modulo) === 0) {
+                    /* Nessun file scelto: si lascia fare al modulo normale,
+                       cosi' e' il server a rispondere "scegli un file" con la
+                       sua frase italiana, in un posto solo. */
+                    return;
+                }
+
+                evento.preventDefault();
+
+                var invio = modulo.querySelector("button[type=submit]");
+                if (invio) {
+                    invio.disabled = true;
+                }
+
+                barra.hidden = false;
+                barra.classList.remove("barra-caricamento--conclusa");
+                barra.classList.remove("barra-caricamento--fallita");
+                aggiornaBarra(barra, 0, "Caricamento in corso...");
+
+                var richiesta = new XMLHttpRequest();
+                richiesta.open(modulo.method || "post", modulo.action, true);
+
+                richiesta.upload.addEventListener("progress", function (e) {
+                    var valore = percentuale(e);
+                    if (valore === null) {
+                        aggiornaBarra(barra, null, "Caricamento in corso...");
+                        return;
+                    }
+                    aggiornaBarra(
+                        barra,
+                        valore,
+                        valore + "% - " + pesoLeggibile(e.loaded) +
+                            " di " + pesoLeggibile(e.total)
+                    );
+                });
+
+                richiesta.upload.addEventListener("load", function () {
+                    /* I byte sono partiti tutti: da qui in avanti si aspetta
+                       che il server finisca di scriverli. Dirlo evita la
+                       barra ferma al 100% che sembra bloccata. */
+                    aggiornaBarra(barra, 100, "Il server sta salvando i file...");
+                });
+
+                richiesta.addEventListener("load", function () {
+                    if (richiesta.status >= 200 && richiesta.status < 400) {
+                        barra.classList.add("barra-caricamento--conclusa");
+                        aggiornaBarra(barra, 100, "Caricamento completato.");
+                        /* La richiesta ha gia' seguito il rimando del server:
+                           responseURL e' la pagina di arrivo. */
+                        window.location.href =
+                            richiesta.responseURL || modulo.action;
+                        return;
+                    }
+                    barra.classList.add("barra-caricamento--fallita");
+                    aggiornaBarra(barra, 100, "Il caricamento non e' riuscito.");
+                    mostraRisposta(richiesta.responseText);
+                });
+
+                richiesta.addEventListener("error", function () {
+                    barra.classList.add("barra-caricamento--fallita");
+                    aggiornaBarra(
+                        barra,
+                        100,
+                        "Collegamento interrotto: il file non e' stato caricato."
+                    );
+                    if (invio) {
+                        invio.disabled = false;
+                    }
+                });
+
+                richiesta.send(new FormData(modulo));
+            });
+        })(moduli[m]);
     }
 })();

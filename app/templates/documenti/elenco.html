@@ -1,0 +1,158 @@
+{# ===========================================================================
+   Elenco dei documenti, con ricerca sul titolo, filtri e impaginazione.
+
+   E' UNA PAGINA SOLA PER DUE USI. Senza parametri mostra tutti i documenti
+   che chi guarda puo' vedere; con "?progetto={id}" li restringe a un
+   progetto, ed e' l'elenco di cui parla il punto 8 della sessione. Due pagine
+   separate avrebbero voluto dire due interrogazioni da tenere allineate e,
+   prima o poi, due elenchi che dicono cose diverse.
+
+   LE RIGHE CHE NON CI SONO. I documenti che il ruolo di chi guarda non gli
+   permette di vedere non vengono nascosti qui: non escono proprio
+   dall'interrogazione (app/services/permissions.py). Un elenco che nasconde
+   una riga che poi si apre scrivendone l'indirizzo non e' una protezione.
+   =========================================================================== #}
+{% extends "base.html" %}
+
+{% from "components/pulsanti.html" import pulsante_collegamento %}
+{% from "components/tabella.html" import tabella %}
+{% from "components/ricerca.html" import ricerca %}
+{% from "components/impaginazione.html" import impaginazione %}
+{% from "components/stato.html" import etichetta, etichetta_documento %}
+{% from "components/vuoto.html" import vuoto %}
+{% from "components/avvisi.html" import notifica %}
+
+{% block titolo %}Documenti{% endblock %}
+{% block sezione %}Documenti{% endblock %}
+
+{% block notifiche %}
+    {% if request.query_params.get("caricati") %}
+        {{ notifica(request.query_params.get("caricati")
+                    ~ " documenti sono stati creati, uno per file. Ognuno "
+                      "parte dalla versione 1, in bozza.",
+                    variante="successo", titolo="Caricamento completato") }}
+    {% endif %}
+    {% if request.query_params.get("ritirato") %}
+        {{ notifica("Il documento e' stato tolto dagli elenchi. Non e' stato "
+                    "cancellato niente: resta nella sezione dei ritirati, da "
+                    "cui si ripristina.",
+                    variante="successo", titolo="Documento ritirato",
+                    durata=0) }}
+    {% endif %}
+{% endblock %}
+
+{% block contenuto %}
+
+<div class="testata">
+    <div>
+        <h1>Documenti</h1>
+        <p class="sottotitolo">
+            {% if progetto_scelto %}
+                I documenti del progetto su
+                <span class="mono">{{ progetto_scelto.product_version.product.code }}</span>
+                versione {{ progetto_scelto.product_version.version_number }}.
+            {% else %}
+                Ogni documento sta in un progetto e ha una versione per ogni
+                file caricato. Le versioni non si sostituiscono: si aggiungono.
+            {% endif %}
+        </p>
+    </div>
+    <div class="testata-azioni">
+        {% if progetto_scelto %}
+            {{ pulsante_collegamento("Il progetto",
+                                     "/progetti/" ~ progetto_scelto.id,
+                                     icona_nome="progetti") }}
+            {{ pulsante_collegamento("Carica un documento",
+                                     "/documenti/nuovo?progetto=" ~ progetto_scelto.id,
+                                     variante="primario", icona_nome="carica") }}
+        {% endif %}
+        {% if utente.is_creatore %}
+            {{ pulsante_collegamento("Ritirati", "/documenti/ritirati",
+                                     icona_nome="cartella-vuota") }}
+        {% endif %}
+    </div>
+</div>
+
+{{ ricerca("/documenti", valore=q, nome="q",
+           etichetta="Cerca fra i documenti",
+           segnaposto="Titolo del documento",
+           filtri=filtri,
+           nascosti={"progetto": progetto_scelto.id if progetto_scelto else "",
+                     "ordina": ordina, "verso": verso}) }}
+
+{% if totale or q or tipo_scelto or stato_scelto %}
+
+    {% set colonne = [
+        {"etichetta": "Titolo", "chiave": "titolo"},
+        {"etichetta": "Tipo", "chiave": "tipo"},
+        {"etichetta": "Versione", "classe": "colonna-numero"},
+        {"etichetta": "Stato", "chiave": "stato"},
+        {"etichetta": "Classificazione"},
+        {"etichetta": "Ultimo caricamento"},
+        {"etichetta": "Data", "chiave": "aggiornato"},
+    ] %}
+
+    {% call tabella(colonne,
+                    vuota=(documenti|length == 0),
+                    messaggio_vuoto="Nessun documento con questi filtri. "
+                                    "Prova a svuotare la casella di ricerca.",
+                    ordina=ordina, verso=verso, indirizzo="/documenti",
+                    riepilogo=(totale ~ " document" ~ ("o" if totale == 1 else "i")
+                               ~ " trovat" ~ ("o" if totale == 1 else "i"))) %}
+        {% for documento in documenti %}
+        {% set corrente = versione_corrente(documento) %}
+        <tr>
+            <td>
+                <a href="/documenti/{{ documento.id }}">{{ documento.title }}</a>
+                {% if not progetto_scelto %}
+                <div class="testo-piccolo testo-tenue mono">
+                    {{ documento.project.product_version.product.code }}
+                    v{{ documento.project.product_version.version_number }}
+                </div>
+                {% endif %}
+            </td>
+            <td>{{ documento.doc_type }}</td>
+            <td class="colonna-numero">
+                {% if corrente %}{{ corrente.version_number }}
+                {% else %}<span class="testo-tenue">&mdash;</span>{% endif %}
+            </td>
+            <td>{{ etichetta_documento(documento.state) }}</td>
+            <td>{{ documento.classification.name }}</td>
+            <td>
+                {% if corrente %}{{ corrente.author.full_name }}
+                {% else %}<span class="testo-tenue">&mdash;</span>{% endif %}
+            </td>
+            <td>
+                {% if corrente %}{{ corrente.created_at.strftime("%d/%m/%Y") }}
+                {% else %}<span class="testo-tenue">&mdash;</span>{% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+    {% endcall %}
+
+    {{ impaginazione(pagina=pagina_corrente, totale_pagine=totale_pagine,
+                     indirizzo="/documenti", parametri=parametri,
+                     totale_righe=totale) }}
+
+{% else %}
+
+    {{ vuoto("Nessun documento",
+             ("In questo progetto non e' ancora stato caricato niente. Il "
+              "primo file diventa il documento numero uno, in bozza."
+              if progetto_scelto else
+              "Non ci sono documenti visibili. I documenti si caricano dentro "
+              "un progetto: si apre il progetto e si carica da li'."),
+             azione=(pulsante_collegamento("Carica il primo documento",
+                                           "/documenti/nuovo?progetto="
+                                           ~ progetto_scelto.id,
+                                           variante="primario",
+                                           icona_nome="carica")
+                     if progetto_scelto else
+                     pulsante_collegamento("Vai ai progetti", "/progetti",
+                                           variante="primario",
+                                           icona_nome="progetti")),
+             icona_nome="documenti") }}
+
+{% endif %}
+
+{% endblock %}

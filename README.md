@@ -19,6 +19,25 @@ Gestione progetti e documentazione tecnica. Gira in rete locale, senza cloud.
 11. Eseguire i test: `pytest`
 12. In caso di problemi, leggere il registro: `Get-Content logs\aurora.log -Tail 50`
 
+## Dove finiscono i file caricati
+
+In `STORAGE_PATH` (di partenza `storage/`), depositati con il nome della loro
+impronta SHA-256 e non con il loro:
+
+```
+storage/objects/3f/9a/3f9a2c11...   il file
+storage/tmp/                        i file a meta' scrittura
+```
+
+Il nome originale, il tipo e tutti i metadati stanno nel database. Due
+caricamenti dello stesso identico file occupano un file solo. La cartella
+`tmp/` in condizioni normali e' vuota: quello che ci resta e' un caricamento
+interrotto, e non lo riferisce nessuna riga del database.
+
+**`STORAGE_PATH` va nei backup del server**: il database senza quella cartella
+e' un elenco di documenti che non si aprono. In produzione conviene un disco
+dedicato.
+
 ## Se nessuno riesce piu' a entrare
 
 Le password non si recuperano: nel database c'e' solo l'impronta argon2. Se ne

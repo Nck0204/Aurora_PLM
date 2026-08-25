@@ -85,3 +85,39 @@
     {{ etichetta("attivo", variante="successo") }}
 {%- endif -%}
 {%- endmacro %}
+
+
+{# --- Lo stato di un documento -------------------------------------------
+
+   I quattro stati di DocumentState. Due di essi - "rilasciato" e "superato" -
+   hanno lo stesso nome di due stati del ciclo di vita di una versione di
+   prodotto, e prendono apposta **la stessa tinta**: vogliono dire la stessa
+   cosa, e dargliene una diversa insegnerebbe a chi guarda che il verde in
+   questa pagina non e' il verde di quell'altra.
+
+   Gli altri due sono di servizio: la bozza e' neutra perche' e' il punto di
+   partenza e non e' una notizia, la verifica e' gialla perche' e' la
+   situazione in cui qualcuno deve fare qualcosa.
+
+   Non c'e' nessuna classe CSS nuova: sono tutte etichette che esistono gia'. #}
+{% set STATI_DOCUMENTO = {
+    "bozza":       {"classe": none,          "testo": "bozza"},
+    "in_verifica": {"classe": "attenzione",  "testo": "in verifica"},
+    "rilasciato":  {"classe": "rilasciato",  "testo": "rilasciato"},
+    "superato":    {"classe": "superato",    "testo": "superato"},
+} %}
+
+
+{% macro etichetta_documento(stato) -%}
+{%- set chiave = stato.value if stato is not string else stato -%}
+{%- set voce = STATI_DOCUMENTO.get(chiave) -%}
+{%- if voce and voce.classe -%}
+<span class="etichetta etichetta--{{ voce.classe }}">{{ voce.testo }}</span>
+{%- elif voce -%}
+<span class="etichetta">{{ voce.testo }}</span>
+{%- else -%}
+{# Stato non previsto: si mostra comunque, in grigio. Meglio una parola
+   sconosciuta che una casella vuota, che nasconderebbe il problema. #}
+<span class="etichetta">{{ chiave }}</span>
+{%- endif -%}
+{%- endmacro %}

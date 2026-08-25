@@ -142,4 +142,35 @@
 
 {% endcall %}
 
+{# --- I documenti ---
+   Il riquadro non elenca niente: porta all'elenco vero, che ha i suoi filtri
+   e la sua ricerca. Due elenchi della stessa cosa, uno ridotto qui e uno
+   intero altrove, sarebbero due interrogazioni da tenere allineate. #}
+{% call riquadro("Documenti") %}
+    {% if documenti_del_progetto %}
+        <p>
+            Questo progetto ha
+            <strong>{{ documenti_del_progetto }}</strong>
+            document{{ "o" if documenti_del_progetto == 1 else "i" }} che puoi
+            vedere.
+        </p>
+    {% else %}
+        <p class="campo-aiuto">
+            In questo progetto non c'e' ancora nessun documento che tu possa
+            vedere. Il primo file caricato diventa il documento numero uno.
+        </p>
+    {% endif %}
+
+    <div class="fila-pulsanti margine-sopra">
+        {{ pulsante_collegamento("Apri i documenti",
+                                 "/documenti?progetto=" ~ progetto.id,
+                                 icona_nome="documenti") }}
+        {% if puo_caricare %}
+            {{ pulsante_collegamento("Carica un documento",
+                                     "/documenti/nuovo?progetto=" ~ progetto.id,
+                                     variante="primario", icona_nome="carica") }}
+        {% endif %}
+    </div>
+{% endcall %}
+
 {% endblock %}

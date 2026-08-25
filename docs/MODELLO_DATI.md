@@ -1,7 +1,7 @@
 # Modello dati — rilascio R1
 
-Ultimo aggiornamento: **25 agosto 2026**, sessione 5 (nessuna tabella
-cambiata: aggiornate la sezione 4.3 e la sezione 7).
+Ultimo aggiornamento: **25 agosto 2026**, sessione 6 (nessuna tabella
+cambiata: aggiornate le sezioni 4.5, 4.6 e 7).
 
 Questo file descrive le diciannove tabelle create dalla migrazione
 `897359b06e69_modello_dati_r1.py`. Una tabella per file in `app/models/`, una
@@ -275,6 +275,16 @@ che dice "no" e' una decisione, una casella che manca e' una dimenticanza, e a
 distanza di mesi non si distinguono. La matrice di partenza sta in
 `scripts/seed.py`.
 
+**Chi la legge**, dalla sessione 6: `app/services/permissions.py`, e nessun
+altro. Offre la stessa domanda in due forme - `permessi()` per un documento
+solo, `filtro_visibilita()` come condizione SQL per gli elenchi - e devono
+dare la stessa risposta, perche' un elenco che nasconde una riga che poi si
+apre scrivendone l'indirizzo non e' una protezione (D-048). Una casella che
+mancasse varrebbe **no**, e il fatto finirebbe nel registro.
+
+**Chi la scrive**: per adesso solo `scripts/seed.py`. La pagina che la corregge
+dall'interfaccia non c'e' ancora.
+
 ### 4.6 Documenti
 
 #### `documents` — il contenitore
@@ -307,6 +317,29 @@ distanza di mesi non si distinguono. La matrice di partenza sta in
 Unicita' su `(document_id, version_number)`. Le righe di questa tabella non si
 modificano mai: una versione caricata e' un fatto avvenuto, e se il file era
 sbagliato si carica la versione dopo.
+
+**Come ci si scrive**, dalla sessione 6. Il contenuto passa prima da
+`app/services/storage.py`, che lo deposita in
+`STORAGE_PATH/objects/<primi 2>/<successivi 2>/<impronta>` e restituisce
+l'impronta; solo dopo si scrive la riga. L'ordine conta: se il deposito
+fallisce - file troppo grande, disco pieno - non e' stata creata nessuna riga
+da annullare, mentre il contrario lascerebbe righe che puntano a un file che
+non c'e' (D-047).
+
+Il caso opposto - file depositato e transazione annullata - lascia
+nell'archivio un oggetto che nessuno riferisce. Non e' un problema: non si
+cancella (regola 5 di CLAUDE.md), e al primo caricamento dello stesso
+contenuto la deduplicazione lo riusa.
+
+**`documents.state` descrive la versione corrente**, cioe' l'ultima caricata.
+Caricando una versione nuova su un documento `rilasciato`, il documento torna
+in `bozza`: la versione rilasciata resta dov'e', identica, e quella nuova deve
+rifare il giro della verifica (D-045). Il grafo degli stati sta in
+`app/services/lifecycle.py`, accanto a quello delle versioni di prodotto e in
+nessun altro posto (D-044).
+
+**Le colonne della presa in carico** (`checked_out_by_id`, `checked_out_at`)
+esistono e nessuno le valorizza: sono del rilascio R2.
 
 ### 4.7 Fasi
 
@@ -509,3 +542,18 @@ dimenticare.**
 Non e' ancora una soluzione generale, e probabilmente non ce ne sara' una: e'
 il modello di D-032, **un controllo solo sulla strada obbligata**, applicato
 tre volte.
+
+Aggiornamento della sessione 6, sempre sullo stesso problema. I documenti
+hanno **due** filtri da non dimenticare, non uno: le righe ritirate
+(`deleted_at` valorizzata) e i permessi. Stanno tutti e due dentro
+`documents._visibili()`, che e' l'interrogazione di partenza di ogni elenco:
+chi parte da li' non se li puo' dimenticare.
+
+| Dove | Come |
+|---|---|
+| Documenti | `documents._visibili()`: toglie i ritirati **e** applica `permissions.filtro_visibilita()`. E' l'unico punto in cui i due filtri vengono messi. |
+| Documenti ritirati | `documents.documenti_ritirati()`, che non passa da `_visibili()` apposta: e' la sezione da cui si ripristinano, ed e' l'unico posto in cui compaiono. La rotta che la usa dichiara `Depends(richiedi_creatore)`, che e' il lucchetto vero. |
+
+E' sempre il modello di D-032 - **un controllo solo sulla strada obbligata** -
+applicato adesso quattro volte. Non e' ancora una soluzione generale, e
+probabilmente non ce ne sara' una.

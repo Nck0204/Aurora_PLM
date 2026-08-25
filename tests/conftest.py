@@ -23,7 +23,7 @@ import uuid
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import inspect, text
+from sqlalchemy import inspect, select, text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -406,3 +406,156 @@ def crea_progetto(db: Session, versione, project_manager, autore=None, squadra=(
     )
     db.flush()
     return progetto
+
+
+# --- Aiuti per i test dei documenti (sessione 6) ----------------------------
+#
+# I documenti hanno una particolarita' rispetto a prodotti e clienti: il loro
+# dato irripetibile non e' un codice ma il **contenuto del file**, perche'
+# l'archivio deposita per impronta e due contenuti uguali finiscono nello
+# stesso file. Un test che scrivesse sempre b"contenuto di prova" lavorerebbe
+# sull'oggetto lasciato dal test precedente, e la verifica della
+# deduplicazione direbbe di si' anche quando la deduplicazione non funziona.
+#
+# Per questo contenuto_irripetibile() ci mette dentro una coda casuale: e' la
+# stessa medicina di modello_irripetibile(), applicata ai byte.
+
+
+def contenuto_irripetibile(prefisso: bytes = b"contenuto di prova") -> bytes:
+    """Un contenuto di file che nell'archivio non puo' gia' esserci.
+
+    L'archivio deposita per impronta SHA-256 del contenuto: due test che
+    usassero gli stessi byte userebbero lo stesso file sul disco, e il secondo
+    troverebbe il lavoro del primo gia' fatto. Con una coda casuale ogni test
+    si porta il proprio oggetto.
+
+    **I file dell'archivio non vengono annullati dal rollback**: la
+    transazione del test copre il database, non il disco. Gli oggetti che
+    restano non sono un problema - non sono riferiti da nessuna riga, non si
+    cancellano (regola 5 di CLAUDE.md) e la deduplicazione li riuserebbe - ma
+    e' il motivo per cui devono essere irripetibili.
+    """
+    return prefisso + b" " + uuid.uuid4().hex.encode("ascii")
+
+
+def pdf_di_prova(pagine: int = 1) -> bytes:
+    """Un PDF vero, vuoto, con la coda casuale che lo rende irripetibile.
+
+    Serve ai test della filigrana, che devono partire da un PDF che pypdf sa
+    aprire. Si costruisce con pypdf invece di scrivere a mano i byte di un
+    file minimo: cosi' e' un PDF valido per la stessa libreria che poi lo
+    dovra' marchiare, e non un file che "sembra" un PDF.
+
+    Il titolo casuale nei metadati e' quello che ne cambia l'impronta: due
+    PDF vuoti costruiti allo stesso modo sarebbero altrimenti identici byte
+    per byte.
+    """
+    import io
+
+    from pypdf import PageObject, PdfWriter
+
+    scrittore = PdfWriter()
+    for _ in range(pagine):
+        scrittore.add_page(PageObject.create_blank_page(width=595, height=842))
+    scrittore.add_metadata({"/Title": f"Prova {uuid.uuid4().hex}"})
+
+    uscita = io.BytesIO()
+    scrittore.write(uscita)
+    return uscita.getvalue()
+
+
+def classificazione_di_prova(db: Session, nome: str = "Tecnico"):
+    """Una classificazione con la matrice dei permessi completa.
+
+    Sul database di sviluppo le quattro classificazioni ci sono gia', messe da
+    scripts/seed.py insieme alle dodici caselle della matrice: in quel caso
+    questa funzione le trova e basta.
+
+    Su un database appena migrato, senza seed, le crea - la classificazione e
+    le tre righe della matrice, una per ruolo - perche' un test non deve
+    fallire per un pezzo di ambiente mancante. I permessi che scrive sono
+    quelli della matrice di partenza per "Tecnico": il project manager e
+    l'ingegnere possono tutto, il lettore vede e basta.
+    """
+    from app.models import Classification, PermissionRule, ProjectRole
+
+    trovata = db.scalars(
+        select(Classification).where(Classification.name == nome)
+    ).first()
+    if trovata is not None:
+        return trovata
+
+    trovata = Classification(name=nome, description="Creata da un test.")
+    db.add(trovata)
+    db.flush()
+
+    permessi_per_ruolo = {
+        ProjectRole.PROJECT_MANAGER: (True, True, True),
+        ProjectRole.INGEGNERE: (True, True, True),
+        ProjectRole.LETTORE: (True, False, False),
+    }
+    for ruolo, (vedere, caricare, modificare) in permessi_per_ruolo.items():
+        db.add(
+            PermissionRule(
+                project_role=ruolo,
+                classification_id=trovata.id,
+                can_view=vedere,
+                can_upload=caricare,
+                can_edit=modificare,
+            )
+        )
+    db.flush()
+    return trovata
+
+
+def crea_documento(
+    db: Session,
+    progetto,
+    autore,
+    contenuto: bytes | None = None,
+    titolo: str = "Documento di prova",
+    tipo: str = "Schema elettrico",
+    nome_file: str = "schema.pdf",
+    mime_type: str = "application/pdf",
+    classificazione=None,
+):
+    """Un documento con la sua versione 1, creato passando dai servizi veri.
+
+    Passa da storage.deposita() e da documents.crea_documento() di proposito:
+    cosi' i test lavorano sugli stessi dati che produce l'interfaccia, riga di
+    audit e deduplicazione comprese.
+    """
+    import io
+
+    from app.services import documents as servizio_documenti
+    from app.services import storage
+
+    if contenuto is None:
+        contenuto = contenuto_irripetibile()
+    if classificazione is None:
+        classificazione = classificazione_di_prova(db)
+
+    # Il deposito consuma la sorgente, quindi si deposita prima e si compone
+    # dopo il caricamento che si passa al servizio: quello legge solo il nome
+    # e il tipo, il contenuto e' gia' nell'archivio. E' lo stesso ordine che
+    # segue la rotta vera.
+    deposito = storage.deposita(io.BytesIO(contenuto))
+
+    caricamento = servizio_documenti.Caricamento(
+        sorgente=io.BytesIO(contenuto),
+        nome_file=nome_file,
+        mime_type=mime_type,
+    )
+
+    documento, versione = servizio_documenti.crea_documento(
+        db,
+        progetto=progetto,
+        titolo=titolo,
+        tipo=tipo,
+        classificazione=classificazione,
+        caricamento=caricamento,
+        deposito=deposito,
+        autore=autore,
+    )
+    db.flush()
+    return documento, versione

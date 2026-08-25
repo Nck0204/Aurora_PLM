@@ -1,0 +1,98 @@
+{# ===========================================================================
+   I documenti ritirati. Riservata al creatore.
+
+   E' LA SEZIONE DEDICATA di cui parla la regola 5 della sessione 6: in Aurora
+   non si cancella niente, quindi "eliminare" un documento vuol dire toglierlo
+   dagli elenchi ordinari, e questo e' il posto in cui i documenti tolti si
+   vedono ancora e si rimettono a posto.
+
+   La riga dice **chi** lo ha tolto e **quando**: senza quelle due colonne
+   questa pagina sarebbe un cestino, e un cestino non risponde alla domanda
+   che si fa davvero, che e' "chi lo ha tolto e perche'".
+   =========================================================================== #}
+{% extends "base.html" %}
+
+{% from "components/pulsanti.html" import pulsante_collegamento, modulo_pulsante %}
+{% from "components/tabella.html" import tabella %}
+{% from "components/stato.html" import etichetta_documento %}
+{% from "components/vuoto.html" import vuoto %}
+{% from "components/avvisi.html" import avviso %}
+
+{% block titolo %}Documenti ritirati{% endblock %}
+{% block sezione %}Documenti{% endblock %}
+
+{% block contenuto %}
+
+<div class="testata">
+    <div>
+        <h1>Documenti ritirati</h1>
+        <p class="sottotitolo">
+            Tolti dagli elenchi, non cancellati. Da qui si rimettono a posto.
+        </p>
+    </div>
+    <div class="testata-azioni">
+        {{ pulsante_collegamento("Torna ai documenti", "/documenti",
+                                 icona_nome="freccia-sinistra") }}
+    </div>
+</div>
+
+{% if documenti %}
+
+    {{ avviso("In Aurora non esiste la cancellazione. Ritirando un documento "
+              "non e' stato buttato via niente: le versioni, i file "
+              "nell'archivio e il registro delle operazioni sono tutti dove "
+              "erano, e il ripristino rimette la riga com'era.",
+              variante="informazione",
+              titolo="Che cosa c'e' in questa pagina") }}
+
+    {% set colonne = [
+        {"etichetta": "Titolo"},
+        {"etichetta": "Tipo"},
+        {"etichetta": "Progetto"},
+        {"etichetta": "Stato"},
+        {"etichetta": "Versioni", "classe": "colonna-numero"},
+        {"etichetta": "Ritirato da"},
+        {"etichetta": "Quando"},
+        {"etichetta": ""},
+    ] %}
+
+    {% call tabella(colonne) %}
+        {% for documento in documenti %}
+        <tr>
+            <td><a href="/documenti/{{ documento.id }}">{{ documento.title }}</a></td>
+            <td>{{ documento.doc_type }}</td>
+            <td class="mono">
+                {{ documento.project.product_version.product.code }}
+                v{{ documento.project.product_version.version_number }}
+            </td>
+            <td>{{ etichetta_documento(documento.state) }}</td>
+            <td class="colonna-numero">{{ documento.versions|length }}</td>
+            <td>
+                {% if documento.deleted_by %}{{ documento.deleted_by.full_name }}
+                {% else %}<span class="testo-tenue">&mdash;</span>{% endif %}
+            </td>
+            <td>{{ documento.deleted_at.strftime("%d/%m/%Y %H:%M") }}</td>
+            <td>
+                {{ modulo_pulsante(request,
+                       "/documenti/" ~ documento.id ~ "/ripristina",
+                       "Ripristina", misura="piccolo",
+                       icona_nome="ripristina") }}
+            </td>
+        </tr>
+        {% endfor %}
+    {% endcall %}
+
+{% else %}
+
+    {{ vuoto("Nessun documento ritirato",
+             "Nessuno ha ancora tolto un documento dagli elenchi. Quando "
+             "succedera', il documento comparira' qui con il nome di chi lo "
+             "ha tolto, e da qui si potra' rimettere a posto.",
+             azione=pulsante_collegamento("Vai ai documenti", "/documenti",
+                                          variante="primario",
+                                          icona_nome="documenti"),
+             icona_nome="cartella-vuota") }}
+
+{% endif %}
+
+{% endblock %}

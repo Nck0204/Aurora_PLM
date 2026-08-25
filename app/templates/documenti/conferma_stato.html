@@ -1,0 +1,82 @@
+{# ===========================================================================
+   Conferma di un cambio di stato di un documento.
+
+   E' UNA PAGINA E NON UNA FINESTRA MODALE, come la conferma del ciclo di vita
+   di una versione di prodotto (D-042). Una finestra ha bisogno di JavaScript
+   per aprirsi; se non si aprisse, l'operazione partirebbe senza che nessuno
+   abbia letto niente. La regola sta in docs/GUIDA_STILE.md, sezione 5.
+
+   IL RILASCIO E' QUELLO CHE CONTA. Da li' in poi il file non si sostituisce
+   piu': la pagina lo scrive per esteso invece di limitarsi a chiedere "sei
+   sicuro?", che e' una domanda a cui tutti rispondono di si' senza leggere.
+   =========================================================================== #}
+{% extends "base.html" %}
+
+{% from "components/campi.html" import csrf %}
+{% from "components/pulsanti.html" import pulsante, pulsante_collegamento %}
+{% from "components/riquadro.html" import riquadro %}
+{% from "components/descrizione.html" import descrizione, voce %}
+{% from "components/stato.html" import etichetta_documento %}
+{% from "components/avvisi.html" import avviso %}
+
+{% block titolo %}Conferma il cambio di stato{% endblock %}
+{% block sezione %}Documenti{% endblock %}
+
+{% block contenuto %}
+
+<div class="testata">
+    <div>
+        <h1>Conferma il cambio di stato</h1>
+        <p class="sottotitolo">{{ documento.title }}</p>
+    </div>
+</div>
+
+<div class="colonna-stretta">
+
+<form method="post" action="/documenti/{{ documento.id }}/stato" class="modulo">
+    {{ csrf(request) }}
+    <input type="hidden" name="nuovo" value="{{ nuovo_stato.value }}">
+
+    {% call riquadro("Che cosa stai per fare",
+                     piede=pulsante("Conferma il passaggio a «"
+                                    ~ nome_stato(nuovo_stato) ~ "»",
+                                    variante="primario")
+                           ~ pulsante_collegamento("Annulla",
+                                   "/documenti/" ~ documento.id)) %}
+
+        {% call descrizione() %}
+            {{ voce("Documento", documento.title) }}
+            {{ voce("Tipo", documento.doc_type) }}
+            {{ voce("Versione corrente",
+                    corrente.version_number if corrente else none) }}
+            {{ voce("Stato di adesso", etichetta_documento(documento.state)) }}
+            {{ voce("Stato dopo", etichetta_documento(nuovo_stato)) }}
+        {% endcall %}
+
+        {% if e_il_rilascio %}
+            {% call avviso("", variante="attenzione",
+                           titolo="Dopo il rilascio il file non si sostituisce piu'") %}
+                <p>
+                    La versione
+                    {{ corrente.version_number if corrente else "corrente" }}
+                    diventa definitiva: il suo file resta com'e' e non puo'
+                    essere sovrascritto da nessuno.
+                </p>
+                <p class="margine-sopra">
+                    Se in futuro il contenuto dovra' cambiare, si carichera'
+                    una versione nuova, che partira' da bozza e lascera'
+                    intatta questa.
+                </p>
+                <p class="margine-sopra">
+                    Il rilascio viene registrato con il tuo nome e con la data
+                    di adesso, e resta nel registro delle operazioni.
+                </p>
+            {% endcall %}
+        {% endif %}
+
+    {% endcall %}
+</form>
+
+</div>
+
+{% endblock %}

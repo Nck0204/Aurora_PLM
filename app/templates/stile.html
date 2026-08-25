@@ -27,7 +27,7 @@
 {% from "components/pulsanti.html" import pulsante, pulsante_collegamento, modulo_pulsante %}
 {% from "components/campi.html" import campo, area_testo, tendina, spunta, scelta, csrf %}
 {% from "components/tabella.html" import tabella %}
-{% from "components/stato.html" import etichetta, etichetta_ciclo_vita %}
+{% from "components/stato.html" import etichetta, etichetta_ciclo_vita, etichetta_documento %}
 {% from "components/riquadro.html" import riquadro %}
 {% from "components/dialogo.html" import dialogo, pulsante_apri, pulsante_chiudi %}
 {% from "components/avvisi.html" import avviso, notifica %}
@@ -37,6 +37,7 @@
 {% from "components/avanzamento.html" import avanzamento %}
 {% from "components/descrizione.html" import descrizione, voce %}
 {% from "components/area_file.html" import area_file %}
+{% from "components/barra_caricamento.html" import barra_caricamento %}
 {% from "components/vuoto.html" import vuoto %}
 
 {% block titolo %}Stile{% endblock %}
@@ -190,8 +191,9 @@
     {% set nomi_icone = ["prodotti", "progetti", "documenti", "posta", "utenti",
                          "clienti", "diagnostica", "stile", "casa", "cerca", "esci",
                          "chiave", "piu", "spunta", "attenzione", "errore",
-                         "informazione", "carica", "cartella-vuota",
-                         "freccia-sinistra", "freccia-destra"] %}
+                         "informazione", "carica", "scarica", "ripristina",
+                         "cartella-vuota", "freccia-sinistra",
+                         "freccia-destra"] %}
     <div class="campioni">
         {% for nome in nomi_icone %}
         <div class="campione campione--icona">
@@ -388,6 +390,36 @@
             </p>
         {% endcall %}
 
+        <h2>Barra di caricamento</h2>
+        <p class="testo-tenue">
+            Quanti byte sono partiti, mentre partono. Non e' la barra di
+            avanzamento delle fasi di un progetto: quella dice a che punto e'
+            un lavoro, questa quanto manca a un file. Nelle pagine vere si
+            scrive senza parametri, nasce nascosta e la riempie lo script; qui
+            le si passa una percentuale apposta, per poterla guardare ferma.
+        </p>
+        {% call riquadro() %}
+            {{ barra_caricamento(id="esempio-barra-a", percentuale=45,
+                                 testo="45% - 13.5 MB di 30.0 MB") }}
+
+            {{ barra_caricamento(id="esempio-barra-b", percentuale=100,
+                                 variante="conclusa",
+                                 testo="Caricamento completato.") }}
+
+            {{ barra_caricamento(id="esempio-barra-c", percentuale=100,
+                                 variante="fallita",
+                                 testo="Collegamento interrotto: "
+                                       "il file non e' stato caricato.") }}
+
+            <p class="campo-aiuto margine-sopra">
+                Dentro un modulo si scrive <code>barra_caricamento()</code> e
+                basta, e il modulo dichiara
+                <code>data-carica-con-avanzamento</code>: senza JavaScript il
+                modulo si invia da solo e la barra non compare mai, perche'
+                caricare un documento non puo' dipendere da uno script.
+            </p>
+        {% endcall %}
+
         <h2>La riga in fondo al modulo</h2>
         {% call riquadro(piede=pulsante("Salva", tipo="button", variante="primario")) %}
             <p>Le azioni possono stare in fondo al riquadro, su fondo piu'
@@ -533,6 +565,21 @@
         {{ etichetta_ciclo_vita("in_produzione") }}
         {{ etichetta_ciclo_vita("superato") }}
         {{ etichetta_ciclo_vita("obsoleto") }}
+    </div>
+
+    <h3>Stati di un documento</h3>
+    <p class="testo-tenue">
+        I quattro stati di un documento. "Rilasciato" e "superato" hanno
+        apposta la stessa tinta degli stati omonimi di una versione di
+        prodotto: vogliono dire la stessa cosa, e dargliene una diversa
+        insegnerebbe che il verde di questa pagina non e' il verde di
+        quell'altra.
+    </p>
+    <div class="affianca margine-sopra">
+        {{ etichetta_documento("bozza") }}
+        {{ etichetta_documento("in_verifica") }}
+        {{ etichetta_documento("rilasciato") }}
+        {{ etichetta_documento("superato") }}
     </div>
 
     <h3>Etichette di servizio</h3>

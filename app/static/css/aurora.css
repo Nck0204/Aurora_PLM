@@ -46,6 +46,7 @@
      22. Pagine senza impalcatura (accesso, errore)
      23. La vetrina /stile
      24. Adattamento alla larghezza dello schermo
+     25. Barra di caricamento dei file
    ========================================================================== */
 
 
@@ -2083,5 +2084,66 @@ fieldset.gruppo-campi legend {
 
     .barra-superiore {
         padding: 0 var(--spazio-4);
+    }
+}
+
+
+/* ==========================================================================
+   25. BARRA DI CARICAMENTO DEI FILE
+   La percentuale di un caricamento in corso. Non e' la barra di avanzamento
+   delle fasi di un progetto (sezione 16): quella dice a che punto e' un
+   lavoro, questa dice quanti byte sono partiti.
+
+   Nasce nascosta: la mostra lo script quando il caricamento comincia. Senza
+   JavaScript resta invisibile e il modulo si invia da solo, perche' caricare
+   un documento non deve dipendere da uno script (D-036).
+   ========================================================================== */
+
+.barra-caricamento {
+    margin-top: var(--spazio-4);
+}
+
+.barra-caricamento[hidden] {
+    display: none;
+}
+
+.barra-caricamento-traccia {
+    height: 10px;
+    border-radius: var(--raggio-piccolo);
+    background-color: var(--colore-superficie-sollevata);
+    border: 1px solid var(--colore-bordo);
+    overflow: hidden;
+}
+
+.barra-caricamento-riempimento {
+    height: 100%;
+    width: 0;
+    background-color: var(--colore-accento);
+    transition: width var(--durata-veloce) linear;
+}
+
+/* A caricamento finito la barra diventa verde: la conferma si vede prima di
+   leggerla. Il testo accanto la ripete a parole, perche' il colore non e' mai
+   l'unica informazione. */
+.barra-caricamento--conclusa .barra-caricamento-riempimento {
+    background-color: var(--colore-successo);
+}
+
+.barra-caricamento--fallita .barra-caricamento-riempimento {
+    background-color: var(--colore-errore);
+}
+
+.barra-caricamento-testo {
+    margin-top: var(--spazio-2);
+    color: var(--colore-testo-tenue);
+    font-size: var(--testo-piccolo);
+    font-variant-numeric: tabular-nums;
+}
+
+/* Chi ha chiesto meno animazioni non vede la barra scorrere: salta da un
+   valore all'altro. L'informazione e' la stessa. */
+@media (prefers-reduced-motion: reduce) {
+    .barra-caricamento-riempimento {
+        transition: none;
     }
 }

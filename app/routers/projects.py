@@ -28,7 +28,7 @@ from sqlalchemy.orm import Session
 from app.db import get_db
 from app.dependencies import richiedi_creatore, richiedi_login
 from app.models import PhaseTemplate, Project, User
-from app.services import lifecycle, projects, users
+from app.services import documents, lifecycle, permissions, projects, users
 from app.templating import pagina
 
 logger = logging.getLogger("aurora.rotte.progetti")
@@ -318,4 +318,13 @@ def scheda(
         squadra=projects.assegnazioni_attive(db, progetto.id),
         avanzamento=avanzamento,
         aperto=bool(aperto),
+        # Il riquadro dei documenti dice quanti se ne vedono e porta al loro
+        # elenco. Il conteggio passa dallo stesso filtro dell'elenco, quindi
+        # non puo' dire "tre documenti" a chi poi ne trova due.
+        documenti_del_progetto=documents.conta_documenti(
+            db, utente, progetto.id
+        ),
+        puo_caricare=bool(
+            permissions.classificazioni_caricabili(db, progetto, utente)
+        ),
     )

@@ -82,6 +82,22 @@ testo e il bordo) e un fondo appena tinto.
 | superato | `--stato-superato` `#D29922` | `--stato-superato-fondo` `#2B2721` |
 | obsoleto | `--stato-obsoleto` `#8B94A7` | `--stato-obsoleto-fondo` `#222731` |
 
+### Stati di un documento
+
+Sono i quattro valori di `DocumentState`. **"Rilasciato" e "superato" prendono
+apposta la stessa tinta** degli stati omonimi di una versione di prodotto:
+vogliono dire la stessa cosa, e dargliene una diversa insegnerebbe che il verde
+di questa pagina non e' il verde di quell'altra.
+
+| Stato | Etichetta |
+|---|---|
+| bozza | quella neutra: e' il punto di partenza, non e' una notizia |
+| in verifica | `--colore-attenzione`: c'e' qualcuno che deve fare qualcosa |
+| rilasciato | `--stato-rilasciato`, la stessa del ciclo di vita |
+| superato | `--stato-superato`, la stessa del ciclo di vita |
+
+Nessuna classe CSS nuova: sono tutte etichette che esistevano gia'.
+
 Non si usa mai il colore come unica informazione: dentro l'etichetta c'e'
 sempre la parola scritta.
 
@@ -160,11 +176,11 @@ la prova.
 
 | File | Macro | A che serve |
 |---|---|---|
-| `icone.html` | `icona` | i ventuno simboli, disegnati a mano in SVG |
+| `icone.html` | `icona` | i ventitre' simboli, disegnati a mano in SVG |
 | `pulsanti.html` | `pulsante`, `pulsante_collegamento`, `modulo_pulsante` | ogni azione |
 | `campi.html` | `campo`, `area_testo`, `tendina`, `spunta`, `scelta`, `csrf` | ogni campo di un modulo |
 | `tabella.html` | `tabella` | gli elenchi, con intestazione ferma e ordinamento |
-| `stato.html` | `etichetta_ciclo_vita`, `etichetta`, `etichetta_utente` | le pillole colorate degli stati |
+| `stato.html` | `etichetta_ciclo_vita`, `etichetta_documento`, `etichetta`, `etichetta_utente` | le pillole colorate degli stati |
 | `riquadro.html` | `riquadro` | il contenitore di tutto |
 | `dialogo.html` | `dialogo`, `pulsante_apri`, `pulsante_chiudi` | le conferme modali |
 | `avvisi.html` | `avviso`, `notifica` | i messaggi, fermi o temporanei |
@@ -174,6 +190,7 @@ la prova.
 | `avanzamento.html` | `avanzamento` | le fasi di un progetto in fila |
 | `descrizione.html` | `descrizione`, `voce` | la scheda di dettaglio etichetta/valore |
 | `area_file.html` | `area_file` | il caricamento dei documenti |
+| `barra_caricamento.html` | `barra_caricamento` | quanti byte sono partiti, mentre partono |
 | `vuoto.html` | `vuoto` | quando non c'e' niente da mostrare |
 
 ### Gli elenchi di scelte si compongono in Python, non nei template
@@ -309,14 +326,21 @@ Tre file, tutti serviti da noi (regola 1 di CLAUDE.md):
 | File | A che serve |
 |---|---|
 | `static/vendor/htmx.min.js` | HTMX 2.0.10, per aggiornare pezzi di pagina |
-| `static/js/aurora.js` | notifiche, finestre di dialogo, trascinamento file |
+| `static/js/aurora.js` | notifiche, finestre di dialogo, trascinamento file, barra di avanzamento del caricamento |
 | `static/js/copia.js` | il pulsante che copia la password assegnata |
 
 **Niente di quello che c'e' dentro e' indispensabile.** Con JavaScript spento
 Aurora funziona: si entra, si cambia la password, si crea un utente, si carica
 un documento. Le notifiche restano finche' non si cambia pagina, le finestre
 modali non si aprono (e le operazioni che contano non stanno li' dentro), i file
-si scelgono con il pulsante invece che trascinandoli.
+si scelgono con il pulsante invece che trascinandoli, e la barra
+dell'avanzamento non compare - il modulo si invia da solo, come ha sempre fatto
+un modulo.
+
+Un solo posto usa `XMLHttpRequest` invece di `fetch()`, ed e' la barra del
+caricamento: `fetch()` non sa dire quanti byte ha spedito, e l'avanzamento in
+salita non fa parte della sua interfaccia. E' l'unica cosa di Aurora in cui la
+libreria vecchia fa qualcosa che la nuova non sa fare.
 
 HTMX si usa **come un miglioramento, mai come la condizione perche' qualcosa
 funzioni**. Il modello e' la barra di ricerca: e' un modulo GET che funziona da

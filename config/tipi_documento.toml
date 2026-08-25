@@ -1,0 +1,41 @@
+# ===========================================================================
+#  Tipi di documento
+#
+#  Quando si carica un documento in Aurora bisogna dire che genere di
+#  documento e'. Questo file contiene l'elenco delle scelte possibili.
+#
+#  PERCHE' STA QUI E NON DENTRO IL PROGRAMMA. E' un elenco che l'azienda
+#  cambiera': aggiungera' "Analisi FMEA" o "Manuale d'uso", toglera' quello
+#  che non usa. Cambiarlo qui vuol dire cambiare una riga di un file di testo
+#  e riavviare il server, senza toccare il programma e senza una migrazione.
+#  E' la stessa scelta di config/codice_prodotto.toml (docs/DECISIONI.md,
+#  D-038).
+#
+#  COME SI CAMBIA. Si aggiunge o si toglie una riga dall'elenco "tipi". Le
+#  virgolette sono doppie e l'ordine e' quello in cui le voci compaiono nel
+#  menu a tendina.
+#
+#  ATTENZIONE AI TIPI GIA' USATI. In documents.doc_type il tipo e' scritto
+#  come testo, quindi togliendo una voce da qui i documenti che l'avevano non
+#  si rompono: continuano a mostrare il loro tipo, semplicemente non si puo'
+#  piu' sceglierlo per un documento nuovo. E' voluto: un dato scritto nel
+#  database si mostra sempre, anche quando non lo si sa piu' spiegare.
+#
+#  SE QUESTO FILE MANCA O E' SCRITTO MALE, Aurora parte lo stesso e usa
+#  l'elenco di ripiego scritto in app/services/doc_types.py. Il guasto finisce
+#  nel registro e si vede nella pagina di caricamento, ma non chiude fuori
+#  nessuno: un errore di battitura in un file di configurazione non deve poter
+#  fermare il lavoro di tutta l'azienda (D-039).
+# ===========================================================================
+
+tipi = [
+    "Schema elettrico",
+    "PCB",
+    "Meccanica",
+    "Firmware",
+    "Specifica",
+    "Rapporto di prova",
+    "Certificato",
+    "Corrispondenza",
+    "Altro",
+]

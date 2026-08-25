@@ -1,7 +1,19 @@
-"""Il ciclo di vita di una versione di prodotto: chi puo' cambiarlo e come.
+"""I cicli di vita di Aurora: i grafi degli stati, chi li muove e come.
 
-Questo modulo contiene tre cose, e sono le tre regole che l'azienda ha
-chiesto per prime:
+In Aurora ci sono **due** cicli di vita, e stanno tutti e due in questo file:
+quello di una versione di prodotto (in sviluppo, rilasciato, in produzione,
+superato, obsoleto) e quello di un documento (bozza, in verifica, rilasciato,
+superato). Il secondo e' arrivato con la sessione 6 ed e' stato messo qui e
+non in documents.py per la ragione scritta in D-042 e ripetuta nella regola
+"cose da non fare mai" di CLAUDE.md: **due stati non si confrontano fuori da
+questo modulo**. Un grafo in un file e uno in un altro sarebbero due posti in
+cui cercare, e alla terza sessione ce ne sarebbe un terzo.
+
+La prima parte del modulo (sezioni da 1 a 3) e' il ciclo di vita di una
+versione di prodotto; la quarta e' quello di un documento.
+
+Il ciclo di vita di una versione contiene tre cose, e sono le tre regole che
+l'azienda ha chiesto per prime:
 
   1. **Il grafo delle transizioni**, cioe' da quale stato si puo' passare a
      quale altro. Sta qui sotto, in una tabella sola, ed e' l'unico posto in
@@ -35,7 +47,7 @@ from fastapi import Request
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import LifecycleState, ProductVersion, User
+from app.models import DocumentState, LifecycleState, ProductVersion, User
 from app.services import audit
 
 logger = logging.getLogger("aurora.ciclo_vita")
@@ -375,3 +387,133 @@ def _supera_la_precedente(
 def trova_versione(db: Session, version_id: uuid.UUID) -> ProductVersion | None:
     """Cerca una versione dal suo identificatore."""
     return db.get(ProductVersion, version_id)
+
+
+# ---------------------------------------------------------------------------
+#  4. IL CICLO DI VITA DI UN DOCUMENTO
+# ---------------------------------------------------------------------------
+#
+#      bozza <──> in verifica ──> rilasciato ──> superato
+#        ^                             │
+#        └──── (si carica una versione nuova) ──┘
+#
+# Sta in questo file e non in documents.py per la stessa ragione per cui il
+# grafo delle versioni sta qui: i confronti fra stati si fanno in un posto
+# solo (D-042, e la regola in fondo a CLAUDE.md).
+#
+# Le scelte che non sono ovvie:
+#
+#   - **da "in verifica" si torna in bozza.** E' il rifiuto della verifica:
+#     chi controlla trova qualcosa che non va e il documento torna al suo
+#     autore. Senza questa freccia l'unico modo di correggere sarebbe
+#     rilasciare comunque, che e' il contrario di quello che serve;
+#   - **da "rilasciato" si va soltanto a "superato".** Un documento rilasciato
+#     e' un fatto avvenuto: non si annulla e non si corregge. Se il contenuto
+#     va cambiato si carica una versione nuova, e quella e' una bozza;
+#   - **"superato" e' terminale**, come "obsoleto" per le versioni di prodotto.
+#
+# LA FRECCIA CHE NON E' NEL GRAFO. Caricare una versione nuova su un documento
+# rilasciato lo riporta a "bozza". Non e' una transizione richiesta da una
+# persona - nessuno preme un pulsante "torna in bozza" - ma la conseguenza di
+# un'altra operazione, ed e' scritta in documents.aggiungi_versione(). Il grafo
+# qui sotto descrive le transizioni che si **chiedono**; quella la fa il
+# programma, e la fa sempre allo stesso modo (D-045).
+
+TRANSIZIONI_DOCUMENTO: dict[DocumentState, tuple[DocumentState, ...]] = {
+    DocumentState.BOZZA: (DocumentState.IN_VERIFICA,),
+    DocumentState.IN_VERIFICA: (DocumentState.BOZZA, DocumentState.RILASCIATO),
+    DocumentState.RILASCIATO: (DocumentState.SUPERATO,),
+    DocumentState.SUPERATO: (),
+}
+
+# Lo stato che chiude il documento: da qui in poi il file non si sostituisce
+# piu'. Il passaggio vuole una conferma esplicita e viene registrato con
+# autore e data (regola 4 della sessione 6).
+STATO_DOCUMENTO_DEFINITIVO = DocumentState.RILASCIATO
+
+# Lo stato in cui torna un documento su cui si carica una versione nuova.
+STATO_DOCUMENTO_INIZIALE = DocumentState.BOZZA
+
+
+def nome_stato_documento(stato: DocumentState) -> str:
+    """Lo stato come si legge in italiano: "in verifica", non "in_verifica"."""
+    return stato.value.replace("_", " ")
+
+
+def elenco_stati_documento(stati: tuple[DocumentState, ...]) -> str:
+    """Gli stati in fila, come si scriverebbero in una frase italiana."""
+    nomi = [nome_stato_documento(stato) for stato in stati]
+    if not nomi:
+        return ""
+    if len(nomi) == 1:
+        return nomi[0]
+    return ", ".join(nomi[:-1]) + " e " + nomi[-1]
+
+
+def transizione_documento_ammessa(da: DocumentState, a: DocumentState) -> bool:
+    """Dice se un documento puo' passare da uno stato all'altro."""
+    return a in TRANSIZIONI_DOCUMENTO.get(da, ())
+
+
+def verifica_transizione_documento(da: DocumentState, a: DocumentState) -> None:
+    """Controlla la transizione di un documento e, se non e' ammessa, si ferma.
+
+    Solleva la stessa TransizioneNonAmmessa del ciclo di vita delle versioni,
+    con un messaggio gia' scritto in italiano: chi la cattura lo mostra e
+    basta.
+    """
+    if transizione_documento_ammessa(da, a):
+        return
+
+    possibili = TRANSIZIONI_DOCUMENTO.get(da, ())
+
+    if da == a:
+        messaggio = (
+            f"Il documento e' gia' nello stato «{nome_stato_documento(a)}»: "
+            "non c'e' niente da cambiare."
+        )
+    elif not possibili:
+        messaggio = (
+            f"Un documento «{nome_stato_documento(da)}» non cambia piu' "
+            "stato: e' l'ultimo passo del suo ciclo."
+        )
+    elif da is DocumentState.RILASCIATO:
+        # Il caso piu' frequente merita la spiegazione per esteso: chi ci
+        # prova sta cercando di correggere un documento rilasciato, e la
+        # risposta utile non e' "non si puo'" ma "si fa in quest'altro modo".
+        messaggio = (
+            "Un documento rilasciato non si riporta indietro: e' un fatto "
+            "avvenuto. Per cambiarne il contenuto si carica una versione "
+            "nuova, che parte da «bozza» e lascia intatta quella rilasciata."
+        )
+    else:
+        messaggio = (
+            f"Un documento «{nome_stato_documento(da)}» non puo' passare a "
+            f"«{nome_stato_documento(a)}». Da qui si puo' andare soltanto a: "
+            f"{elenco_stati_documento(possibili)}."
+        )
+
+    raise TransizioneNonAmmessa(messaggio)
+
+
+def stati_documento_raggiungibili(
+    da: DocumentState,
+) -> tuple[DocumentState, ...]:
+    """Gli stati proponibili a un documento che si trova in quello attuale.
+
+    Le pagine ci costruiscono i pulsanti: non si propone mai un'operazione che
+    verrebbe poi rifiutata, e cambiando il grafo cambiano anche i pulsanti
+    senza toccare nessun template.
+    """
+    return TRANSIZIONI_DOCUMENTO.get(da, ())
+
+
+def opzioni_stati_documento() -> list[tuple[str, str]]:
+    """Tutti gli stati di un documento come coppie (valore, testo).
+
+    Serve alla tendina del filtro nell'elenco dei documenti. Si compone qui e
+    non nel template per la regola della sezione 5 di docs/GUIDA_STILE.md.
+    """
+    return [
+        (stato.value, nome_stato_documento(stato)) for stato in DocumentState
+    ]

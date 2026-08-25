@@ -86,6 +86,22 @@ class Settings(BaseSettings):
     # Quante righe per pagina negli elenchi lunghi (prodotti, progetti).
     PAGE_SIZE: int = 25
 
+    # File che elenca i tipi di documento proponibili al caricamento (schema
+    # elettrico, PCB, firmware...). Sta fuori dal codice per la stessa ragione
+    # della scomposizione dei codici: e' un elenco che l'azienda cambiera',
+    # e cambiarlo non deve voler dire modificare il programma. Se il file
+    # manca o e' scritto male, Aurora usa l'elenco di ripiego di
+    # app/services/doc_types.py e non si ferma.
+    DOCUMENT_TYPES_CONFIG: Path = Path("config/tipi_documento.toml")
+
+    # Dimensione massima di un file caricato, in megabyte. Il valore di
+    # partenza e' 2 GB: gli schemi meccanici e i firmware compilati di
+    # quest'azienda ci stanno dentro con margine. Il limite si verifica
+    # **mentre** il file arriva (app/services/storage.py), non dopo: un file
+    # da 8 GB non deve poter riempire il disco prima che qualcuno se ne
+    # accorga.
+    MAX_UPLOAD_MB: int = 2048
+
     # Nome mostrato nell'interfaccia.
     APP_NAME: str = "Aurora"
 
@@ -126,6 +142,21 @@ class Settings(BaseSettings):
     def product_code_config(self) -> Path:
         """Percorso assoluto del file di scomposizione dei codici prodotto."""
         return _absolute(self.PRODUCT_CODE_CONFIG)
+
+    @property
+    def document_types_config(self) -> Path:
+        """Percorso assoluto del file con l'elenco dei tipi di documento."""
+        return _absolute(self.DOCUMENT_TYPES_CONFIG)
+
+    @property
+    def max_upload_bytes(self) -> int:
+        """Dimensione massima di un file caricato, in byte.
+
+        Nel file .env il limite si scrive in megabyte perche' e' l'unita' in
+        cui lo pensa una persona; il programma lavora in byte perche' e'
+        l'unita' in cui li conta mentre arrivano.
+        """
+        return self.MAX_UPLOAD_MB * 1024 * 1024
 
 
 # Unica istanza usata da tutto il programma: la configurazione si legge una

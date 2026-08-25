@@ -1,0 +1,114 @@
+{# ===========================================================================
+   Caricamento di una versione nuova su un documento che esiste gia'.
+
+   QUANDO IL DOCUMENTO E' RILASCIATO questa pagina lo dice in cima, prima del
+   modulo. Non e' un avvertimento: e' la spiegazione di che cosa sta per
+   succedere. Il file rilasciato non verra' toccato in nessun modo, quello che
+   si sta caricando sara' la versione dopo, e il documento tornera' in bozza
+   per rifare il giro della verifica.
+
+   E' cosi' che il criterio "un documento rilasciato non puo' essere
+   sovrascritto" viene rispettato: non c'e' nessuna schermata che rifiuta
+   qualcosa, c'e' che sostituire un file non e' un'operazione che esiste.
+
+   LA NOTA E' OBBLIGATORIA. Chi apre lo storico fra un anno deve poter capire
+   che cosa e' cambiato fra la 3 e la 4 senza aprire tutti e due i file: e'
+   l'unica informazione che nessun programma potra' mai ricostruire da solo.
+   =========================================================================== #}
+{% extends "base.html" %}
+
+{% from "components/campi.html" import area_testo, csrf %}
+{% from "components/pulsanti.html" import pulsante, pulsante_collegamento %}
+{% from "components/riquadro.html" import riquadro %}
+{% from "components/avvisi.html" import avviso %}
+{% from "components/descrizione.html" import descrizione, voce %}
+{% from "components/area_file.html" import area_file %}
+{% from "components/barra_caricamento.html" import barra_caricamento %}
+
+{% block titolo %}Versione nuova di {{ documento.title }}{% endblock %}
+{% block sezione %}Documenti{% endblock %}
+
+{% block contenuto %}
+
+<div class="testata">
+    <div>
+        <h1>Versione {{ prossimo_numero }}</h1>
+        <p class="sottotitolo">{{ documento.title }}</p>
+    </div>
+    <div class="testata-azioni">
+        {{ pulsante_collegamento("Torna al documento",
+                                 "/documenti/" ~ documento.id,
+                                 icona_nome="freccia-sinistra") }}
+    </div>
+</div>
+
+{% if errore %}
+    {{ avviso(errore, variante="errore", titolo="Il caricamento non e' partito") }}
+{% endif %}
+
+{% if era_rilasciato %}
+    {% call avviso("", variante="attenzione",
+                   titolo="Il documento adesso e' rilasciato") %}
+        <p>
+            La versione {{ corrente.version_number if corrente else "corrente" }}
+            <strong>non verra' toccata</strong>: resta rilasciata, con il suo
+            file identico e scaricabile da chiunque abbia il permesso.
+        </p>
+        <p class="margine-sopra">
+            Quello che stai caricando diventera' la versione
+            {{ prossimo_numero }}, e il documento tornera' in
+            <strong>bozza</strong>: dovra' rifare il giro della verifica prima
+            di essere rilasciato di nuovo. E' cosi' che un documento rilasciato
+            non si sostituisce - non perche' qualcosa lo vieti, ma perche'
+            sostituire un file non e' un'operazione che Aurora sa fare.
+        </p>
+    {% endcall %}
+{% endif %}
+
+<div class="colonna-stretta">
+
+<form method="post" action="/documenti/{{ documento.id }}/versione"
+      class="modulo" enctype="multipart/form-data" data-carica-con-avanzamento>
+    {{ csrf(request) }}
+
+    {% call riquadro("Il file nuovo",
+                     piede=pulsante("Carica la versione " ~ prossimo_numero,
+                                    variante="primario", icona_nome="carica")
+                           ~ pulsante_collegamento("Annulla",
+                                   "/documenti/" ~ documento.id)) %}
+
+        {{ area_file("File della versione " ~ prossimo_numero, "file",
+                     peso_massimo=peso_massimo) }}
+
+        {{ barra_caricamento() }}
+
+        {{ area_testo("Che cosa cambia", "nota", valore=nota_scritta, righe=4,
+                      obbligatorio=true,
+                      aiuto="Lo legge un collega, non il programma. E' l'unica "
+                            "informazione che nessuno potra' ricostruire "
+                            "aprendo i file.") }}
+
+    {% endcall %}
+</form>
+
+{% if corrente %}
+{% call riquadro("La versione di adesso, che resta com'e'") %}
+    {% call descrizione(stretta=true) %}
+        {{ voce("Versione", corrente.version_number) }}
+        {{ voce("File", corrente.original_filename) }}
+        {{ voce("Caricato da", corrente.author.full_name) }}
+        {{ voce("Caricato il",
+                corrente.created_at.strftime("%d/%m/%Y alle %H:%M")) }}
+        {{ voce("Impronta SHA-256", corrente.storage_hash, monospazio=true) }}
+    {% endcall %}
+    <p class="campo-aiuto margine-sopra">
+        Questa riga non cambiera' di una virgola. L'impronta e' quella del
+        contenuto: dopo il caricamento della versione nuova si puo' riscaricare
+        questo file e verificare che sia lo stesso di sempre.
+    </p>
+{% endcall %}
+{% endif %}
+
+</div>
+
+{% endblock %}

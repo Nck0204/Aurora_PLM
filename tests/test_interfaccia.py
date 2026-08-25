@@ -171,12 +171,16 @@ def test_le_sezioni_non_ancora_fatte_non_sono_collegamenti(client, db_session):
 
     pagina = client.get("/").text
 
-    # "Documenti" e' la prima sezione ancora da fare: arrivera' nella sessione
-    # 7. Fino alla sessione 4 questo test guardava "Prodotti", che pero' dalla
-    # sessione 5 e' una sezione vera e un collegamento vero. Quando arrivera'
-    # anche l'archivio documenti, qui andra' messa la sezione spenta di allora.
-    assert "Documenti" in pagina, "la voce spenta si deve comunque vedere"
-    assert 'href="/documenti"' not in pagina, "ma non deve essere un collegamento"
+    # "Posta" e' la prima sezione ancora da fare: arrivera' nella sessione 10.
+    #
+    # Questo test cambia bersaglio a ogni sezione che viene realizzata: fino
+    # alla sessione 4 guardava "Prodotti", dalla 5 alla 6 guardava
+    # "Documenti", e adesso guarda "Posta". Non e' un fastidio: e' il modo in
+    # cui ci si accorge che una voce e' rimasta spenta per dimenticanza invece
+    # che per scelta. Quando arrivera' anche la posta, qui andra' messa
+    # "Diagnostica", che e' della sessione 11.
+    assert "Posta" in pagina, "la voce spenta si deve comunque vedere"
+    assert 'href="/posta"' not in pagina, "ma non deve essere un collegamento"
     assert 'aria-disabled="true"' in pagina
 
 
@@ -222,6 +226,7 @@ def test_la_vetrina_chiede_di_entrare_a_chi_non_e_entrato(client, db_session):
         "riga-vuota",
         "etichetta--rilasciato",
         "etichetta--obsoleto",
+        "etichetta--attenzione",
         "riquadro-testata",
         "dialogo",
         "notifica",
@@ -231,6 +236,7 @@ def test_la_vetrina_chiede_di_entrare_a_chi_non_e_entrato(client, db_session):
         "avanzamento-fase",
         "descrizione",
         "area-file",
+        "barra-caricamento",
         "vuoto",
         "avviso--errore",
     ],

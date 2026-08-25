@@ -49,6 +49,7 @@ Vincoli che discendono dal contesto e che non cambiano:
 | Pagine | Template Jinja2 generati dal server + HTMX |
 | Configurazione | pydantic-settings, da file `.env` |
 | Password | argon2-cffi |
+| Lettura e scrittura di PDF | pypdf (solo per la filigrana, D-046) |
 | Lavori pianificati | APScheduler |
 | Test | pytest + httpx |
 
@@ -142,12 +143,18 @@ aurora/
 │   └── versions/          una migrazione per file
 │
 ├── config/                configurazione che non sta nel .env perche' non e'
-│                       una riga sola (la scomposizione dei codici prodotto)
+│                       una riga sola: la scomposizione dei codici prodotto,
+│                       l'elenco dei tipi di documento
 ├── docs/                  STATO.md, DECISIONI.md, MODELLO_DATI.md,
 │                       GUIDA_STILE.md
 ├── scripts/               procedure operative (installazione, manutenzione)
 ├── tests/                 test pytest
 ├── storage/               archivio dei file caricati (NON in git)
+│   ├── objects/           i file, depositati per impronta SHA-256:
+│   │                   objects/3f/9a/3f9a2c11... (D-004, D-047)
+│   └── tmp/               i file a meta' scrittura. In condizioni normali e'
+│                       vuota: quello che ci resta e' un caricamento
+│                       interrotto, e non lo riferisce nessuno
 └── logs/                  registro applicativo rotativo (NON in git)
 ```
 
@@ -182,8 +189,18 @@ Dove mettere una cosa nuova:
 - **un colore, una spaziatura, un raggio** → una variabile in `:root`, in cima
   ad `app/static/css/aurora.css`. Mai un valore scritto dentro una regola o
   dentro un template: c'e' un test che lo verifica (D-033).
+- **un file da salvare su disco** → si passa da `app/services/storage.py`,
+  che lo deposita per impronta e scrive in modo atomico. Non si apre un file
+  dentro una rotta: il nome originale sul filesystem, il limite dei 260
+  caratteri di Windows e la scrittura interrotta sono tre problemi gia'
+  risolti li' (D-004, D-047);
+- **un permesso su un documento** → si chiede a
+  `app/services/permissions.py`, che legge la matrice. Non si scrive un
+  controllo dentro una rotta: le due strade - il documento singolo e l'elenco
+  - devono dare la stessa risposta (D-048);
 - **una regola che l'azienda potrebbe cambiare** (come si legge un codice
-  prodotto) → un file in `config/`, con il suo percorso dichiarato in `.env`.
+  prodotto, quali sono i tipi di documento) → un file in `config/`, con il suo
+  percorso dichiarato in `.env`.
   Il programma deve continuare a funzionare anche se quel file e' sbagliato o
   manca: vedi D-038 e D-039;
 - **un elenco di scelte per un menu a tendina o un filtro** → si compone in
@@ -255,10 +272,14 @@ Tutti dalla radice del progetto (`aurora/`), con l'ambiente virtuale attivo:
   cambiare la password, creare un utente, caricare un documento (vedi D-036).
 - Usare SQLite, nemmeno "solo per provare".
 - Scrivere `DELETE FROM` su una tabella applicativa.
+- Aggiungere un modo di **sostituire** il file di una versione gia'
+  caricata. Una versione e' un fatto avvenuto: se il file era sbagliato se
+  ne carica un'altra (D-045). C'e' un test che lo verifica.
 - Rifiutare un codice prodotto perche' non si scompone: si accetta con
   `code_parts` vuoto e una segnalazione visibile (D-039).
 - Confrontare due stati del ciclo di vita fuori da `app/services/lifecycle.py`:
-  il grafo delle transizioni sta li' e in nessun altro posto (D-042).
+  i grafi delle transizioni stanno li' e in nessun altro posto. Sono **due**:
+  quello di una versione di prodotto e quello di un documento (D-042, D-044).
 - Mettere una password o un indirizzo di server dentro un file `.py`.
 - Modificare a mano una migrazione gia' applicata in produzione: se ne scrive
   una nuova.

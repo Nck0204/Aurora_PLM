@@ -1,6 +1,6 @@
 # Stato di avanzamento
 
-Ultimo aggiornamento: **25 agosto 2026**, fine della sessione 5.
+Ultimo aggiornamento: **25 agosto 2026**, fine della sessione 6.
 
 Il progetto e' diviso in 13 sessioni di lavoro. Questa tabella dice a che
 punto siamo. Va aggiornata **alla fine di ogni sessione**, prima del commit.
@@ -17,11 +17,11 @@ Stati possibili: `da fare` · `in corso` · `completata`
 | 2 | Modello dati R1 | **completata** | Diciannove tabelle come modelli SQLAlchemy, una migrazione Alembic, dati iniziali idempotenti, test del modello, `docs/MODELLO_DATI.md`. Dettaglio sotto. |
 | 3 | Accesso e gestione utenti | **completata** | Password con argon2id, accesso con sessione e "ricordami" rotante, blocco dopo cinque tentativi, cambio password obbligatorio al primo accesso, protezione CSRF, gestione utenti riservata al creatore, registro di audit. Dettaglio sotto. |
 | 4 | Sistema grafico | **completata** | Foglio di stile unico con tutti i valori in variabili, quindici componenti come macro Jinja2, barra laterale filtrata per ruolo, vetrina `/stile`, pagine di accesso e gestione utenti ristilate, pagine di errore. Dettaglio sotto. |
-| 4b | Anagrafiche | **in parte** | Clienti e contatti: fatti nella sessione 5 (elenco, creazione, modifica, disattivazione, riattivazione). Restano da fare la matrice dei permessi modificabile dall'interfaccia e il cambio di ruolo di un utente: servono ai documenti, sessione 7. |
+| 4b | Anagrafiche | **in parte** | Clienti e contatti: fatti nella sessione 5 (elenco, creazione, modifica, disattivazione, riattivazione). Restano da fare la matrice dei permessi modificabile dall'interfaccia e il cambio di ruolo di un utente. La sessione 6 la matrice la **legge** (D-048), quindi funziona; e' la pagina che la corregge a mancare. |
 | 5 | Prodotti, versioni e progetti | **completata** | Clienti e contatti, prodotti con la scomposizione del codice configurabile, versioni e derivazioni, grafo del ciclo di vita con superamento automatico, apertura dei progetti, cruscotto iniziale. Dettaglio sotto. |
-| 6 | Fasi e assegnazioni | da fare | L'apertura del progetto, la squadra e la scelta del modello di fasi sono state fatte nella sessione 5. Restano: passaggi di fase con richiesta e approvazione, modifica della squadra a progetto avviato, chiusura di un progetto. |
-| 7 | Archivio documenti | da fare | Caricamento file, calcolo dell'impronta SHA-256, deposito per impronta, versioni successive, presa in carico, permessi effettivi calcolati sulla matrice. |
-| 8 | Revisioni e approvazioni | da fare | Flusso di revisione dei documenti tecnici: bozza, in verifica, rilasciato, superato. |
+| 6 | Archivio documenti | **completata** | Deposito per impronta SHA-256 con deduplicazione e scrittura atomica, caricamento con barra di avanzamento reale, versioni con nota obbligatoria, stato del documento e immutabilita' del rilasciato, ritiro logico con ripristino, scarico registrato, filigrana sui PDF delle versioni superate, permessi calcolati sulla matrice. Dettaglio sotto. |
+| 7 | Fasi e assegnazioni | da fare | L'apertura del progetto, la squadra e la scelta del modello di fasi sono state fatte nella sessione 5. Restano: passaggi di fase con richiesta e approvazione, modifica della squadra a progetto avviato, chiusura di un progetto. **Le sessioni 6 e 7 sono state invertite rispetto al piano della sessione 2**: l'azienda ha chiesto prima i documenti. |
+| 8 | Revisioni e approvazioni | da fare | Il ciclo bozza / in verifica / rilasciato / superato e' stato fatto nella sessione 6. Restano il flusso di **approvazione** con verificatore e approvatore distinti, la presa in carico (R2) e le notifiche a chi deve verificare. |
 | 9 | Interfaccia completa | da fare | Struttura di navigazione, ricerca, elenchi con filtri e paginazione, rifinitura del tema scuro. |
 | 10 | Notifiche e posta | da fare | Adattatore di posta doppio (locale/Graph), archiviazione dei messaggi, smistamento automatico e quarantena, allegati, modelli dei messaggi, notifiche. |
 | 11 | Lavori pianificati e manutenzione | da fare | APScheduler, controlli notturni, procedura di backup e di ripristino. |
@@ -35,6 +35,278 @@ Stati possibili: `da fare` · `in corso` · `completata`
 > comportamento. Resta una **domanda aperta**: le tabelle di distinta base e
 > articoli sono del rilascio R3 e in questo piano non compaiono; va chiarito se
 > le 13 sessioni coprono il solo R1 o arrivano anche a R2 e R3.
+
+---
+
+## Sessione 6 — Archivio documenti · completata (25 agosto 2026)
+
+La sessione ha costruito **il mestiere di Aurora**: i documenti. Fino a ieri
+il programma sapeva descrivere prodotti, versioni e progetti; da oggi ci mette
+dentro i file, li versiona, li protegge e li restituisce.
+
+> **Nota sull'ordine delle sessioni.** Il piano scritto alla fine della
+> sessione 2 metteva l'archivio documenti alla sessione 7 e le fasi alla 6.
+> L'azienda ha chiesto di invertirle: i documenti sono la parte che serve
+> prima. La riga 6 della tabella qui sopra e' quindi l'archivio documenti, e
+> i passaggi di fase restano da fare. Le due sessioni non si toccavano: le
+> fasi vivono sul progetto, i documenti dentro il progetto.
+
+> **Nessuna migrazione.** `documents`, `document_versions`, `classifications`
+> e `permission_rules` c'erano tutte dalla sessione 2. Questa sessione ci ha
+> costruito sopra soltanto comportamento e pagine, che e' esattamente quello
+> che D-021 si aspettava. `alembic current` non si muove.
+
+### Realizzato
+
+**L'archivio fisico** (`app/services/storage.py`) — il file non si salva con
+il suo nome. Si calcola l'impronta SHA-256 del contenuto e il file finisce in
+`STORAGE_PATH/objects/<primi 2>/<successivi 2>/<impronta intera>`. Il nome
+originale, il tipo e tutto il resto stanno nel database.
+
+Tre regole, e sono tutte e tre il motivo per cui il modulo esiste:
+
+| Regola | Come |
+|---|---|
+| **Deduplicazione** | Se quell'impronta c'e' gia', il file non viene riscritto. Due documenti condividono un oggetto solo. |
+| **Scrittura atomica** | Si scrive su `storage/tmp/<casuale>.parziale`, si fa `fsync`, e solo allora `os.replace()` lo sposta al suo posto. Un'interruzione non lascia un file troncato che sembra buono (D-047). |
+| **Limite durante la lettura** | `MAX_UPLOAD_MB` (2 GB di partenza) si verifica **mentre** il file arriva, non dopo: un file da 8 GB non riempie il disco prima di essere rifiutato. |
+
+Il temporaneo sta dentro `STORAGE_PATH` e non nella cartella di sistema
+perche' `os.replace()` e' atomico solo dentro lo stesso volume, e in
+produzione l'archivio sta su un disco dedicato.
+
+**Servizi nuovi** (`app/services/`):
+
+| File | A che cosa serve |
+|---|---|
+| `storage.py` | L'archivio fisico: deposita, ritrova, verifica. Non sa niente di documenti. |
+| `documents.py` | Documenti e versioni: creazione, versione nuova, stato, ritiro, ripristino, scarico, ricerca. |
+| `permissions.py` | La matrice (ruolo x classificazione), in due forme che devono dire la stessa cosa (D-048). |
+| `watermark.py` | La filigrana diagonale sui PDF delle versioni non piu' valide. |
+| `doc_types.py` | L'elenco dei tipi di documento, letto da `config/tipi_documento.toml` (D-050). |
+
+**Il secondo ciclo di vita** — un documento passa per `bozza`, `in verifica`,
+`rilasciato`, `superato`. Il grafo sta in `TRANSIZIONI_DOCUMENTO`, **dentro
+`lifecycle.py`** accanto a quello delle versioni di prodotto, perche' la
+regola di D-042 dice che due stati non si confrontano da nessun'altra parte
+(D-044):
+
+```
+bozza <--> in verifica --> rilasciato --> superato
+  ^                             |
+  +---- (si carica una versione nuova) --+
+```
+
+**Il rilasciato non si sostituisce, e non perche' qualcosa lo vieti.** Le
+righe di `document_versions` non si modificano mai: caricare un file su un
+documento rilasciato crea la **versione successiva** e riporta il documento in
+`bozza`, che dovra' rifare il giro della verifica. La versione rilasciata
+resta con la sua impronta e il suo file intatto. Sostituire un file non e'
+un'operazione che Aurora sappia fare, quindi non c'e' nessun controllo che
+qualcuno possa dimenticare di scrivere (D-045).
+
+Il passaggio a `rilasciato` ha la sua **pagina di conferma** - non una finestra
+modale, per la stessa ragione di D-042 - e viene registrato con autore e data.
+L'autore e la data non hanno una colonna: si rileggono dal registro delle
+operazioni con `documents.ultimo_rilascio()`, perche' duplicare un fatto in
+due posti vuol dire due verita' che possono divergere.
+
+**La filigrana** (D-046) — se il documento appartiene a una versione di
+prodotto `superato` o `obsoleto`:
+
+- **PDF**: esce con una filigrana diagonale semitrasparente su **ogni pagina**,
+  calcolata sulla misura di quella pagina, con tre righe: la dicitura
+  "VERSIONE SUPERATA - non utilizzare per la produzione", lo stato, e data e
+  ora dello scarico. Fatta con pypdf, applicata **al volo** su una copia in
+  memoria: nell'archivio il file resta identico a com'e' stato caricato, ed e'
+  la sua impronta a dimostrarlo.
+- **Tutto il resto**: una pagina di avviso prima dello scarico, e l'avvertenza
+  dentro il nome del file (`VERSIONE-SUPERATA_telaio.dwg`) - l'unica cosa che
+  resta attaccata al file dopo che e' uscito da Aurora.
+- **Se pypdf fallisce**, il file esce com'era, con l'avvertenza nel nome, e il
+  guasto finisce nel registro: negare un download per un PDF scritto male
+  sarebbe il modo peggiore di sbagliare.
+
+**I permessi, finalmente calcolati sulla matrice** (D-048) — chi vede un
+documento lo decide la casella di `permission_rules` all'incrocio fra il ruolo
+che la persona ha in **quel** progetto e la classificazione del documento.
+`permissions.py` e' l'unico posto che legge quella tabella, e offre la stessa
+regola in due forme: `permessi()` per un documento solo e
+`filtro_visibilita()` come condizione SQL per gli elenchi. Le due strade
+devono dare la stessa risposta, e per esserne certi partono dalla stessa
+tabella nello stesso file.
+
+**Pagine** (`app/routers/documents.py`, `app/templates/documenti/`):
+
+| Indirizzo | Che cosa fa |
+|---|---|
+| `GET /documenti` | Elenco con ricerca sul titolo, filtri per tipo e stato, ordinamento e impaginazione. Con `?progetto={id}` diventa l'elenco di un progetto: **una pagina sola per due usi**. |
+| `GET/POST /documenti/nuovo?progetto={id}` | Caricamento con trascinamento o scelta, uno o piu' file insieme, barra di avanzamento reale. |
+| `GET /documenti/{id}` | La scheda: dati, storico completo delle versioni con nota e scarico di ciascuna, ultimi scarichi registrati. |
+| `GET/POST /documenti/{id}/versione` | La versione nuova, con nota di modifica obbligatoria. |
+| `GET/POST /documenti/{id}/stato` | La conferma del cambio di stato, e il cambio. |
+| `POST /documenti/{id}/ritira` · `/ripristina` | Ritiro logico e ritorno. |
+| `GET /documenti/ritirati` | La sezione dedicata dei ritirati. Solo creatore. |
+| `GET /documenti/{id}/versioni/{vid}/scarica` | Il file, con o senza filigrana. Registra lo scarico. |
+| `GET /documenti/{id}/versioni/{vid}/avviso` | L'avviso prima di scaricare un formato che non si marchia. |
+
+**Un componente grafico nuovo**: `barra_caricamento.html`, la barra di
+avanzamento del caricamento, con la sua sezione 25 in `aurora.css`, il suo
+esempio in `/stile` e la sua riga in `docs/GUIDA_STILE.md` - i cinque passi
+della sezione 10 della guida. Piu' **due icone**, `scarica` e `ripristina`, e
+un macro in piu' in `stato.html`, `etichetta_documento`, che riusa apposta le
+tinte degli stati omonimi del ciclo di vita.
+
+L'avanzamento e' **reale**: lo script manda il modulo con una
+`XMLHttpRequest`, che sa dire quanti byte sono partiti. Senza JavaScript il
+modulo si invia da solo e la barra non compare mai, perche' caricare un
+documento e' una delle cose che non possono dipendere da uno script (D-036).
+
+**Configurazione** — due parametri nuovi in `.env` e `.env.example`
+(`DOCUMENT_TYPES_CONFIG`, `MAX_UPLOAD_MB`) e un file nuovo in git,
+`config/tipi_documento.toml`. Una dipendenza nuova in `requirements.txt`:
+`pypdf==6.4.0`, che lavora solo in memoria e non parla con nessun servizio
+esterno.
+
+**La barra laterale** — "Documenti" si accende. Restano spente Posta
+(sessione 10) e Diagnostica (11).
+
+### Verificato
+
+**Test automatici: 237, tutti superati** (erano 180 alla fine della sessione
+5). I 57 nuovi stanno quasi tutti in `tests/test_documenti.py`, divisi come e'
+divisa la sessione: archivio, versionamento, immutabilita' del rilasciato,
+filigrana, ritiro logico, permessi, pagine, configurazione.
+
+| Criterio di accettazione | Come e' stato verificato | Esito |
+|---|---|---|
+| Lo stesso file su due documenti: un solo oggetto sul disco | `test_lo_stesso_file_caricato_due_volte_occupa_un_solo_oggetto`, e la prova a mano: 5 versioni, 4 impronte | superato |
+| La versione precedente resta scaricabile e identica (impronta) | `test_la_versione_precedente_resta_scaricabile_e_identica` | superato |
+| Un rilasciato non si sovrascrive: l'interfaccia lo impedisce e propone la versione nuova | `test_l_interfaccia_non_propone_di_sostituire_un_rilasciato`, `test_caricare_una_versione_su_un_rilasciato_lo_riporta_in_bozza` | superato |
+| Filigrana su un PDF di una versione superata | `test_il_pdf_di_una_versione_superata_esce_con_la_filigrana`, che rilegge il PDF ricevuto e ci cerca dentro la dicitura | superato |
+| Test su deduplicazione, versionamento, immutabilita' del rilasciato e scrittura atomica | 4 famiglie, 25 test | superato |
+
+Tre test verificano **forma** e non comportamento, e servono a proteggere una
+regola: `test_il_grafo_dei_documenti_copre_tutti_gli_stati`,
+`test_non_esiste_nessuna_rotta_per_cancellare_un_documento` e
+`test_la_versione_e_una_riga_che_non_si_modifica`, che diventa rosso se
+qualcuno aggiungesse in buona fede una `documents.modifica_versione()`.
+
+**Prova nel browser**, con il server avviato e il database di sviluppo, sul
+progetto vero lasciato dalla sessione 5 - la cui versione di prodotto e'
+`superato`, quindi il caso della filigrana e' quello di tutti i giorni:
+
+| Passo | Esito |
+|---|---|
+| Caricamento di uno schema PDF | superato: documento con versione 1, in bozza |
+| Caricamento dello **stesso identico file** come documento diverso | superato: due righe in `document_versions`, un solo oggetto sul disco |
+| Due file di meccanica scelti insieme | superato: due documenti, ciascuno con il nome del proprio file come titolo |
+| Versione 2 con nota di modifica | superato: la versione 1 resta, con la sua impronta invariata |
+| Rilascio di un documento (bozza -> verifica -> rilasciato) | superato: la scheda dice "Rilasciato da Prova Sessione5 il 25/08/2026 alle 15:59", letto dal registro |
+| Scheda di un documento rilasciato | superato: nessun pulsante che riporti indietro, solo "Porta a «superato»" e l'invito a caricare una versione nuova |
+| Tentativo di tornare in bozza scrivendo l'indirizzo | superato: 400 con "Un documento rilasciato non si riporta indietro... si carica una versione nuova" |
+| Scarico del PDF | superato: filigrana su tutte e due le pagine (A4 e A3), nome `VERSIONE-SUPERATA_schema-alimentatore.pdf` |
+| Scarico del DWG | superato: dirottato sulla pagina di avviso, poi consegnato con l'avvertenza nel nome |
+| Barra di avanzamento con un file da 12 MB | superato: `false\|0%\|Caricamento in corso...` -> `100% - 12.0 MB di 12.0 MB` -> "Il server sta salvando i file..." -> "Caricamento completato." |
+| Ritiro di un documento | superato: sparisce dall'elenco, compare fra i ritirati con chi e quando |
+| Ripristino | superato: torna com'era, stesso stato e stesse versioni |
+| Elenco del progetto | superato: tutte e sette le colonne chieste, piu' i due filtri e la ricerca |
+| Ogni campo ha la sua etichetta collegata | superato: 4 campi sulla pagina di caricamento, nessuno scoperto |
+| Nessuno scorrimento orizzontale a 1280 pixel | superato |
+| `/stile` dopo le aggiunte | superato: 23 icone, la barra di caricamento nelle tre varianti, gli stati di un documento |
+| Nessun errore nella consolle del browser | superato |
+| Nessun temporaneo rimasto in `storage/tmp/` | superato |
+
+### Difetti trovati e corretti durante la sessione
+
+1. **La filigrana usciva dai bordi su un A4 verticale.** La misura del
+   carattere si calcolava sulla **diagonale** della pagina, che e' la risposta
+   istintiva e sbagliata: la diagonale e' lunga quanto la riga soltanto se la
+   riga e' inclinata esattamente come la diagonale. Con un A4 e
+   un'inclinazione di 38 gradi, il testo sbordava di una novantina di punti
+   per parte.
+
+   Il calcolo giusto e' che una riga lunga L inclinata di un angolo occupa
+   `L*cos(angolo)` in orizzontale e `L*sin(angolo)` in verticale, e deve
+   starci tutte e due le volte. Il test che lo protegge non guarda il PDF -
+   guardare un PDF non e' una cosa che un test sappia fare - ma **misura**:
+   prende il corpo che il servizio sceglie e verifica l'ingombro su cinque
+   misure di pagina, dalla cartolina all'A0.
+
+2. **Il test della voce di menu spenta e' diventato rosso, e doveva.**
+   `test_le_sezioni_non_ancora_fatte_non_sono_collegamenti` guardava
+   "Documenti", che da questa sessione e' una sezione vera. Il commento dentro
+   il test lo prevedeva ed e' stato spostato su "Posta". Non e' un fastidio:
+   e' il modo in cui ci si accorge che una voce e' rimasta spenta per
+   dimenticanza invece che per scelta.
+
+3. **Le righe di audit scritte nella stessa richiesta hanno la stessa ora.**
+   PostgreSQL da a `now()` lo stesso valore per tutta la transazione, quindi
+   un test che cercava "l'ultima riga di stato scritta" ordinando per
+   `occurred_at` pescava a caso fra le tre. La medicina e' cercare la riga per
+   **contenuto** invece che per posizione. Vale per qualunque test futuro che
+   guardi il registro, ed e' scritto li' accanto.
+
+4. **La vetrina disegnava la barra di caricamento a mano, e restava vuota.**
+   Il primo tentativo scriveva l'HTML della barra dentro `stile.html` invece
+   di passare dal macro, e senza larghezze le tre barre d'esempio erano tre
+   righe grigie. E' esattamente quello che la sezione 10 della guida vieta.
+   Il macro ha adesso un parametro `percentuale`, che le pagine vere non usano
+   mai - li' la barra nasce nascosta e la riempie lo script - e che serve alla
+   vetrina per mostrarla ferma.
+
+### Scelte prese durante la sessione
+
+Sette decisioni nuove in `docs/DECISIONI.md`, dalla D-044 alla D-050. Le tre
+da rileggere prima di toccare i documenti:
+
+- **D-045**, il rilasciato non si sostituisce, e la regola non e' un divieto:
+  e' che l'operazione non esiste;
+- **D-046**, la filigrana si applica al volo e, se fallisce, il file esce lo
+  stesso;
+- **D-048**, i permessi si leggono dalla matrice in un posto solo, e la stessa
+  regola vale per il documento singolo e per l'elenco.
+
+### Rimasto in sospeso per le sessioni successive
+
+- **La matrice dei permessi non si modifica dall'interfaccia.** Questa
+  sessione la **legge** - ed e' la prima che la usa davvero - ma la pagina che
+  la corregge non c'e'. Fino ad allora la matrice e' quella scritta da
+  `scripts/seed.py`. Insieme a lei resta il cambio di ruolo di un utente:
+  sono in sospeso dalla sessione 3.
+
+- **La presa in carico (check-out) non si fa.** Le colonne
+  `checked_out_by_id` e `checked_out_at` esistono in `documents` e nessuna
+  rotta le valorizza: e' del rilascio R2, ed e' scritto nella sessione.
+
+- **La ricerca dentro il contenuto dei file non si fa.** La ricerca e' sul
+  titolo. Anche questa e' R2.
+
+- **Niente anteprime dei file**, come chiedeva la sessione.
+
+- **I documenti non si modificano nei dati.** Titolo, tipo e classificazione
+  si scelgono al caricamento e restano. `can_edit` della matrice, in questa
+  sessione, governa il cambio di stato e il ritiro. La pagina di modifica dei
+  dati di un documento non e' stata chiesta e non e' stata fatta.
+
+- **Gli scarichi si vedono solo sulla scheda del documento**, gli ultimi
+  venti, e solo a chi ha il permesso di modifica. Una pagina che risponda a
+  "tutto quello che ha scaricato questa persona" e' materia del registro di
+  audit navigabile, sessione 11.
+
+- **`storage/objects/` contiene 214 oggetti lasciati dai test.** I test
+  depositano contenuti irripetibili apposta (vedi `contenuto_irripetibile()`
+  in `conftest.py`), e il rollback della transazione copre il database, non il
+  disco. Non sono riferiti da nessuna riga, occupano qualche kilobyte e non si
+  cancellano (regola 5). La pagina di diagnostica della sessione 11 e' il
+  posto in cui, un giorno, si potranno elencare.
+
+- **Sul database di sviluppo sono rimasti i documenti della verifica a mano**,
+  sul progetto della sessione 5: lo schema dell'alimentatore con due versioni,
+  la sua copia rilasciata, il telaio e la staffa. Piu' due documenti di prova
+  della barra di avanzamento, **ritirati** - restano visibili solo in
+  `/documenti/ritirati`. Non si cancellano e fanno comodo: sono il primo caso
+  vero su cui provare le sessioni successive.
 
 ---
 

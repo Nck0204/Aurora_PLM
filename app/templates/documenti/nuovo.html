@@ -1,0 +1,135 @@
+{# ===========================================================================
+   Caricamento di uno o piu' documenti dentro un progetto.
+
+   UN FILE, UN DOCUMENTO. Scegliendo piu' file insieme si creano piu'
+   documenti, uno per file: il titolo scritto qui vale quando il file e' uno,
+   altrimenti ogni documento prende il nome del proprio file. Tipo e
+   classificazione valgono per tutti, perche' chi carica dieci schemi insieme
+   li sta caricando tutti come schemi.
+
+   IL MODULO FUNZIONA ANCHE SENZA JAVASCRIPT. enctype="multipart/form-data" e
+   il campo file vero sono quello che conta; data-carica-con-avanzamento e' un
+   aggancio che lo script usa per mostrare la barra dell'avanzamento. Senza
+   script il modulo si invia da solo e la barra non compare mai: caricare un
+   documento e' una delle cose che non possono dipendere da uno script
+   (D-036).
+   =========================================================================== #}
+{% extends "base.html" %}
+
+{% from "components/campi.html" import campo, tendina, csrf %}
+{% from "components/pulsanti.html" import pulsante, pulsante_collegamento %}
+{% from "components/riquadro.html" import riquadro %}
+{% from "components/avvisi.html" import avviso %}
+{% from "components/descrizione.html" import descrizione, voce %}
+{% from "components/area_file.html" import area_file %}
+{% from "components/barra_caricamento.html" import barra_caricamento %}
+
+{% block titolo %}Carica un documento{% endblock %}
+{% block sezione %}Documenti{% endblock %}
+
+{% block contenuto %}
+
+<div class="testata">
+    <div>
+        <h1>Carica un documento</h1>
+        <p class="sottotitolo">
+            Nel progetto su <span class="mono">{{ prodotto.code }}</span>
+            versione {{ versione.version_number }}
+        </p>
+    </div>
+    <div class="testata-azioni">
+        {{ pulsante_collegamento("Torna ai documenti",
+                                 "/documenti?progetto=" ~ progetto.id,
+                                 icona_nome="freccia-sinistra") }}
+    </div>
+</div>
+
+{% if errore %}
+    {{ avviso(errore, variante="errore", titolo="Il caricamento non e' partito") }}
+{% endif %}
+
+{% if problema_tipi %}
+    {{ avviso(problema_tipi ~ " Nel frattempo l'elenco dei tipi e' quello "
+              "scritto dentro il programma: si puo' caricare lo stesso.",
+              variante="attenzione",
+              titolo="Il file dei tipi di documento non e' stato letto") }}
+{% endif %}
+
+{% if not classificazioni %}
+
+    {{ avviso("Il tuo ruolo in questo progetto non permette di caricare "
+              "documenti con nessuna delle classificazioni previste. Chiedi "
+              "a chi gestisce il progetto di cambiarti ruolo.",
+              variante="attenzione", titolo="Nessuna classificazione disponibile") }}
+
+{% else %}
+
+<form method="post" action="/documenti/nuovo" class="modulo"
+      enctype="multipart/form-data" data-carica-con-avanzamento>
+    {{ csrf(request) }}
+    <input type="hidden" name="progetto" value="{{ progetto.id }}">
+
+    <div class="griglia-riquadri">
+
+        {% call riquadro("Il file",
+                         piede=pulsante("Carica", variante="primario",
+                                        icona_nome="carica")
+                               ~ pulsante_collegamento("Annulla",
+                                       "/documenti?progetto=" ~ progetto.id)) %}
+
+            {{ area_file("File da caricare", "file", multipli=true,
+                         tipi="Nessun limite di formato: schemi, disegni, "
+                              "firmware, fogli di calcolo, archivi.",
+                         peso_massimo=peso_massimo) }}
+
+            {{ barra_caricamento() }}
+
+            {{ campo("Titolo", "titolo", valore=titolo_scritto,
+                     lunghezza_massima=200,
+                     aiuto="Vale se il file e' uno solo. Lasciandolo vuoto, o "
+                           "scegliendo piu' file, ogni documento prende come "
+                           "titolo il nome del proprio file.") }}
+
+            {{ tendina("Tipo di documento", "tipo", opzioni=tipi,
+                       scelto=tipo_scelto, obbligatorio=true,
+                       vuoto="Scegli il tipo",
+                       aiuto="L'elenco sta in un file di configurazione: "
+                             "l'azienda lo cambia senza toccare il programma.") }}
+
+            {{ tendina("Classificazione", "classificazione",
+                       opzioni=classificazioni, scelto=classificazione_scelta,
+                       obbligatorio=true, vuoto="Scegli la classificazione",
+                       aiuto="Decide chi puo' vedere il documento: i permessi "
+                             "si calcolano sulla coppia ruolo/classificazione.") }}
+
+        {% endcall %}
+
+        {% call riquadro("Che cosa succede quando premi") %}
+            {% call descrizione(stretta=true) %}
+                {{ voce("Progetto", prodotto.code ~ " v"
+                                    ~ versione.version_number) }}
+                {{ voce("Versione creata", "1, in bozza") }}
+                {{ voce("Dimensione massima", peso_massimo) }}
+            {% endcall %}
+
+            <p class="campo-aiuto margine-sopra">
+                Il file viene depositato nell'archivio con il nome della sua
+                impronta, non con il suo: cosi' due nomi uguali non si
+                sovrappongono e i caratteri strani non danno fastidio. Il nome
+                che hai dato tu resta nel database, ed e' quello con cui il
+                file ti torna indietro quando lo riscarichi.
+            </p>
+
+            <p class="campo-aiuto margine-sopra">
+                Se lo stesso identico file e' gia' stato caricato altrove, sul
+                disco non viene riscritto: i due documenti condividono un solo
+                file, e nessuno dei due se ne accorge.
+            </p>
+        {% endcall %}
+
+    </div>
+</form>
+
+{% endif %}
+
+{% endblock %}

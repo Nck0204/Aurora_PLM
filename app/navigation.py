@@ -65,8 +65,7 @@ MENU_PRINCIPALE: tuple[VoceMenu, ...] = (
         etichetta="Documenti",
         percorso="/documenti",
         icona="documenti",
-        attiva=False,
-        nota="sessione 7",
+        attiva=True,
     ),
     VoceMenu(
         etichetta="Posta",

@@ -1193,3 +1193,255 @@ Il 404 e il 403 restano distinti: "non esiste" e "esiste ma non e' tuo" sono
 due cose diverse. Nascondere la seconda dietro la prima sembra piu' prudente,
 ma manda chi ha davvero bisogno di quel progetto a cercare un guasto che non
 c'e', invece che a chiedere l'assegnazione.
+
+---
+
+## D-044 — I due cicli di vita stanno tutti e due in `lifecycle.py`
+
+**Data:** 25 agosto 2026 · **Stato:** attiva
+
+**Decisione.** Il grafo degli stati di un **documento** (`bozza`,
+`in verifica`, `rilasciato`, `superato`) sta in `app/services/lifecycle.py`,
+accanto a quello delle versioni di prodotto, nella tabella
+`TRANSIZIONI_DOCUMENTO`:
+
+```
+bozza <--> in verifica --> rilasciato --> superato
+  ^                             |
+  +---- (si carica una versione nuova) --+
+```
+
+Non si torna indietro da `rilasciato`, `superato` e' terminale, e da
+`in verifica` si torna in bozza perche' quello e' il rifiuto della verifica.
+
+**Motivazione.** Il posto naturale sarebbe `documents.py`, dove sta tutto il
+resto dei documenti. Metterlo li' avrebbe pero' rotto la regola che D-042 ha
+appena stabilito e che CLAUDE.md ripete fra le cose da non fare mai: **due
+stati non si confrontano fuori da `lifecycle.py`**. Con un grafo in un file e
+uno in un altro, la regola diventa "i grafi stanno un po' dove capita", e alla
+terza sessione ce n'e' un terzo.
+
+Il nome del modulo regge: si chiama `lifecycle`, non `product_lifecycle`.
+
+**Conseguenza.** `documents.py` importa `lifecycle` e non decide niente sugli
+stati: chiama `verifica_transizione_documento()` e lascia che sia quella a
+rifiutare. La docstring in cima a `lifecycle.py` adesso dichiara che i cicli
+di vita sono due e dove comincia il secondo.
+
+---
+
+## D-045 — Il rilasciato non si sostituisce, e la regola non e' un divieto
+
+**Data:** 25 agosto 2026 · **Stato:** attiva
+
+**Decisione.** Un documento in stato `rilasciato` non puo' avere il proprio
+file sostituito. Caricando un file su quel documento si crea la **versione
+successiva**, e il documento torna in `bozza`. La versione rilasciata resta in
+tabella con la sua impronta, e il suo file nell'archivio non viene toccato.
+
+Il ritorno in bozza **non e' una transizione del grafo**: nessuno preme un
+pulsante "torna in bozza". E' la conseguenza del caricamento, e sta scritta in
+`documents.aggiungi_versione()`.
+
+**Motivazione.** Il criterio di accettazione dell'azienda dice che
+"l'interfaccia lo impedisce e propone la nuova versione". Si poteva
+rispondere in due modi: un controllo che rifiuta la sostituzione, oppure un
+programma in cui sostituire un file non e' un'operazione che esiste. Il
+secondo e' piu' robusto, perche' non c'e' nessun controllo che qualcuno possa
+dimenticare di scrivere sulla strada nuova che aprira' fra tre sessioni: le
+righe di `document_versions` non si modificano e basta, e l'unica cosa che si
+puo' fare a un documento e' aggiungergliene una.
+
+Sul ritorno in bozza: una versione nuova non e' verificata da nessuno, quindi
+lasciare il documento "rilasciato" direbbe una cosa falsa. Deve rifare il giro.
+
+**Conseguenza.** La pagina del caricamento di una versione, quando il
+documento e' rilasciato, spiega tutto questo **prima** del modulo. Il
+passaggio a rilasciato ha la sua pagina di conferma, che dice che da li' in
+poi il file non si sostituira' piu', e viene registrato con autore e data.
+
+L'autore e la data del rilascio non hanno una colonna in `documents`: si
+rileggono dal registro delle operazioni con `documents.ultimo_rilascio()`.
+Duplicarli in una colonna vorrebbe dire due verita' che possono divergere, e
+il registro e' gia' il posto in cui i fatti vengono registrati (regola 6 di
+CLAUDE.md).
+
+---
+
+## D-046 — La filigrana si applica al volo, e se fallisce il file esce lo stesso
+
+**Data:** 25 agosto 2026 · **Stato:** attiva
+
+**Decisione.** Quando si scarica un PDF che appartiene a una versione di
+prodotto in stato `superato` o `obsoleto`, il file viene marchiato **al
+momento del download**, su una copia in memoria, con una filigrana diagonale
+che dice la dicitura, lo stato e il momento dello scarico. L'originale
+nell'archivio non viene toccato.
+
+Per i formati che non si possono marchiare senza rovinarli, l'avvertenza
+viaggia in due altri modi: una **pagina di avviso** prima dello scarico e
+l'avvertenza dentro il **nome del file** consegnato.
+
+Se pypdf non riesce ad aprire o a riscrivere il PDF, l'errore viene registrato
+con la sua traccia e **il file viene consegnato com'e'**, con l'avvertenza nel
+nome.
+
+**Motivazione.** Sul marchiare al volo invece che alla scrittura: il file
+depositato deve restare identico a quello caricato, perche' e' la sua impronta
+a dimostrare che un documento approvato non e' stato alterato (D-004). Un file
+marchiato all'ingresso avrebbe un'impronta diversa da quella del file che
+l'ingegnere ha firmato. In piu' la data e l'ora dello scarico, che sono la
+parte utile della filigrana, all'ingresso non si conoscono.
+
+Sul non rifiutare il download: togliere a una persona un documento che ha il
+diritto di avere, per un guasto in un PDF che non la riguarda, e' il modo
+peggiore di sbagliare. L'avvertenza resta comunque nel nome del file, e chi
+amministra trova la riga nel registro.
+
+Sull'avviso a schermo come pagina e non come finestra modale: se lo script non
+arrivasse, la finestra non si aprirebbe e il file partirebbe lo stesso - che e'
+esattamente quello che l'avviso serve a evitare (D-036).
+
+**Conseguenza.** `pypdf` entra in `requirements.txt`. E' una libreria che
+lavora solo in memoria, non parla con nessun servizio esterno e non ha
+dipendenze native: il vincolo "deve funzionare con internet staccato" regge.
+
+Il dirottamento verso la pagina di avviso sta **nella rotta dello scarico** e
+non nei collegamenti, cosi' vale per tutti i modi in cui ci si arriva: il
+pulsante, un indirizzo copiato, un preferito salvato sei mesi fa.
+
+---
+
+## D-047 — L'archivio scrive su un temporaneo e rinomina
+
+**Data:** 25 agosto 2026 · **Stato:** attiva
+
+**Decisione.** Un file caricato viene scritto in
+`STORAGE_PATH/tmp/<casuale>.parziale`, con l'impronta SHA-256 calcolata
+**mentre** si scrive, e solo a scrittura completata - dopo un `fsync` - viene
+spostato al suo posto definitivo con `os.replace()`. Se il contenuto e' gia'
+nell'archivio, il temporaneo viene buttato e non si riscrive niente.
+
+Il limite di dimensione (`MAX_UPLOAD_MB`, 2 GB di partenza) si verifica
+durante la lettura, non dopo.
+
+**Motivazione.** `os.replace()` e' atomico a livello di sistema operativo: da
+quel momento il file c'e' per intero o non c'e' affatto. Senza, un'interruzione
+a meta' caricamento lascerebbe al posto giusto un file troncato che **sembra
+buono**, e sarebbe il caso peggiore di tutti: la deduplicazione lo
+riconoscerebbe come gia' presente e nessuno riscriverebbe mai quello vero.
+
+Il temporaneo sta **dentro** `STORAGE_PATH` e non nella cartella temporanea di
+sistema perche' `os.replace()` e' atomico solo dentro lo stesso volume: in
+produzione l'archivio sta su un disco dedicato, e uno spostamento fra volumi
+diversi e' una copia, non uno scambio di nome.
+
+Il `fsync` prima dello spostamento serve contro un'interruzione di corrente
+subito dopo: senza, il sistema operativo potrebbe aver spostato il nome senza
+aver ancora scritto i byte.
+
+Il limite verificato durante la lettura serve a non far riempire il disco da un
+file che verra' comunque rifiutato.
+
+**Conseguenza.** Un temporaneo rimasto in `storage/tmp/` vuol dire un
+caricamento interrotto: non e' riferito da nessuna riga del database e si puo'
+togliere senza perdere niente. `storage.temporanei_rimasti()` esiste per i
+test e per la pagina di diagnostica della sessione 11.
+
+Una transazione annullata dopo che il file e' stato depositato lascia
+nell'archivio un oggetto che nessuno riferisce. Non e' un problema: non si
+cancella (regola 5), e al primo caricamento dello stesso contenuto la
+deduplicazione lo riusa.
+
+---
+
+## D-048 — I permessi sui documenti si leggono dalla matrice, in un posto solo
+
+**Data:** 25 agosto 2026 · **Stato:** attiva
+
+**Decisione.** Chi puo' vedere, caricare e modificare un documento lo dice la
+casella di `permission_rules` all'incrocio fra il **ruolo che la persona ha in
+quel progetto** e la **classificazione del documento**.
+`app/services/permissions.py` e' l'unico posto in cui quella tabella viene
+consultata, e offre la stessa regola in due forme: `permessi()` per un
+documento solo, `filtro_visibilita()` come condizione SQL per gli elenchi.
+
+Una casella che manca vale **no**, e il fatto finisce nel registro. Il
+creatore vede e puo' tutto.
+
+**Motivazione.** Le due forme sono due scritture della stessa domanda, e
+questo e' il punto: un elenco che nasconde una riga che poi si apre
+scrivendone l'indirizzo non e' una protezione, e' una tenda (D-043). Perche'
+le due strade diano sempre la stessa risposta devono partire dalla stessa
+tabella e stare nello stesso file, dove chi cambia una si accorge dell'altra.
+
+Sulla casella mancante che vale no: e' l'unico modo prudente di sbagliare. Il
+contrario vorrebbe dire che aggiungendo una classificazione nuova si aprono
+per sbaglio dei documenti a chi non doveva vederli.
+
+**Conseguenza.** Il menu a tendina della classificazione, nella pagina di
+caricamento, propone **solo** le classificazioni con cui quella persona puo'
+davvero caricare: proporne una con cui il caricamento verrebbe poi rifiutato
+vuol dire far perdere a qualcuno l'attesa di un file da 300 MB.
+
+**La matrice non si modifica dall'interfaccia.** Questa sessione la legge e
+basta: la pagina che la corregge e' rimasta in sospeso dalla sessione 3 ed e'
+segnata in `docs/STATO.md`. Fino ad allora la matrice e' quella scritta da
+`scripts/seed.py`.
+
+---
+
+## D-049 — Un file caricato, un documento; il titolo cede al nome del file
+
+**Data:** 25 agosto 2026 · **Stato:** attiva
+
+**Decisione.** Scegliendo piu' file insieme si creano **piu' documenti, uno
+per file**. Il titolo scritto nel modulo vale quando il file e' uno solo;
+negli altri casi ogni documento prende come titolo il nome del proprio file,
+senza estensione. Tipo e classificazione valgono per tutti.
+
+**Motivazione.** La sessione chiede di poter caricare "uno o piu' file
+insieme" e, separatamente, di indicare un titolo. Le due cose insieme non
+stanno in piedi: con dieci file non esiste un titolo solo che vada bene per
+tutti, e chiederne dieci in un modulo vorrebbe dire un modulo che si compila
+in cinque minuti.
+
+Un documento per file e' anche la lettura giusta del modello: il documento e'
+il contenitore di **una** cosa che nel tempo cambia versione. Dieci file
+insieme sono dieci cose diverse, non dieci versioni della stessa.
+
+**Conseguenza.** Chi carica dieci schemi ha dieci documenti con il titolo del
+file, e li rinomina dopo se vuole. Intanto i file sono dentro, che e' quello
+che conta: un caricamento che si rifiuta perche' manca un titolo e' un
+caricamento da rifare.
+
+La regola sta in `documents.crea_documento()` e non nella rotta: e' una regola,
+e le regole si provano con un test.
+
+---
+
+## D-050 — L'elenco dei tipi di documento sta in un file di configurazione
+
+**Data:** 25 agosto 2026 · **Stato:** attiva
+
+**Decisione.** I tipi di documento proponibili al caricamento (Schema
+elettrico, PCB, Meccanica, Firmware, Specifica, Rapporto di prova,
+Certificato, Corrispondenza, Altro) stanno in `config/tipi_documento.toml`,
+indicato da `DOCUMENT_TYPES_CONFIG` nel file `.env`. Se il file manca o e'
+scritto male, Aurora parte lo stesso e usa l'elenco di ripiego scritto in
+`app/services/doc_types.py`.
+
+**Motivazione.** E' la stessa scelta di D-038 per la scomposizione dei codici
+prodotto, e per la stessa ragione: e' un elenco che l'azienda cambiera'
+- aggiungera' "Analisi FMEA", togliera' quello che non usa - e cambiarlo non
+deve voler dire una modifica al programma e un rilascio.
+
+Il ripiego che non ferma il programma e' D-039 applicato ai tipi: un errore di
+battitura in un file di configurazione non deve poter impedire a tutta
+l'azienda di caricare i documenti.
+
+**Conseguenza.** `documents.doc_type` resta una colonna di testo e non diventa
+una chiave esterna: togliendo una voce dal file, i documenti che l'avevano
+continuano a mostrare il loro tipo, semplicemente non lo si puo' piu' scegliere
+per un documento nuovo. E' la regola generale del modello - un dato scritto nel
+database si mostra sempre, anche quando non lo si sa piu' spiegare.

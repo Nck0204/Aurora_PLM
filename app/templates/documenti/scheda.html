@@ -1,0 +1,342 @@
+{# ===========================================================================
+   Scheda di un documento: i dati, lo storico delle versioni, gli scarichi.
+
+   LO STORICO E' LA PAGINA. Tutto il resto e' contorno: chi apre questa scheda
+   vuole sapere che cosa e' cambiato, quando e per mano di chi, e poter
+   scaricare **qualunque** versione, non solo l'ultima. Per questo la tabella
+   delle versioni ha una riga per ciascuna, con la sua nota di modifica e il
+   suo pulsante di scarico.
+
+   IL RILASCIATO NON SI SOSTITUISCE. Quando il documento e' rilasciato, il
+   riquadro dello stato non propone di sostituire il file: propone di caricare
+   una versione nuova, e dice che quella partira' da bozza. E' il criterio di
+   accettazione "l'interfaccia lo impedisce e propone la nuova versione", e
+   non e' un divieto scritto da qualche parte: e' che il pulsante per farlo
+   non esiste.
+
+   L'AVVISO IN CIMA compare quando la versione di prodotto non e' piu' valida.
+   Sta prima di tutto il resto perche' cambia il significato di quello che si
+   legge dopo: capita che qualcuno lavori mezza giornata sullo schema di una
+   versione superata.
+   =========================================================================== #}
+{% extends "base.html" %}
+
+{% from "components/pulsanti.html" import pulsante, pulsante_collegamento, modulo_pulsante %}
+{% from "components/riquadro.html" import riquadro %}
+{% from "components/descrizione.html" import descrizione, voce %}
+{% from "components/stato.html" import etichetta, etichetta_documento, etichetta_ciclo_vita %}
+{% from "components/avvisi.html" import avviso, notifica %}
+{% from "components/tabella.html" import tabella %}
+
+{% block titolo %}{{ documento.title }}{% endblock %}
+{% block sezione %}Documenti{% endblock %}
+
+{% block notifiche %}
+    {% if caricato %}
+        {{ notifica("Il documento e' stato creato con la sua versione 1, in "
+                    "bozza.", variante="successo", titolo="Caricato") }}
+    {% endif %}
+    {% if versione_nuova %}
+        {{ notifica("La versione precedente resta dov'era, identica e "
+                    "scaricabile: le versioni non si sostituiscono, si "
+                    "aggiungono.",
+                    variante="successo", titolo="Versione caricata", durata=0) }}
+    {% endif %}
+    {% if cambiato %}
+        {{ notifica("Il documento e' passato a «" ~ nome_stato(documento.state)
+                    ~ "».", variante="successo", titolo="Stato aggiornato") }}
+    {% endif %}
+    {% if request.query_params.get("ripristinato") %}
+        {{ notifica("Il documento e' tornato negli elenchi ordinari, con tutte "
+                    "le sue versioni.",
+                    variante="successo", titolo="Ripristinato") }}
+    {% endif %}
+{% endblock %}
+
+{% block contenuto %}
+
+{% if documento.is_deleted %}
+    {% call avviso("", variante="attenzione",
+                   titolo="Questo documento e' stato ritirato") %}
+        <p>
+            Non compare negli elenchi ordinari. Le sue versioni e i suoi file
+            non sono stati toccati: ripristinandolo torna esattamente com'era.
+        </p>
+    {% endcall %}
+{% endif %}
+
+{% if da_marchiare %}
+    {% call avviso("", variante="attenzione",
+                   titolo="Questa versione di prodotto non e' piu' quella valida") %}
+        <p>
+            Il documento appartiene alla versione
+            {{ versione_prodotto.version_number }} di
+            <span class="mono">{{ prodotto.code }}</span>, che adesso e'
+            {{ etichetta_ciclo_vita(versione_prodotto.lifecycle_state) }}.
+        </p>
+        <p class="margine-sopra">
+            I PDF scaricati da qui escono con una <strong>filigrana</strong>
+            che lo dice; gli altri formati escono con l'avvertenza nel nome del
+            file. Non e' un ripiego: e' l'unico modo perche' l'avvertenza
+            viaggi insieme al file anche dopo che e' uscito da Aurora.
+        </p>
+    {% endcall %}
+{% endif %}
+
+<div class="testata">
+    <div>
+        <h1>{{ documento.title }}</h1>
+        <p class="sottotitolo">
+            {{ documento.doc_type }} &middot;
+            {{ etichetta_documento(documento.state) }} &middot;
+            <span class="mono">{{ prodotto.code }}</span>
+            v{{ versione_prodotto.version_number }}
+        </p>
+    </div>
+    <div class="testata-azioni">
+        {{ pulsante_collegamento("Il progetto", "/progetti/" ~ progetto.id,
+                                 icona_nome="progetti") }}
+        {% if permessi.caricare and not documento.is_deleted %}
+            {{ pulsante_collegamento("Carica una versione nuova",
+                                     "/documenti/" ~ documento.id ~ "/versione",
+                                     variante="primario", icona_nome="carica") }}
+        {% endif %}
+    </div>
+</div>
+
+<div class="griglia-riquadri">
+
+    {% call riquadro("Il documento") %}
+        {% call descrizione(stretta=true) %}
+            {{ voce("Titolo", documento.title) }}
+            {{ voce("Tipo", documento.doc_type) }}
+            {{ voce("Classificazione", documento.classification.name) }}
+            {{ voce("Stato", etichetta_documento(documento.state)) }}
+            {{ voce("Versione corrente",
+                    corrente.version_number if corrente else none) }}
+            {{ voce("Creato il", documento.created_at.strftime("%d/%m/%Y")) }}
+        {% endcall %}
+    {% endcall %}
+
+    {% call riquadro("Il file di adesso") %}
+        {% if corrente %}
+            {% call descrizione(stretta=true) %}
+                {{ voce("Nome originale", corrente.original_filename) }}
+                {{ voce("Dimensione", peso(corrente.size_bytes)) }}
+                {{ voce("Tipo dichiarato", corrente.mime_type, monospazio=true) }}
+                {{ voce("Caricato da", corrente.author.full_name) }}
+                {{ voce("Caricato il",
+                        corrente.created_at.strftime("%d/%m/%Y alle %H:%M")) }}
+                {{ voce("Impronta SHA-256", corrente.storage_hash,
+                        monospazio=true) }}
+            {% endcall %}
+            <div class="fila-pulsanti margine-sopra">
+                {{ pulsante_collegamento("Scarica",
+                       "/documenti/" ~ documento.id ~ "/versioni/"
+                       ~ corrente.id ~ "/scarica",
+                       icona_nome="scarica") }}
+            </div>
+        {% else %}
+            <p class="campo-aiuto">
+                Questo documento non ha nessun file: e' una situazione che
+                l'interfaccia non sa produrre.
+            </p>
+        {% endif %}
+    {% endcall %}
+
+</div>
+
+{# --- Lo stato del documento --- #}
+{% call riquadro("Stato del documento") %}
+
+    <p>
+        Il documento e' <strong>{{ nome_stato(documento.state) }}</strong>.
+    </p>
+
+    {% if documento.state == stato_definitivo %}
+        {% call avviso("", variante="informazione",
+                       titolo="Questa versione non si sostituisce piu'") %}
+            <p>
+                Un documento rilasciato e' un fatto avvenuto: il file della
+                versione {{ corrente.version_number if corrente else "corrente" }}
+                resta com'e' e non puo' essere sovrascritto.
+                {% if permessi.caricare %}
+                Per cambiarne il contenuto si carica una <strong>versione
+                nuova</strong>, che parte da bozza e lascia intatta questa.
+                {% endif %}
+            </p>
+            {% if rilascio %}
+            <p class="margine-sopra">
+                Rilasciato da
+                <strong>{{ rilascio.user.full_name if rilascio.user else "il programma" }}</strong>
+                il {{ rilascio.occurred_at.strftime("%d/%m/%Y alle %H:%M") }}.
+            </p>
+            {% endif %}
+            {% if permessi.caricare and not documento.is_deleted %}
+            <p class="margine-sopra">
+                {{ pulsante_collegamento("Carica una versione nuova",
+                       "/documenti/" ~ documento.id ~ "/versione",
+                       variante="primario", misura="piccolo",
+                       icona_nome="carica") }}
+            </p>
+            {% endif %}
+        {% endcall %}
+    {% endif %}
+
+    {% if permessi.modificare and not documento.is_deleted %}
+        {% if stati_possibili %}
+            <p class="campo-aiuto margine-sopra">
+                Da qui si puo' passare a questi stati, e a nessun altro. Ogni
+                passaggio chiede prima una conferma.
+            </p>
+            <div class="fila-pulsanti margine-sopra">
+                {% for stato in stati_possibili %}
+                    {{ pulsante_collegamento(
+                           "Porta a «" ~ nome_stato(stato) ~ "»",
+                           "/documenti/" ~ documento.id ~ "/stato?nuovo="
+                           ~ stato.value,
+                           variante="primario" if loop.first else "secondario") }}
+                {% endfor %}
+            </div>
+        {% else %}
+            <p class="campo-aiuto margine-sopra">
+                E' l'ultimo passo: da qui il documento non cambia piu' stato.
+            </p>
+        {% endif %}
+    {% elif not documento.is_deleted %}
+        <p class="campo-aiuto margine-sopra">
+            Lo stato di un documento lo cambia chi ha il permesso di modifica
+            sulla sua classificazione.
+        </p>
+    {% endif %}
+
+{% endcall %}
+
+{# --- Lo storico delle versioni --- #}
+{% call riquadro("Storico delle versioni") %}
+
+    {% set colonne = [
+        {"etichetta": "Versione", "classe": "colonna-numero"},
+        {"etichetta": "File"},
+        {"etichetta": "Dimensione", "classe": "colonna-numero"},
+        {"etichetta": "Autore"},
+        {"etichetta": "Data"},
+        {"etichetta": "Che cosa cambia"},
+        {"etichetta": ""},
+    ] %}
+
+    {% call tabella(colonne, vuota=(versioni|length == 0),
+                    messaggio_vuoto="Questo documento non ha versioni.") %}
+        {% for v in versioni %}
+        <tr>
+            <td class="colonna-numero">
+                {{ v.version_number }}
+                {% if corrente and v.id == corrente.id %}
+                    {{ etichetta("corrente", variante="accento") }}
+                {% endif %}
+            </td>
+            <td>
+                <span class="mono">{{ v.original_filename }}</span>
+                <div class="testo-piccolo testo-tenue mono"
+                     title="Impronta SHA-256 del contenuto">
+                    {{ v.storage_hash[:16] }}&hellip;
+                </div>
+            </td>
+            <td class="colonna-numero">{{ peso(v.size_bytes) }}</td>
+            <td>{{ v.author.full_name }}</td>
+            <td>{{ v.created_at.strftime("%d/%m/%Y %H:%M") }}</td>
+            <td>
+                {% if v.note %}{{ v.note }}
+                {% else %}<span class="testo-tenue">prima versione</span>{% endif %}
+            </td>
+            <td>
+                {{ pulsante_collegamento("Scarica",
+                       "/documenti/" ~ documento.id ~ "/versioni/" ~ v.id
+                       ~ "/scarica",
+                       misura="piccolo", icona_nome="scarica") }}
+            </td>
+        </tr>
+        {% endfor %}
+    {% endcall %}
+
+    <p class="campo-aiuto margine-sopra">
+        Ogni versione resta scaricabile per sempre, identica a com'e' stata
+        caricata: l'impronta accanto al nome e' quella del contenuto, e
+        ricalcolandola si dimostra che il file non e' stato toccato.
+    </p>
+
+{% endcall %}
+
+{# --- Gli scarichi registrati --- #}
+{% if permessi.modificare %}
+{% call riquadro("Ultimi scarichi") %}
+    {% if scarichi %}
+        {% set colonne_scarichi = [
+            {"etichetta": "Quando"},
+            {"etichetta": "Chi"},
+            {"etichetta": "Versione", "classe": "colonna-numero"},
+            {"etichetta": "Copia consegnata"},
+        ] %}
+        {% call tabella(colonne_scarichi) %}
+            {% for riga in scarichi %}
+            <tr>
+                <td>{{ riga.occurred_at.strftime("%d/%m/%Y %H:%M") }}</td>
+                <td>{{ riga.user.full_name if riga.user else "il programma" }}</td>
+                <td class="colonna-numero">
+                    {{ riga.new_value.get("version_number", "") }}
+                </td>
+                <td>
+                    {% if riga.new_value.get("filigrana") %}
+                        {{ etichetta("con filigrana", variante="attenzione") }}
+                    {% else %}
+                        {{ etichetta("originale", pallino=false) }}
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        {% endcall %}
+    {% else %}
+        <p class="campo-aiuto">
+            Nessuno ha ancora scaricato questo documento. Ogni scarico viene
+            registrato con chi, che cosa, quale versione e quando: e' la
+            risposta alla domanda "chi ha in mano lo schema vecchio", e il
+            giorno in cui la si fa e' tardi per cominciare a registrare.
+        </p>
+    {% endif %}
+{% endcall %}
+{% endif %}
+
+{# --- Il ritiro --- #}
+{% if permessi.modificare and not documento.is_deleted %}
+{% call riquadro("Ritira il documento") %}
+    <p class="campo-aiuto">
+        Il documento sparisce dagli elenchi ordinari. <strong>Non viene
+        cancellato niente</strong>: le versioni, i file e il registro restano
+        dove sono, e chi ha il ruolo di creatore puo' rimetterlo a posto dalla
+        sezione dei documenti ritirati.
+    </p>
+    <div class="fila-pulsanti margine-sopra">
+        {{ modulo_pulsante(request, "/documenti/" ~ documento.id ~ "/ritira",
+                           "Ritira", variante="pericolo",
+                           conferma="Ritirare questo documento? Sparira' dagli "
+                                    "elenchi, ma non verra' cancellato niente.") }}
+    </div>
+{% endcall %}
+{% endif %}
+
+{% if documento.is_deleted and utente.is_creatore %}
+{% call riquadro("Ripristina il documento") %}
+    <p class="campo-aiuto">
+        Torna negli elenchi ordinari esattamente com'era: stesso stato, stesse
+        versioni, stessi file.
+    </p>
+    <div class="fila-pulsanti margine-sopra">
+        {{ modulo_pulsante(request,
+                           "/documenti/" ~ documento.id ~ "/ripristina",
+                           "Ripristina", variante="primario",
+                           icona_nome="ripristina") }}
+    </div>
+{% endcall %}
+{% endif %}
+
+{% endblock %}

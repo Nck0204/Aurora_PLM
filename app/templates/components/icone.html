@@ -73,6 +73,15 @@
     <circle cx="12" cy="12" r="9"/><path d="M12 11v6"/><path d="M12 7.8h.01"/>
 {%- elif nome == "carica" %}
     <path d="M12 16V4.5"/><path d="m7.5 9 4.5-4.5L16.5 9"/><path d="M4.5 15v3.5A1.5 1.5 0 0 0 6 20h12a1.5 1.5 0 0 0 1.5-1.5V15"/>
+{%- elif nome == "scarica" %}
+    {# La freccia in giu' verso un piano: e' l'opposto esatto di "carica", e
+       le due si distinguono a colpo d'occhio anche piccole in una riga di
+       tabella. #}
+    <path d="M12 4.5V16"/><path d="m7.5 11.5 4.5 4.5 4.5-4.5"/><path d="M4.5 15v3.5A1.5 1.5 0 0 0 6 20h12a1.5 1.5 0 0 0 1.5-1.5V15"/>
+{%- elif nome == "ripristina" %}
+    {# Una freccia che torna indietro girando: rimettere a posto una cosa
+       tolta, non annullare l'ultima operazione. #}
+    <path d="M4 12a8 8 0 1 0 2.6-5.9"/><path d="M4 4v4.5h4.5"/>
 {%- elif nome == "cartella-vuota" %}
     <path d="M3 7.5A1.5 1.5 0 0 1 4.5 6h4l2 2.5h7A1.5 1.5 0 0 1 19 10v7.5A1.5 1.5 0 0 1 17.5 19h-13A1.5 1.5 0 0 1 3 17.5Z"/><path d="M8 13.5h6"/>
 {%- elif nome == "freccia-sinistra" %}

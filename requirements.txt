@@ -18,6 +18,11 @@ psycopg[binary]==3.3.4
 Jinja2==3.1.6
 python-multipart==0.0.32
 
+# --- Documenti -------------------------------------------------------------
+# Filigrana applicata al volo ai PDF delle versioni superate (sessione 6,
+# D-046). Serve solo a leggere e ricomporre PDF: nessun servizio esterno.
+pypdf==6.4.0
+
 # --- Configurazione e sicurezza -------------------------------------------
 pydantic-settings==2.15.0
 argon2-cffi==25.1.0

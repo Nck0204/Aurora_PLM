@@ -1,0 +1,73 @@
+{# ===========================================================================
+   BARRA DI CARICAMENTO
+
+   QUANDO SI USA. Dentro un modulo che manda dei file, insieme all'area di
+   trascinamento. Mostra a che punto e' il caricamento **davvero**: la
+   percentuale arriva dal browser mentre i byte partono, non da
+   un'animazione che gira per far compagnia.
+
+   QUANDO NON SI USA. Per l'avanzamento di un progetto fra le sue fasi: quello
+   e' il componente "avanzamento", e non e' una percentuale. Un progetto non e'
+   "al 60%", e' "in verifica".
+
+   COME FUNZIONA. Il modulo dichiara data-carica-con-avanzamento; lo script in
+   /static/js/aurora.js intercetta l'invio, manda i file con una richiesta che
+   sa dire quanti byte sono partiti, e aggiorna questa barra. Senza JavaScript
+   il modulo si invia da solo come un modulo qualunque e la barra non compare
+   mai: il caricamento dei documenti non dipende da uno script (D-036).
+
+   Per questo la barra nasce con l'attributo "hidden": non e' un dettaglio di
+   presentazione, e' il modo in cui una pagina senza JavaScript non mostra un
+   pezzo di interfaccia che non si muovera' mai.
+
+       {% raw %}<form method="post" action="/documenti/nuovo"
+             enctype="multipart/form-data" data-carica-con-avanzamento>
+           {{ csrf(request) }}
+           {{ area_file("File da caricare", "file", multipli=true) }}
+           {{ barra_caricamento() }}
+           {{ pulsante("Carica", variante="primario") }}
+       </form>{% endraw %}
+   =========================================================================== #}
+
+
+{# Parametri:
+
+     percentuale  quanto e' piena. Lasciandola a "none" - il caso di tutte le
+                  pagine vere - la barra nasce nascosta e vuota, e la riempie
+                  lo script. Passandole un numero la barra si vede subito: lo
+                  fa soltanto la vetrina /stile, che deve poterla mostrare
+                  ferma a un valore qualunque.
+     testo        la riga scritta sotto. Lo script la riscrive a ogni blocco
+                  di byte partito.
+     variante     "conclusa" o "fallita", per l'esito.
+
+   La larghezza e' scritta nell'attributo style, ed e' l'unico posto di Aurora
+   in cui succede. Non e' un valore del tema - un colore, una spaziatura, un
+   raggio - ma **il dato stesso** che la barra mostra: e' lo stesso numero che
+   sta in aria-valuenow, scritto una volta per gli occhi e una per chi
+   ascolta. Metterlo in una classe CSS vorrebbe dire centouno classi. #}
+{% macro barra_caricamento(id="avanzamento-caricamento",
+                           etichetta="Avanzamento del caricamento",
+                           percentuale=none, testo="", variante=none) -%}
+{#- role="progressbar" con i suoi tre valori: un lettore di schermo annuncia
+    "45 per cento" senza che ci sia scritto da nessuna parte. Lo script
+    aggiorna aria-valuenow insieme alla larghezza, mai una sola delle due. -#}
+<div class="barra-caricamento{% if variante %} barra-caricamento--{{ variante }}{% endif %}"
+     id="{{ id }}" data-barra-caricamento
+     {%- if percentuale is none %} hidden{% endif %}>
+    <div class="barra-caricamento-traccia"
+         role="progressbar"
+         aria-label="{{ etichetta }}"
+         aria-valuemin="0"
+         aria-valuemax="100"
+         aria-valuenow="{{ percentuale|default(0, true) }}">
+        <div class="barra-caricamento-riempimento" data-barra-riempimento
+             {%- if percentuale is not none %} style="width: {{ percentuale }}%"{% endif %}></div>
+    </div>
+
+    {#- aria-live="polite" fa leggere i cambiamenti senza interrompere quello
+        che si sta ascoltando: durante un caricamento da tre minuti e'
+        l'unico modo di sapere che sta succedendo qualcosa. -#}
+    <p class="barra-caricamento-testo" data-barra-testo aria-live="polite">{{ testo }}</p>
+</div>
+{%- endmacro %}
