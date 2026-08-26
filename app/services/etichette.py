@@ -26,6 +26,7 @@ from app.models import (
     Contact,
     Customer,
     Document,
+    EmailMessage,
     PhaseTemplate,
     Product,
     ProductVersion,
@@ -84,3 +85,17 @@ def nome_classificazione(classificazione: Classification) -> str:
 def nome_modello_fasi(modello: PhaseTemplate) -> str:
     """Nome e versione del modello: i modelli sono versionati e immutabili."""
     return f"{modello.name} v{modello.version}"
+
+
+def nome_messaggio(messaggio: EmailMessage) -> str:
+    """Oggetto e mittente: "Offerta rev. 2 (da mario@cliente.it)".
+
+    L'oggetto da solo non basta a distinguere due messaggi - in un filo di
+    risposte sono tutti uguali - e il mittente da solo non dice di che cosa si
+    parlava. Un messaggio senza oggetto capita: ha comunque un mittente, ed e'
+    quello che si legge.
+    """
+    oggetto = (messaggio.subject or "").strip()
+    if oggetto:
+        return f"{oggetto} (da {messaggio.sender})"
+    return f"Messaggio senza oggetto (da {messaggio.sender})"

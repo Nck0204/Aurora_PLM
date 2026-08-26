@@ -49,6 +49,7 @@
      25. Barra di caricamento dei file
      26. La griglia della matrice dei permessi
      27. La griglia delle fasi di un modello
+     28. Il corpo di un messaggio di posta
    ========================================================================== */
 
 
@@ -2423,4 +2424,57 @@ fieldset.gruppo-campi legend {
     .griglia-fasi-spunte {
         grid-column: 2;
     }
+}
+
+
+/* ==========================================================================
+   28. IL CORPO DI UN MESSAGGIO DI POSTA
+   Il testo di una mail archiviata. Il componente e' in
+   components/messaggio.html.
+
+   E' l'unico blocco di Aurora che mostra testo scritto da qualcun altro,
+   lungo quanto capita e con gli a capo che contano. Da qui le tre regole:
+   gli a capo si rispettano, le righe lunghe vanno a capo da sole, e il
+   carattere resta quello della prosa - il monospazio si legge peggio su
+   dieci righe di frasi.
+   ========================================================================== */
+
+.corpo-messaggio {
+    padding: var(--spazio-4);
+    background-color: var(--colore-superficie);
+    border: 1px solid var(--colore-bordo-tenue);
+    border-radius: var(--raggio-piccolo);
+    color: var(--colore-testo);
+    font-size: var(--testo-normale);
+    line-height: 1.6;
+
+    /* "pre-wrap" e' il perno: tiene gli a capo scritti dentro il messaggio e
+       manda a capo da sole le righe troppo lunghe. Con "pre" si scorrerebbe
+       di lato, con "normal" una mail diventerebbe un unico paragrafo. */
+    white-space: pre-wrap;
+
+    /* Gli indirizzi lunghi e i collegamenti incollati dentro una mail non
+       hanno spazi: senza questo sfonderebbero la larghezza del riquadro. */
+    overflow-wrap: anywhere;
+}
+
+/* Il resto del messaggio, chiuso finche' non lo si chiede. Il blocco dentro
+   si attacca a quello di sopra: sono lo stesso testo, tagliato. */
+.corpo-messaggio-resto {
+    margin-top: var(--spazio-2);
+}
+
+.corpo-messaggio-resto > summary {
+    padding: var(--spazio-2) 0;
+    color: var(--colore-accento);
+    cursor: pointer;
+    font-size: var(--testo-piccolo);
+}
+
+.corpo-messaggio-resto > summary:hover {
+    color: var(--colore-accento-scuro);
+}
+
+.corpo-messaggio-resto .corpo-messaggio {
+    margin-top: var(--spazio-2);
 }

@@ -1,6 +1,6 @@
 # Stato di avanzamento
 
-Ultimo aggiornamento: **26 agosto 2026**, fine della sessione 9.
+Ultimo aggiornamento: **26 agosto 2026**, fine della sessione 10.
 
 Il progetto e' diviso in 13 sessioni di lavoro. Questa tabella dice a che
 punto siamo. Va aggiornata **alla fine di ogni sessione**, prima del commit.
@@ -23,12 +23,21 @@ Stati possibili: `da fare` · `in corso` · `completata`
 | 7 | Regole di accesso | **completata** | Una funzione sola che decide tutti i permessi (`permissions.puo`), filtro a livello di interrogazione e di conteggio, 404 al posto del 403, matrice dei permessi modificabile con conferma e registro, gestione delle classificazioni, verifica degli accessi di una persona. Dettaglio sotto. |
 | 8 | Fasi e flusso di avanzamento | **completata** | Amministrazione dei modelli di fasi immutabili e versionati, barra dell'avanzamento con date e durate, avanzamento diretto e per richiesta con approvazione o rifiuto, divieto di tornare indietro da una fase che lo blocca, chiusura del progetto e sola lettura, storico completo. Dettaglio sotto. |
 | 9 | Registro delle operazioni | **completata** | Catalogo di 58 azioni registrate, descrizione in italiano su ogni voce, catena di impronte SHA-256, permessi PostgreSQL che rendono `audit_logs` a sola aggiunta, pagina di consultazione con filtri e ricerca, esportazione CSV registrata, scheda "Storico" su cinque tipi di oggetto, tre script operativi. Dettaglio sotto. |
-| 10 | Notifiche e posta | da fare | Adattatore di posta doppio (locale/Graph), archiviazione dei messaggi, smistamento automatico e quarantena, allegati, modelli dei messaggi, notifiche. |
-| 11 | Lavori pianificati e manutenzione | da fare | APScheduler, controlli notturni, procedura di backup e di ripristino. |
+| 10 | Notifiche e posta | **completata** | Il motore di acquisizione: interfaccia della fonte e fonte locale a file `.eml`, archiviazione del messaggio e degli allegati per impronta, quattro rami di attribuzione, quarantena con assegnazione a mano estesa alla conversazione, motivi configurabili dall'interfaccia, ricerca su mittente/oggetto/contenuto/date. **Le notifiche non sono state chieste e restano da ricollocare.** Dettaglio sotto. |
+| 11 | Lavori pianificati e manutenzione | da fare | APScheduler, controlli notturni, procedura di backup e di ripristino. **Piu' il collegamento vero a Microsoft Graph**, cioe' la seconda `FonteEmail`: l'interfaccia c'e' dalla sessione 10 e il motore non va toccato. |
 | 12 | Rapporti ed esportazioni | da fare | Cruscotto, rapporti di avanzamento, esportazione in CSV e PDF. |
 | 13 | Messa in produzione | da fare | Irrobustimento, prestazioni, installazione sul server aziendale, manuale d'uso, consegna. |
 
-> **Nota sul piano.** La **sessione 9 e' cambiata**: era "Interfaccia
+> **Nota sul piano.** La **sessione 10 e' cambiata a meta'**: era "Notifiche
+> e posta" e l'azienda ha chiesto la sola meta' della posta, cioe' il motore di
+> acquisizione. **Le notifiche non sono state fatte e non hanno piu' una
+> sessione loro**: la tabella delle notifiche, i modelli dei messaggi e l'invio
+> restano da ricollocare, come il lavoro sull'interfaccia della sessione 9. Le
+> due code che ci sarebbero servite - chi deve verificare un documento, chi deve
+> rispondere a una richiesta di fase - sono avvisi in linea sul cruscotto
+> (D-060) e continuano a funzionare cosi'.
+>
+> La **sessione 9 era gia' cambiata**: era "Interfaccia
 > completa" e l'azienda ha chiesto invece il **registro delle operazioni**, che
 > nel piano non compariva da nessuna parte ed e' il requisito che rende il
 > sistema difendibile in sede di audit. Il lavoro sull'interfaccia che era
@@ -57,6 +66,231 @@ Stati possibili: `da fare` · `in corso` · `completata`
 > comportamento. Resta una **domanda aperta**: le tabelle di distinta base e
 > articoli sono del rilascio R3 e in questo piano non compaiono; va chiarito se
 > le 13 sessioni coprono il solo R1 o arrivano anche a R2 e R3.
+
+---
+
+## Sessione 10 — Notifiche e posta · completata (26 agosto 2026)
+
+La sessione aveva un vincolo che ha deciso tutto il resto: **il motore doveva
+essere collaudabile senza nessun accesso a Outlook.** Il collegamento vero alla
+casella aziendale arriva nella sessione 11, e aspettarlo avrebbe voluto dire
+scrivere il pezzo difficile - riconoscere a quale prodotto appartiene un
+messaggio - senza poterlo provare su niente.
+
+La risposta e' un'interfaccia di quattro metodi, `FonteEmail`, e una sola
+implementazione: `FonteLocale`, che legge file `.eml` da una cartella. Il
+motore non sa da dove arrivino i messaggi. Fra un anno, chi tocchera'
+l'attribuzione potra' rieseguire gli stessi ventiquattro file di prova e sapere
+se ha rotto qualcosa (D-076).
+
+> **Una migrazione, `d4b8607e15a2`.** Le due tabelle della posta -
+> `email_messages` e `email_attachments` - ci sono dalla sessione 2 e non
+> cambiano forma. La migrazione aggiunge una tabella nuova (`email_reasons`),
+> due colonne a `email_messages` (`quarantine_reason` e `source_reference`) e
+> **la classificazione "Corrispondenza" con le sue tre caselle della matrice**,
+> che e' quella con cui si decide chi puo' vedere un messaggio.
+
+### La cosa che non e' stata scritta
+
+**Non c'e' nessuna regola di accesso nuova.** Era la tentazione piu' facile
+della sessione: i messaggi non hanno una colonna `classification_id`, quindi
+sembrava naturale scrivere "la posta la vede chi e' nella squadra". Invece un
+messaggio e' trattato come **un documento di classificazione "Corrispondenza"**
+nel progetto aperto sulla versione a cui e' attaccato, e la risposta la da' la
+stessa funzione che risponde per i documenti (D-069).
+
+Il guadagno si vede subito: la matrice ha una colonna in piu' che si amministra
+dalla pagina di sempre, la verifica degli accessi di una persona comprende la
+posta senza una riga di programma, e il giorno in cui si corregge la matrice la
+posta si corregge insieme ai documenti. Una seconda regola di accesso e' una
+regola che si disallinea, e le regole di accesso sbagliate non si vedono.
+
+### Le quattro strade dell'attribuzione
+
+Un messaggio appartiene a una **versione di prodotto**, non a un progetto: la
+corrispondenza con il cliente continua anche dopo che il progetto e' chiuso e
+il prodotto e' in produzione. Per capire a quale, si prova nell'ordine - dal
+piu' esplicito al piu' congetturale:
+
+| # | Strada | Che cosa guarda |
+|---|---|---|
+| a | l'oggetto formattato | `[RMS1100-24-110SW][V2][SPECS]`, riconosciuto anche dietro a `R:`, `Re:`, `Fwd:`, `I:`, `FW:` accumulati, con qualunque combinazione di maiuscole e spazi dentro e fuori le parentesi |
+| b | il codice in mezzo alla frase | `Ordine di ricambi (prodotto: CVT2200-48-24DC), urgente` |
+| c | il filo di conversazione | `In-Reply-To` e `References`, **in tutte e due le direzioni** |
+| d | la quarantena | non un errore: una domanda a una persona |
+
+**La terza guarda in tutte e due le direzioni**, e non e' un lusso: i file di
+una cartella si leggono in ordine di nome, quindi capita di archiviare prima la
+risposta e poi il messaggio originale. Si cercano sia i messaggi che noi
+citiamo sia quelli che citano noi.
+
+**Due casi hanno voluto una decisione.** Quando l'oggetto nomina il prodotto ma
+non la versione si prende la piu' recente **non chiusa**; se sono chiuse tutte
+si prende comunque la piu' recente, perche' un prodotto fuori produzione riceve
+posta e mandarla in quarantena vorrebbe dire far smistare a mano tutto
+l'archivio storico (D-072). Quando invece l'oggetto dichiara una versione che
+**non esiste** - `[RMS1100-24-110SW][V7]` su un prodotto che ne ha due - il
+messaggio va in quarantena e le regole successive non si provano: Aurora non ne
+sceglie un'altra al posto del mittente. Meta' delle decisioni tecniche sta
+nelle mail, e una decisione archiviata sotto la versione sbagliata e' una
+decisione persa (D-073).
+
+### Realizzato
+
+**`app/services/mail_source.py`** — l'interfaccia `FonteEmail` e la fonte
+locale. Quattro metodi: elenca, scarica, marca elaborato, sposta in quarantena.
+La cartella si organizza da sola:
+
+    MAIL_LOCAL_PATH/               i messaggi da leggere
+    MAIL_LOCAL_PATH/elaborate/     quelli archiviati e attribuiti
+    MAIL_LOCAL_PATH/quarantena/    quelli che aspettano una persona
+
+Non c'e' `cancella`, perche' in Aurora non si cancella niente; non c'e'
+`segna_come_letto`, perche' lo stato di lettura appartiene alla casella di chi
+la usa. `MAIL_PROVIDER=graph` si ferma con una spiegazione invece di
+restituire un elenco vuoto, che lascerebbe credere che la casella sia vuota.
+
+**`app/services/email_parsing.py`** — la lettura di un `.eml`, e **non tocca il
+database**. E' la meta' difficile della sessione, ed e' in un file suo proprio
+perche' cosi' si prova una funzione per volta senza PostgreSQL: i prefissi di
+risposta, le tre parentesi, gli elementi che potrebbero essere un codice, la
+conversione da HTML a testo leggibile, gli allegati staccati.
+
+**Nessuna di queste funzioni solleva mai.** Un file troncato, un PDF rinominato
+in `.eml`, zero byte: esce comunque un risultato, piu' o meno povero, con
+l'elenco in italiano di quello che non tornava. Se potessero sollevare, un file
+rovinato fermerebbe l'acquisizione di tutti quelli che vengono dopo - ed e'
+esattamente il giorno in cui l'acquisizione serve di piu'.
+
+**`app/services/emails.py`** — il motore. Attribuisce, deposita il `.eml` e
+ogni allegato nell'archivio per impronta (D-004), scrive le righe, registra
+l'operazione e **fa commit di ogni messaggio per conto suo**. E' l'unico punto
+di Aurora in cui un servizio decide quando scrivere invece di lasciarlo alla
+rotta, e la ragione e' nei punti 6 e 7 della sessione: con una transazione
+unica per tutto il giro il primo messaggio storto porterebbe con se' i
+cinquecento gia' archiviati (D-070).
+
+**La ripetibilita' e' garantita dal `Message-ID`**, che e' unico in tabella. I
+messaggi che non ne hanno uno - i file rotti - ne ricevono uno ricavato
+dall'impronta del file, che e' altrettanto stabile: rileggere lo stesso file
+produce lo stesso identificativo e nessun doppione (D-074). Lo spostamento del
+file avviene **dopo** il commit: se il programma si spegne in mezzo, al giro
+successivo il messaggio viene riconosciuto come gia' archiviato e spostato
+allora.
+
+**Le pagine:**
+
+| Indirizzo | Che cosa fa |
+|---|---|
+| `/posta` | l'elenco cronologico, con ricerca su mittente, oggetto e **contenuto**, filtro sull'attribuzione e intervallo di date |
+| `/posta?progetto={id}` | la stessa pagina ristretta a un progetto: e' la "sezione Posta" del punto 1 |
+| `/posta/{id}` | il messaggio con il corpo leggibile, gli allegati scaricabili e la spiegazione di **perche' sta li'** |
+| `/posta/{id}/scarica` | il `.eml` originale, con un nome che si ritrova fra i download |
+| `/posta/{id}/allegati/{aid}` | un allegato, verificando che sia di quel messaggio |
+| `/posta/{id}/storico` | la sesta scheda "Storico" di Aurora |
+| `/posta/quarantena` | i messaggi non attribuiti, con il motivo in colonna (creatore) |
+| `/posta/{id}/assegna` | l'assegnazione a mano, con la ricerca del prodotto |
+| `/posta/motivi` | l'elenco dei motivi ammessi, modificabile (creatore) |
+| `POST /posta/elabora` | avvia l'acquisizione |
+
+**L'assegnazione dalla quarantena propone di assegnare tutto il filo**, ed e'
+una spunta gia' segnata: una conversazione appartiene tutta allo stesso
+prodotto, e assegnarne dodici uno per volta e' il modo piu' sicuro di smettere
+di usare la quarantena. I messaggi del filo gia' attribuiti restano dove sono:
+sovrascrivere una decisione gia' presa non e' quello che chiede chi preme quel
+pulsante.
+
+**I motivi ammessi sono una tabella, non un file di configurazione** (D-071).
+I due file di `config/` li cambia chi amministra la macchina, con un editore di
+testo e un riavvio; questo elenco lo cambia chi usa Aurora, dal browser, e ogni
+cambiamento lascia una riga nel registro. Il motivo pero' **non decide niente**:
+un oggetto con una sigla fuori elenco viene attribuito lo stesso, perche' quello
+che conta e' il codice prodotto, e la sigla sconosciuta resta scritta sul
+messaggio cosi' ci si accorge che ne serve una nuova.
+
+**Quattro azioni nuove nel registro** — `email.archived`, `email.download`, piu'
+`email.quarantined` e `email.assigned_manual` che erano catalogate dalla
+sessione 9 e non le scriveva ancora nessuno; e quattro per i motivi. Un
+messaggio archiviato produce **una riga sola**: `archived` se e' stato
+attribuito, `quarantined` se no.
+
+**Un componente grafico nuovo**, `components/messaggio.html`, in vetrina su
+`/stile` come vuole la guida. E' l'unico blocco di Aurora che mostra testo
+scritto da qualcun altro: va a capo da solo, non e' a spaziatura fissa, e sopra
+le dodici righe si accorcia con un `<details>` che funziona senza JavaScript.
+
+**`scripts/genera_email_prova.py`** — ventiquattro file `.eml` che esercitano
+tutti i rami: oggetti corretti, con `R:` e `Fwd:` accumulati, con gli spazi
+dentro le parentesi, senza codice, risposte in conversazione, allegati grandi e
+con lettere accentate, corpo in solo HTML, un motivo sconosciuto, una versione
+inesistente, un messaggio senza `Message-ID`, uno senza oggetto e un file
+malformato. **Gli identificativi non sono casuali**: rieseguendo lo script e
+rielaborando, il numero di messaggi nel database non cambia - ed e' l'unico
+modo di verificare davvero la ripetibilita'. I codici prodotto invece si
+leggono dal database, altrimenti i rami "riconosciuto" non si proverebbero mai.
+
+### Verificato
+
+- **I quattro criteri di accettazione, eseguiti davvero sul database di
+  sviluppo.** Generati i ventiquattro file e avviata l'elaborazione: **16
+  attribuiti** (RMS1100-24-110SW v2 e CVT2200-48-24DC v1, ciascuno sul suo) e
+  **8 in quarantena**, ciascun file spostato nella sottocartella che gli
+  spetta. Rigenerati i file e rielaborato: **24 messaggi, nessun doppione**.
+  Assegnata dalla quarantena la conversazione "Convocazione riunione di
+  avanzamento": Aurora ha proposto gli altri due messaggi del filo e tutti e
+  tre sono finiti su RMS1100-24-110SW v2. Il file malformato e' in
+  `quarantena/` e non ha fermato nessuno degli altri.
+- **Il muro dei permessi, provato dai due lati** con uno script `httpx` a due
+  sessioni: `piero.bertoli`, ingegnere sul solo CVT2200-48-24DC v1, vede **6
+  messaggi** e riceve **403** sulla quarantena; `prova.sessione5`, creatore,
+  vede tutti e ventiquattro.
+- **Le lettere accentate sopravvivono** a tutto il giro: oggetto, corpo e
+  **nome dell'allegato** (`relazione-tecnica-più-recente.txt`) si rileggono
+  identici nella pagina.
+- **467 test passano** (386 prima della sessione, 81 nuovi in
+  `tests/test_posta.py`).
+- **La catena delle impronte del registro e' integra** dopo le 134 voci:
+  `scripts/verifica_audit.py` lo conferma.
+- **Le pagine sono state provate nel browser**: l'elenco con la ricerca sul
+  contenuto, la scheda di un messaggio con allegati, la quarantena con i motivi
+  in colonna, il modulo di assegnazione, la pagina dei motivi - da cui e' stato
+  aggiunto "garanzia", che il programma ha normalizzato in `GARANZIA` e
+  registrato.
+
+### Un difetto trovato da un test, e perche' vale la pena di saperlo
+
+Scrivendo il test del quarto criterio di accettazione e' venuto fuori che
+**PostgreSQL rifiuta il byte zero dentro una colonna di testo**. Un `.eml`
+rovinato ne contiene a decine, e finivano dritti nel corpo del messaggio:
+l'`INSERT` falliva, il messaggio veniva contato fra gli errori invece che finire
+in quarantena, e il file restava nella cartella per essere riprovato al giro dopo
+e fallire di nuovo. Un file rotto sarebbe comparso fra gli errori **per sempre**.
+
+La ripulitura sta adesso al confine - dove i byte diventano testo - e non sulla
+riga dell'`INSERT`: e' D-075, e vale la pena che resti scritta perche' la
+prossima colonna che raccogliera' contenuto arrivato da fuori avra' lo stesso
+problema.
+
+### Quello che resta da fare, e perche'
+
+- **Le notifiche non ci sono.** Il titolo della sessione nel piano era
+  "Notifiche e posta", e l'azienda ha chiesto la sola meta' della posta: il
+  motore di acquisizione, con i suoi quattro rami e la quarantena. La tabella
+  delle notifiche, i modelli dei messaggi e l'invio non sono stati fatti e non
+  hanno ancora una sessione: le due code che ci sarebbero servite - chi deve
+  verificare un documento, chi deve rispondere a una richiesta di fase -
+  restano avvisi in linea sul cruscotto (D-060). **Va deciso dove
+  ricollocarli.**
+- **`FonteGraph` e' della sessione 11.** L'interfaccia c'e' e la fonte locale
+  la rispetta; quello che manca e' la classe che parla con Microsoft Graph e le
+  credenziali con cui autenticarsi. Il motore non va toccato.
+- **L'acquisizione la avvia una persona**, dalla pagina della posta. Il
+  collegamento ad APScheduler e' materia della sessione 11: `acquisisci()` e'
+  gia' scritta per quello, e prende l'autore come argomento facoltativo proprio
+  perche' un lavoro pianificato non ne ha uno.
+- **Un allegato non diventa un documento da solo**, ed e' voluto: se merita di
+  diventarlo lo si carica come documento. Un pulsante "promuovi ad allegato"
+  sulla scheda del messaggio sarebbe comodo e non e' stato chiesto.
 
 ---
 
@@ -236,11 +470,11 @@ imparato l'intervallo di date.
   procedura e' `scripts/hardening_db.md`, passo 3. La parte 1 - i permessi - e'
   gia' applicata sul database di sviluppo, ed e' quella che il criterio di
   accettazione chiedeva di verificare.
-- **`email.assigned_manual` e `email.quarantined` sono catalogate ma non le
-  scrive ancora nessuno**: la sezione della posta arriva con la sessione 10, e
-  oggi in Aurora non esiste nessuna pagina che assegni un messaggio a un
-  progetto. Sono in catalogo apposta, cosi' quel giorno registrare l'operazione
-  sara' una riga sola invece di una discussione su come chiamarla.
+- ~~**`email.assigned_manual` e `email.quarantined` sono catalogate ma non le
+  scrive ancora nessuno**~~ — **fatto nella sessione 10.** La scommessa ha
+  pagato: registrare le due operazioni e' costato esattamente una riga per
+  ciascuna, e non c'e' stata nessuna discussione su come chiamarle. La
+  sessione 10 ne ha aggiunte altre due, `email.archived` e `email.download`.
 - **Il cambio di ruolo globale di un utente** resta in sospeso dalla sessione 3.
   Adesso c'e' la scheda della persona su cui appoggiarlo, e l'azione
   `user.updated` che lo registrerebbe; manca la decisione su come impedire che

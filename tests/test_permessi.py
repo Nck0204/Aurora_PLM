@@ -1181,6 +1181,10 @@ def test_le_rotte_chiedono_i_permessi_alla_funzione_centrale(db_session):
         "versions.py",
         "permissions.py",
         "phases.py",
+        # La posta e' arrivata con la sessione 10: un messaggio si vede con la
+        # stessa regola di un documento, trattato come classificazione
+        # "Corrispondenza" (D-069).
+        "emails.py",
     )
 
     for nome in da_controllare:

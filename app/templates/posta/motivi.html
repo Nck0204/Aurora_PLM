@@ -1,0 +1,148 @@
+{# ===========================================================================
+   I motivi ammessi nella terza parentesi dell'oggetto di un messaggio.
+
+       [RMS1100-24-110SW][V2][SPECS] Chiarimento sulla tensione
+                              ^^^^^ questo
+
+   UN MODULO SOLO PER AGGIUNGERE E PER CORREGGERE. Sono la stessa operazione -
+   due campi e un elenco su cui finiscono - e il campo nascosto dice quale
+   delle due si sta facendo. Chi vuole correggere una riga preme "Correggi",
+   che riempie il modulo con i suoi valori.
+
+   IL MOTIVO NON DECIDE NIENTE, e la pagina lo dice: un messaggio con un
+   motivo fuori elenco viene attribuito lo stesso, perche' quello che conta e'
+   il codice prodotto. Senza questa frase, chi amministra crederebbe di
+   toccare qualcosa che governa lo smistamento.
+   =========================================================================== #}
+{% extends "base.html" %}
+
+{% from "components/pulsanti.html" import pulsante, pulsante_collegamento, modulo_pulsante %}
+{% from "components/riquadro.html" import riquadro %}
+{% from "components/campi.html" import campo, area_testo, csrf %}
+{% from "components/tabella.html" import tabella %}
+{% from "components/stato.html" import etichetta %}
+{% from "components/avvisi.html" import avviso, notifica %}
+
+{% block titolo %}Motivi della posta{% endblock %}
+{% block sezione %}Posta{% endblock %}
+
+{% block notifiche %}
+    {% if request.query_params.get("salvato") %}
+        {{ notifica("L'elenco dei motivi e' aggiornato. Vale dal prossimo "
+                    "messaggio elaborato.",
+                    variante="successo", titolo="Motivo salvato") }}
+    {% endif %}
+    {% if request.query_params.get("disattivato") %}
+        {{ notifica("Il motivo non e' piu' fra quelli riconosciuti. I "
+                    "messaggi che ce l'hanno addosso continuano a mostrarlo.",
+                    variante="attenzione", titolo="Motivo disattivato") }}
+    {% endif %}
+    {% if request.query_params.get("riattivato") %}
+        {{ notifica("Il motivo e' di nuovo fra quelli riconosciuti.",
+                    variante="successo", titolo="Motivo riattivato") }}
+    {% endif %}
+{% endblock %}
+
+{% block contenuto %}
+
+<div class="testata">
+    <div>
+        <h1>Motivi della posta</h1>
+        <p class="sottotitolo">
+            Le sigle ammesse nella terza parentesi dell'oggetto di un
+            messaggio, per esempio
+            <span class="codice">[RMS1100-24-110SW][V2][SPECS]</span>.
+        </p>
+    </div>
+    <div class="testata-azioni">
+        {{ pulsante_collegamento("Tutta la posta", "/posta",
+                                 icona_nome="posta") }}
+    </div>
+</div>
+
+{{ avviso("Il motivo serve a chi legge la posta archiviata, non allo "
+          "smistamento: un messaggio con un motivo che non e' in questo "
+          "elenco viene attribuito lo stesso, perche' quello che conta e' il "
+          "codice prodotto. Il motivo sconosciuto resta scritto sul "
+          "messaggio, cosi' ci si accorge che ne serve uno nuovo.",
+          variante="informazione") }}
+
+{% set colonne = [
+    {"etichetta": "Codice"},
+    {"etichetta": "Descrizione"},
+    {"etichetta": "Stato"},
+    {"etichetta": "", "classe": "colonna-azioni"},
+] %}
+
+{% call tabella(colonne,
+                vuota=(motivi|length == 0),
+                messaggio_vuoto="Non c'e' nessun motivo. Finche' l'elenco e' "
+                                "vuoto, tutte le sigle scritte nell'oggetto "
+                                "risultano non riconosciute.") %}
+    {% for motivo in motivi %}
+    <tr>
+        <td class="mono">{{ motivo.code }}</td>
+        <td>{{ motivo.description or "" }}</td>
+        <td>
+            {% if motivo.is_active %}
+                {{ etichetta("riconosciuto", variante="successo") }}
+            {% else %}
+                {{ etichetta("non riconosciuto", variante="neutra") }}
+            {% endif %}
+        </td>
+        <td class="colonna-azioni">
+            <div class="affianca">
+                {{ pulsante_collegamento(
+                       "Correggi",
+                       "/posta/motivi?modifica=" ~ motivo.id,
+                       misura="piccolo") }}
+                {{ modulo_pulsante(request,
+                                   "/posta/motivi/" ~ motivo.id ~ "/proponibilita",
+                                   "Disattiva" if motivo.is_active else "Riattiva",
+                                   misura="piccolo") }}
+            </div>
+        </td>
+    </tr>
+    {% endfor %}
+{% endcall %}
+
+{% set da_correggere = namespace(riga=none) %}
+{% for motivo in motivi %}
+    {% if request.query_params.get("modifica") == (motivo.id | string) %}
+        {% set da_correggere.riga = motivo %}
+    {% endif %}
+{% endfor %}
+
+<form method="post" action="/posta/motivi" class="colonna-stretta margine-sopra">
+    {{ csrf(request) }}
+    {% if da_correggere.riga %}
+    <input type="hidden" name="motivo_id" value="{{ da_correggere.riga.id }}">
+    {% endif %}
+
+    {% call riquadro(
+            "Correggi il motivo" if da_correggere.riga else "Aggiungi un motivo",
+            piede=pulsante("Salva", variante="primario")) %}
+        {{ campo("Codice", "codice",
+                 valore=codice_scritto or (da_correggere.riga.code if da_correggere.riga else ""),
+                 obbligatorio=true,
+                 aiuto="Come si scrive dentro la parentesi: SPECS, RFQ, "
+                       "QUOTE. Viene messo in maiuscolo da solo.") }}
+
+        {{ area_testo("Descrizione", "descrizione",
+                      valore=descrizione_scritta or (da_correggere.riga.description if da_correggere.riga and da_correggere.riga.description else ""),
+                      righe=2,
+                      aiuto="A che cosa serve questo motivo. Si legge in "
+                            "questa pagina e basta.") }}
+
+        {% if da_correggere.riga %}
+            <p class="campo-aiuto">
+                Cambiando il codice cambia quello che verra' riconosciuto da
+                domani. I messaggi gia' archiviati continuano a mostrare la
+                sigla con cui erano arrivati.
+                <a href="/posta/motivi">Annulla la correzione</a>
+            </p>
+        {% endif %}
+    {% endcall %}
+</form>
+
+{% endblock %}

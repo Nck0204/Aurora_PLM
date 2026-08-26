@@ -31,6 +31,7 @@ impronta SHA-256 e non con il loro:
 ```
 storage/objects/3f/9a/3f9a2c11...   il file
 storage/tmp/                        i file a meta' scrittura
+storage/posta/                      la cartella della posta (MAIL_LOCAL_PATH)
 ```
 
 Il nome originale, il tipo e tutti i metadati stanno nel database. Due
@@ -77,8 +78,8 @@ e la ricerca sulla descrizione. Da li' si esporta in CSV quello che si sta
 guardando - e l'esportazione stessa finisce nel registro.
 
 La storia di un oggetto singolo si guarda invece dalla sua scheda, linguetta
-**Storico**: prodotti, versioni, progetti, documenti e persone ce l'hanno
-tutti, e la vede chi vede l'oggetto.
+**Storico**: prodotti, versioni, progetti, documenti, messaggi di posta e
+persone ce l'hanno tutti, e la vede chi vede l'oggetto.
 
 **Le righe si aggiungono e non si tolgono.** Non e' una promessa del programma:
 l'utente PostgreSQL con cui Aurora si collega ha su quella tabella `SELECT` e
@@ -104,6 +105,64 @@ Le voci **non si cancellano mai**, nemmeno le piu' vecchie. Per consegnarne una
 copia a chi verifica, o per tenerne una fuori dal database, c'e'
 `python scripts/archivia_audit.py --anni 5`, che scrive un file compresso e non
 tocca il database.
+
+## La posta
+
+Aurora archivia i messaggi di posta e li attacca alla **versione di prodotto**
+di cui parlano. Il file `.eml` originale si conserva intero nell'archivio, come
+ogni altro file, e resta sempre scaricabile.
+
+**Da dove arrivano.** Lo dice `MAIL_PROVIDER` nel file `.env`. Con `locale`,
+che e' quello che si usa oggi, Aurora legge i file `.eml` che trova in
+`MAIL_LOCAL_PATH` e, dopo averli archiviati, li sposta:
+
+```
+storage/posta/               i messaggi ancora da leggere
+storage/posta/elaborate/     quelli archiviati e attribuiti
+storage/posta/quarantena/    quelli che aspettano una persona
+```
+
+Il collegamento alla casella aziendale (Microsoft Graph) arriva con la sessione
+11: fino ad allora `MAIL_PROVIDER=graph` si ferma con un messaggio che lo
+spiega, invece di far credere che la casella sia vuota.
+
+**Come si prova, senza toccare nessuna casella:**
+
+```powershell
+python scripts/genera_email_prova.py
+```
+
+Scrive ventiquattro messaggi che esercitano tutti i casi - oggetti corretti,
+con `R:` e `Fwd:` davanti, senza codice, risposte in conversazione, allegati
+grandi e accentati, un file malformato - usando i codici dei prodotti veri del
+database. Poi si apre <http://localhost:8000/posta> e si preme **Elabora la
+posta**. Rieseguendo tutto una seconda volta non compare nessun doppione.
+
+**Come Aurora capisce a chi appartiene un messaggio**, nell'ordine:
+
+1. l'oggetto scritto secondo la convenzione `[CODICE][Vn][MOTIVO]`,
+   riconosciuto anche dietro a `R:`, `Re:`, `Fwd:`, `I:` accumulati;
+2. il codice prodotto scritto in mezzo alla frase, senza parentesi;
+3. il filo di conversazione: se un altro messaggio dello stesso scambio e' gia'
+   archiviato e attribuito, si eredita la sua attribuzione;
+4. la **quarantena**, che non e' un errore ma una domanda a una persona.
+
+Il messaggio viene archiviato **sempre**, anche quando il file e' rovinato o
+l'oggetto non dice niente: in quarantena, con scritto perche' e' li'.
+
+**La quarantena** sta in <http://localhost:8000/posta/quarantena> (serve il
+ruolo di creatore, perche' un messaggio non attribuito non appartiene a nessun
+progetto e non c'e' nessuna matrice da consultare). Assegnando un messaggio,
+Aurora propone di assegnare allo stesso prodotto anche gli altri messaggi della
+stessa conversazione.
+
+**Le sigle dei motivi** - `SPECS`, `RFQ`, `QUOTE`... - si cambiano da
+<http://localhost:8000/posta/motivi>. Non governano lo smistamento: un
+messaggio con un motivo fuori elenco viene attribuito lo stesso.
+
+**Chi vede la posta** e' deciso dalla stessa matrice dei documenti: un
+messaggio e' trattato come un documento di classificazione **Corrispondenza**
+nel progetto della versione a cui e' attaccato.
 
 ## Se nessuno riesce piu' a entrare
 

@@ -42,6 +42,7 @@
 {% from "components/area_file.html" import area_file %}
 {% from "components/barra_caricamento.html" import barra_caricamento %}
 {% from "components/vuoto.html" import vuoto %}
+{% from "components/messaggio.html" import corpo_messaggio %}
 
 {% block titolo %}Stile{% endblock %}
 {% block sezione %}Stile &middot; vetrina dei componenti{% endblock %}
@@ -867,6 +868,29 @@
     </p>
 
     {{ storico(VOCI_DI_ESEMPIO, con_oggetto=true) }}
+
+    <h2>Il corpo di un messaggio di posta</h2>
+    <p class="testo-tenue">
+        L'unico blocco di Aurora che mostra testo scritto da qualcun altro,
+        lungo quanto capita e con gli a capo che contano. Va a capo da solo
+        sulle righe lunghe, e sopra le dodici righe si accorcia con un
+        <code>&lt;details&gt;</code> che funziona anche senza JavaScript. I due
+        esempi qui sotto sono un messaggio corto e uno lungo.
+    </p>
+
+    <div class="impila">
+    {% call riquadro("Corto: si vede tutto") %}
+        {{ corpo_messaggio(MESSAGGIO_CORTO) }}
+    {% endcall %}
+
+    {% call riquadro("Lungo: si accorcia") %}
+        {{ corpo_messaggio(MESSAGGIO_LUNGO) }}
+    {% endcall %}
+
+    {% call riquadro("Senza testo: il messaggio con il solo allegato") %}
+        {{ corpo_messaggio("") }}
+    {% endcall %}
+    </div>
 
     <h2>Barra laterale</h2>
     <p class="testo-tenue">

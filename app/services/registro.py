@@ -78,7 +78,8 @@ ENTITA: dict[str, TipoEntita] = {
         TipoEntita("permission_rules", "Matrice dei permessi"),
         TipoEntita("phase_templates", "Modello di fasi", "/fasi/{id}"),
         TipoEntita("phase_transitions", "Passaggio di fase"),
-        TipoEntita("email_messages", "Messaggio di posta"),
+        TipoEntita("email_messages", "Messaggio di posta", "/posta/{id}"),
+        TipoEntita("email_reasons", "Motivo della posta"),
         TipoEntita(audit.ENTITY_SISTEMA, "Sistema"),
     )
 }

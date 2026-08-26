@@ -171,16 +171,27 @@ def test_le_sezioni_non_ancora_fatte_non_sono_collegamenti(client, db_session):
 
     pagina = client.get("/").text
 
-    # "Posta" e' la prima sezione ancora da fare: arrivera' nella sessione 10.
+    # "Diagnostica" e' la prima sezione ancora da fare: arrivera' nella
+    # sessione 11.
     #
     # Questo test cambia bersaglio a ogni sezione che viene realizzata: fino
     # alla sessione 4 guardava "Prodotti", dalla 5 alla 6 guardava
-    # "Documenti", e adesso guarda "Posta". Non e' un fastidio: e' il modo in
-    # cui ci si accorge che una voce e' rimasta spenta per dimenticanza invece
-    # che per scelta. Quando arrivera' anche la posta, qui andra' messa
-    # "Diagnostica", che e' della sessione 11.
-    assert "Posta" in pagina, "la voce spenta si deve comunque vedere"
-    assert 'href="/posta"' not in pagina, "ma non deve essere un collegamento"
+    # "Documenti", dalla 7 alla 9 guardava "Posta", e adesso guarda
+    # "Diagnostica". Non e' un fastidio: e' il modo in cui ci si accorge che
+    # una voce e' rimasta spenta per dimenticanza invece che per scelta.
+    #
+    # La voce e' riservata al creatore, quindi il bersaglio va guardato con
+    # un creatore: a un utente qualunque la barra laterale non la mostra
+    # affatto, e il test passerebbe senza aver verificato niente.
+    crea_creatore(db_session)
+    client.get("/esci")
+    entra(client, "prova.capo.stile", PASSWORD_DI_PROVA)
+    pagina = client.get("/").text
+
+    assert "Diagnostica" in pagina, "la voce spenta si deve comunque vedere"
+    assert 'href="/diagnostica"' not in pagina, (
+        "ma non deve essere un collegamento"
+    )
     assert 'aria-disabled="true"' in pagina
 
 

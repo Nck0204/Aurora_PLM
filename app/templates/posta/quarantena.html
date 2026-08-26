@@ -1,0 +1,106 @@
+{# ===========================================================================
+   I messaggi che Aurora non ha saputo attribuire.
+
+   NON E' UN ELENCO DI ERRORI, e' una coda di lavoro. Ogni riga e' un
+   messaggio archiviato per intero, con il suo file originale al sicuro: manca
+   soltanto la risposta alla domanda "di quale prodotto parla", e quella la
+   da' una persona.
+
+   PER QUESTO IL MOTIVO STA IN COLONNA e non dentro un dettaglio da aprire.
+   "Nessun codice nell'oggetto" e "la versione V7 non esiste" sono due
+   situazioni che si risolvono in due modi diversi, e chi smista deve poterle
+   distinguere scorrendo l'elenco.
+
+   La pagina e' riservata al creatore: un messaggio non attribuito non
+   appartiene a nessun progetto, quindi non c'e' nessuna matrice dei permessi
+   da consultare (D-069). Il lucchetto e' la dipendenza sulla rotta.
+   =========================================================================== #}
+{% extends "base.html" %}
+
+{% from "components/pulsanti.html" import pulsante_collegamento %}
+{% from "components/tabella.html" import tabella %}
+{% from "components/impaginazione.html" import impaginazione %}
+{% from "components/vuoto.html" import vuoto %}
+{% from "components/avvisi.html" import avviso %}
+
+{% block titolo %}Quarantena{% endblock %}
+{% block sezione %}Posta{% endblock %}
+
+{% block contenuto %}
+
+<div class="testata">
+    <div>
+        <h1>Quarantena</h1>
+        <p class="sottotitolo">
+            I messaggi archiviati di cui Aurora non ha capito a quale prodotto
+            appartengono. Non e' andato perso niente: aspettano solo che
+            qualcuno lo dica.
+        </p>
+    </div>
+    <div class="testata-azioni">
+        {{ pulsante_collegamento("Tutta la posta", "/posta",
+                                 icona_nome="posta") }}
+    </div>
+</div>
+
+{% if totale %}
+
+    {{ avviso("Assegnando un messaggio, Aurora propone di assegnare allo "
+              "stesso prodotto anche gli altri messaggi della stessa "
+              "conversazione: una conversazione appartiene tutta allo stesso "
+              "prodotto, e assegnarne dodici uno per volta e' il modo piu' "
+              "sicuro di smettere di usare questa pagina.",
+              variante="informazione") }}
+
+    {% set colonne = [
+        {"etichetta": "Data"},
+        {"etichetta": "Mittente"},
+        {"etichetta": "Oggetto"},
+        {"etichetta": "Perche' e' qui"},
+        {"etichetta": "", "classe": "colonna-azioni"},
+    ] %}
+
+    {% call tabella(colonne,
+                    riepilogo=(totale ~ " messagg" ~ ("io" if totale == 1 else "i")
+                               ~ " in attesa")) %}
+        {% for messaggio in messaggi %}
+        <tr>
+            <td>{{ (messaggio.sent_at or messaggio.received_at).astimezone().strftime("%d/%m/%Y %H:%M") }}</td>
+            <td class="mono testo-piccolo">{{ messaggio.sender }}</td>
+            <td>
+                <a href="/posta/{{ messaggio.id }}">
+                    {{ messaggio.subject or "(senza oggetto)" }}
+                </a>
+                {% if messaggio.attachments %}
+                <div class="testo-piccolo testo-tenue">
+                    {{ messaggio.attachments|length }}
+                    allegat{{ "o" if messaggio.attachments|length == 1 else "i" }}
+                </div>
+                {% endif %}
+            </td>
+            <td class="testo-piccolo testo-tenue">
+                {{ messaggio.quarantine_reason or "—" }}
+            </td>
+            <td class="colonna-azioni">
+                {{ pulsante_collegamento("Assegna",
+                                         "/posta/" ~ messaggio.id ~ "/assegna",
+                                         variante="primario", misura="piccolo") }}
+            </td>
+        </tr>
+        {% endfor %}
+    {% endcall %}
+
+    {{ impaginazione(pagina_corrente, totale_pagine, "/posta/quarantena",
+                     totale_righe=totale) }}
+
+{% else %}
+
+    {{ vuoto("La quarantena e' vuota",
+             "Tutti i messaggi archiviati sono attaccati a una versione di "
+             "prodotto. Quelli che Aurora non riuscira' a riconoscere "
+             "compariranno qui.",
+             icona_nome="spunta") }}
+
+{% endif %}
+
+{% endblock %}

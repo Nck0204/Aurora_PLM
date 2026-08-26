@@ -4,13 +4,17 @@
     GET /versioni/{id}/storico
     GET /progetti/{id}/storico
     GET /documenti/{id}/storico
+    GET /posta/{id}/storico
     GET /utenti/{id}/storico
 
-**Cinque rotte in un file solo, e non una in ciascun router.** La pagina e' la
+**Sei rotte in un file solo, e non una in ciascun router.** La pagina e' la
 stessa per tutti e cinque: cambia soltanto quale oggetto si cerca e quali
 identificatori compongono la sua storia. Sparpagliarle nei cinque router
 avrebbe voluto dire cinque copie della stessa funzione, e alla prima modifica
 tre copie aggiornate e due no.
+
+(Erano cinque fino alla sessione 9; la sesta e' quella dei messaggi di
+posta.)
 
 Gli indirizzi restano pero' **sotto l'oggetto** e non sotto una sezione
 "storico" tutta sua: `/progetti/{id}/storico` e non `/storico/progetti/{id}`.
@@ -49,7 +53,8 @@ from app.config import settings
 from app.db import get_db
 from app.dependencies import richiedi_creatore, richiedi_login
 from app.models import Assignment, Document, PhaseTransition, User
-from app.services import audit, documents, lifecycle, permissions, products
+from app.services import audit, documents, emails, etichette, lifecycle
+from app.services import permissions, products
 from app.services import projects as servizio_progetti
 from app.services import registro
 from app.templating import pagina
@@ -314,6 +319,49 @@ def storico_documento(
             "Tutto quello che e' successo a questo documento: chi lo ha "
             "caricato, chi ne ha cambiato lo stato, chi lo ha scaricato e "
             "quando."
+        ),
+    )
+
+
+# ---------------------------------------------------------------------------
+#  Messaggio di posta
+# ---------------------------------------------------------------------------
+
+
+@router.get("/posta/{message_id}/storico")
+def storico_messaggio(
+    request: Request,
+    message_id: uuid.UUID,
+    utente: User = Depends(richiedi_login),
+    db: Session = Depends(get_db),
+) -> Response:
+    """La storia di un messaggio: come e' entrato, chi lo ha smistato, chi lo ha preso.
+
+    E' la sesta pagina di questa famiglia, arrivata con la posta della
+    sessione 10. Risponde a due domande che sui messaggi si fanno spesso:
+    perche' questo messaggio e' finito su questa versione - e la risposta e'
+    la riga dell'archiviazione, con dentro scritta quale delle quattro strade
+    ha risposto - e chi ha scaricato quell'allegato.
+    """
+    messaggio = emails.trova_messaggio(db, message_id)
+    if messaggio is None:
+        raise HTTPException(status_code=404, detail=MESSAGGIO_INESISTENTE)
+
+    permissions.pretendi(db, utente, permissions.Azione.VEDERE, messaggio)
+
+    return _pagina_storico(
+        request,
+        db,
+        titolo=etichette.nome_messaggio(messaggio),
+        sezione="Posta",
+        indirizzo_oggetto=f"/posta/{messaggio.id}",
+        etichetta_ritorno="Il messaggio",
+        altre_schede=None,
+        entity_ids=[messaggio.id],
+        spiegazione=(
+            "Tutto quello che e' successo a questo messaggio: quando e' stato "
+            "archiviato, come e' stato attribuito, chi lo ha assegnato a mano "
+            "e chi lo ha scaricato."
         ),
     )
 

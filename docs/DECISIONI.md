@@ -2186,3 +2186,291 @@ elencherebbe tutti e diciassette i parametri invece dei due che contano.
 **Un riavvio che non cambia niente non scrive niente.** Un registro con dentro
 una riga a ogni riavvio del server e' un registro in cui non si trova piu'
 nulla.
+
+---
+
+## D-069 — La posta e' una classificazione, non un sistema di permessi a parte
+
+**Data:** 26 agosto 2026 · **Stato:** attiva
+
+**Decisione.** Un messaggio di posta si vede con la **stessa identica regola**
+di un documento: e' trattato come un documento di classificazione
+**"Corrispondenza"** nel progetto aperto sulla versione di prodotto a cui e'
+attaccato. `permissions.puo()` ha imparato un oggetto in piu' - `EmailMessage`
+- e la sua risposta la calcola `_permessi_su_classificazione()`, che e' la
+stessa funzione dei documenti. La riga di `classifications` la crea la
+migrazione `d4b8607e15a2` con le sue tre caselle della matrice.
+
+**Il problema.** La sessione 10 porta dentro Aurora un genere di contenuto
+nuovo, e la corrispondenza con i clienti e' riservata quanto i documenti: ci
+sono dentro i prezzi, le deroghe concordate, i nomi delle persone. Serviva una
+regola di accesso, e la tentazione era scriverne una nuova - "la posta la vede
+chi e' nella squadra" - perche' i messaggi non hanno una colonna
+`classification_id` come i documenti.
+
+**Perche' invece si riusa la matrice.** Una seconda regola di accesso e' una
+regola che si disallinea. D-051 dice che i permessi si decidono in un punto
+solo, e il motivo e' che le regole di accesso sbagliate non si vedono: un
+elenco che mostra una riga di troppo sembra un elenco normale. Se la posta
+avesse la sua regola, il giorno in cui si corregge la matrice per i documenti
+la posta resterebbe indietro, e nessuno se ne accorgerebbe.
+
+Con questa scelta invece la matrice ha una colonna in piu' che si amministra
+dalla pagina di sempre, chi ha gia' capito come funzionano i permessi dei
+documenti non deve imparare niente di nuovo, e la verifica degli accessi di una
+persona (`/permessi/verifica`) comprende la posta senza una riga di programma.
+
+**La classificazione si cerca per nome.** E' l'unico modo di riferirsi a una
+riga che una persona puo' rinominare dalla pagina delle classificazioni. Se
+manca, tutte le domande sulla posta rispondono "no" tranne che per il creatore,
+e il guasto finisce nel registro su file: e' l'unico modo prudente di
+sbagliare, perche' senza la riga non esiste nessuna casella da guardare.
+
+**La quarantena e' l'eccezione, ed e' riservata al creatore.** Un messaggio non
+attribuito non e' attaccato a nessuna versione, quindi non c'e' nessun progetto
+su cui la matrice possa dire qualcosa: nessun ruolo, nessuna casella, nessun
+permesso decidibile. L'unica regola scrivibile e' "lo vede chi amministra
+Aurora", e la pagina `/posta/quarantena` dichiara `Depends(richiedi_creatore)`
+come tutte le altre pagine riservate. Vale lo stesso per un messaggio
+attaccato a una versione su cui non e' ancora stato aperto nessun progetto:
+capita per la posta che arriva prima che il lavoro cominci.
+
+**Le tre caselle di partenza** sono nella migrazione e in `scripts/seed.py`: il
+project manager puo' tutto, l'ingegnere legge e puo' **correggere
+l'attribuzione** di un messaggio finito sulla versione sbagliata - e' lui che
+se ne accorge - il lettore legge e basta. La casella "caricare" non ha senso
+per la posta (i messaggi arrivano dalla casella, non si caricano a mano) ma
+esiste lo stesso, perche' una casella che manca a distanza di mesi non si
+distingue da una dimenticanza.
+
+---
+
+## D-070 — Ogni messaggio ha la sua transazione, e la chiude il servizio
+
+**Data:** 26 agosto 2026 · **Stato:** attiva
+
+**Decisione.** `emails.elabora_messaggio()` finisce con un `commit()` suo, ed
+e' **l'unico punto di Aurora in cui un servizio decide quando scrivere** invece
+di lasciarlo alla rotta che lo ha chiamato. Un errore su un messaggio produce
+un `rollback()` e un esito di errore; il giro prosegue con i messaggi
+successivi.
+
+**Il problema.** La regola generale di Aurora e' che i servizi aggiungono righe
+alla sessione e il commit lo fa la rotta, insieme all'operazione che le righe
+descrivono: cosi' o si scrive tutto o non si scrive niente. Per l'acquisizione
+della posta quella regola dice la cosa sbagliata. Il punto 6 della sessione
+chiede che l'elaborazione di un messaggio sia una transazione - "se qualcosa
+fallisce a metà, non deve restare nulla di parziale" - e il punto 7 chiede che
+un errore su un messaggio non interrompa gli altri. Con una transazione unica
+per tutto il giro le due richieste si contraddicono: il cinquecentunesimo
+messaggio storto porterebbe con se' i cinquecento gia' archiviati.
+
+**Che cosa resta fuori dalla transazione, e va bene.** Il file `.eml` e gli
+allegati vanno nell'archivio **prima** di qualunque riga, come fa gia'
+`documents.deposita_file()`. Se poi la scrittura fallisce, nell'archivio resta
+un oggetto che non riferisce nessuno: non e' un problema - non si cancella
+(regola 5 di CLAUDE.md), non occupa quasi niente, e al tentativo successivo la
+deduplicazione lo riusa.
+
+**Lo spostamento del file avviene dopo il commit.** Se il programma si spegne in
+mezzo, il file resta nella cartella e al giro successivo viene riletto,
+riconosciuto come gia' archiviato dal suo `Message-ID` e spostato allora: la
+cartella si svuota comunque e nel database non compare niente due volte.
+L'ordine inverso - sposta e poi scrivi - perderebbe il messaggio per sempre.
+
+**Un errore lascia il file dov'e'.** E' l'unico modo perche' il giro successivo
+lo riprovi, ed e' anche il motivo per cui il caso del carattere nullo (vedi
+sotto) andava risolto e non ignorato: un file che fallisce sempre resterebbe li'
+a fallire per sempre.
+
+---
+
+## D-071 — I motivi della posta sono una tabella, non un file di configurazione
+
+**Data:** 26 agosto 2026 · **Stato:** attiva
+
+**Decisione.** L'elenco dei motivi ammessi nella terza parentesi dell'oggetto
+(`[RMS1100-24-110SW][V2][SPECS]`) sta nella tabella `email_reasons` e si
+amministra dalla pagina `/posta/motivi`, riservata al creatore. Non e' un file
+in `config/` come la scomposizione dei codici prodotto e l'elenco dei tipi di
+documento.
+
+**Perche' non un file.** I due file di `config/` esistono per una ragione
+precisa (D-038): sono regole che l'azienda potrebbe cambiare, e cambiarle non
+deve costare una modifica al programma. Ma chi li cambia e' chi amministra la
+**macchina**, con un editore di testo e un riavvio del server. Questo elenco
+invece lo cambia chi usa Aurora, dal browser, mentre il server e' in funzione;
+e ogni cambiamento deve lasciare una riga nel registro delle operazioni. Sono
+esattamente le due cose che un file di testo non sa fare. Il punto 8 della
+sessione chiede "configurabile dall'interfaccia", e l'interfaccia scrive nel
+database.
+
+**Il motivo non decide niente**, ed e' il motivo per cui questa tabella e'
+piccola e innocua. Un oggetto con una sigla che non e' in elenco viene
+attribuito lo stesso: quello che conta e' il codice prodotto. La sigla
+sconosciuta resta scritta in `subject_parsed` con `motivo_riconosciuto: false`,
+cosi' chi amministra si accorge che ne serve uno nuovo. Rifiutare
+l'attribuzione per una sigla fuori elenco vorrebbe dire mettere in quarantena
+della posta che sappiamo benissimo a chi appartiene.
+
+**Il codice di un motivo si puo' correggere**, a differenza del nome utente:
+qui non c'e' niente che ci punti. I messaggi gia' archiviati portano il motivo
+scritto dentro `subject_parsed`, che e' una copia del giorno in cui il
+messaggio e' arrivato e non un collegamento a questa riga.
+
+---
+
+## D-072 — La versione a cui attaccare un messaggio, quando l'oggetto non la dice
+
+**Data:** 26 agosto 2026 · **Stato:** attiva
+
+**Decisione.** Un messaggio il cui oggetto nomina il prodotto ma non la
+versione va alla **versione piu' recente non chiusa**, cioe' al numero piu'
+alto fra quelle che non sono ne' `superato` ne' `obsoleto`. Quando **tutte** le
+versioni sono chiuse si prende comunque la piu' recente.
+
+**Il problema.** Il punto 5a della sessione dice "se la versione non è
+indicata, usa la versione più recente non chiusa di quel prodotto", e non dice
+che cosa fare quando di versioni non chiuse non ce n'e' nessuna. Non e' un caso
+di laboratorio: succede a ogni prodotto che esce di produzione, ed e' proprio
+allora che arrivano le contestazioni e le richieste di ricambi.
+
+**Perche' non la quarantena.** In quel caso il prodotto lo conosciamo con
+certezza - il suo codice sta scritto nell'oggetto - e la quarantena e' la
+domanda che si fa a una persona quando **non** si sa. Mandarci un messaggio di
+cui si sa tutto vorrebbe dire far smistare a mano tutta la corrispondenza dei
+prodotti fuori produzione, che e' il modo piu' sicuro di far smettere di usare
+la quarantena per quello a cui serve.
+
+**Che cosa vuol dire "chiusa" e dove sta scritto.** Sono i due stati
+`superato` e `obsoleto`, elencati in `emails.STATI_CHIUSI`. Stanno li' e non in
+`lifecycle.py` perche' non sono una transizione: `lifecycle.py` e' il file dei
+**passaggi** fra stati (CLAUDE.md, sezione 8), e questo e' il modo in cui la
+posta legge uno stato.
+
+---
+
+## D-073 — Una versione dichiarata che non esiste manda il messaggio in quarantena
+
+**Data:** 26 agosto 2026 · **Stato:** attiva
+
+**Decisione.** Quando l'oggetto di un messaggio dichiara una versione precisa -
+`[RMS1100-24-110SW][V7]` - e quella versione non esiste, il messaggio va in
+quarantena **senza provare le regole successive**, con scritto il perche'.
+Aurora non ne sceglie un'altra al posto del mittente.
+
+**Il problema.** Le quattro regole di attribuzione si provano in ordine e la
+seconda cerca il codice prodotto **ovunque** nell'oggetto, parentesi comprese.
+Senza questa decisione, `[RMS1100-24-110SW][V7]` su un prodotto che di versioni
+ne ha due fallirebbe la prima regola, passerebbe la seconda - il codice c'e' -
+e il messaggio finirebbe sulla versione piu' recente, cioe' su una **diversa**
+da quella che il mittente ha scritto.
+
+**Perche' si preferisce chiedere.** Meta' delle decisioni tecniche di un
+progetto sta nelle mail: una modifica concordata al telefono e confermata per
+iscritto, un nulla osta, una deroga. Una decisione archiviata sotto la versione
+sbagliata e' una decisione persa, e non se ne accorge nessuno - il messaggio
+c'e', e' solo nel posto sbagliato. La quarantena non e' un errore e non e' un
+blocco: e' una riga in una coda di lavoro, con accanto la frase che dice che
+cosa e' successo ("L'oggetto chiede la versione 99 del prodotto X, che non
+esiste") e il pulsante per assegnarlo.
+
+**Non e' in contrasto con "mai scartare, mai bloccarsi".** Il messaggio viene
+archiviato per intero, file originale e allegati compresi, e resta consultabile:
+manca solo l'attribuzione, che e' esattamente quello che la quarantena esiste
+per raccogliere.
+
+---
+
+## D-074 — I messaggi senza Message-ID ne ricevono uno ricavato dall'impronta
+
+**Data:** 26 agosto 2026 · **Stato:** attiva
+
+**Decisione.** Un messaggio che non dichiara nessuna intestazione `Message-ID`
+- capita con i file esportati male e con i file rovinati - viene archiviato con
+un identificativo costruito dall'impronta SHA-256 del file:
+`aurora-<impronta>@impronta.aurora.local`.
+
+**Il problema.** `email_messages.internet_message_id` e' obbligatorio e unico,
+ed e' quello che rende ripetibile tutta l'acquisizione: prima di scrivere
+qualunque cosa si chiede se quel messaggio c'e' gia'. Un messaggio senza
+identificativo non potrebbe essere archiviato affatto - e la regola della
+sessione e' "mai scartare" - oppure ne riceverebbe uno casuale, e allora
+verrebbe archiviato di nuovo a ogni rilettura.
+
+**Perche' l'impronta.** E' **stabile**: rileggere lo stesso file produce lo
+stesso identificativo, quindi la ripetibilita' vale anche per i messaggi rotti,
+che sono proprio quelli che si riprova a leggere piu' spesso. Due file diversi
+con lo stesso contenuto sono lo stesso messaggio, ed e' giusto che lo siano: e'
+la stessa mail esportata due volte.
+
+**Il dominio inventato e' voluto.** `impronta.aurora.local` non esiste e non
+deve esistere: guardando il database si vede subito quali identificativi se li
+e' inventati Aurora. Lo dice anche `subject_parsed.identificativo_costruito`.
+
+---
+
+## D-075 — Il carattere nullo non arriva mai al database
+
+**Data:** 26 agosto 2026 · **Stato:** attiva
+
+**Decisione.** Tutto il testo estratto da un messaggio - oggetto, corpo,
+mittente, indirizzi, nomi degli allegati - passa da
+`email_parsing.scrivibile()`, che toglie il carattere nullo (`\x00`). Solo
+quello: gli altri caratteri di controllo PostgreSQL li accetta, e toglierli
+vorrebbe dire rovinare i messaggi che li contengono per una ragione loro.
+
+**Il problema, scoperto da un test.** PostgreSQL rifiuta il byte zero dentro una
+colonna di testo. Un `.eml` rovinato ne contiene a decine - un PDF rinominato,
+un file troncato a meta' di un allegato binario - e finiscono dritti nel corpo
+del messaggio. Senza la ripulitura l'`INSERT` falliva, il messaggio veniva
+contato fra gli errori invece che finire in quarantena, e **il file restava
+nella cartella per essere riprovato al giro dopo e fallire di nuovo**: un file
+rotto sarebbe comparso fra gli errori per sempre.
+
+**Perche' e' una decisione e non una correzione.** Il caso e' esattamente il
+quarto criterio di accettazione della sessione ("un file .eml malformato finisce
+in quarantena senza fermare gli altri"), ed e' venuto fuori scrivendo il test
+che lo verifica. Vale la pena che resti scritto: la prossima colonna di testo
+che raccogliera' contenuto arrivato da fuori avra' lo stesso problema, e il
+posto in cui si risolve e' il confine - dove i byte diventano testo - non la
+riga dell'`INSERT`.
+
+---
+
+## D-076 — L'interfaccia della fonte di posta nasce prima della seconda fonte
+
+**Data:** 26 agosto 2026 · **Stato:** attiva
+
+**Decisione.** Il motore di acquisizione parla con una `FonteEmail`
+(`app/services/mail_source.py`), un'interfaccia di quattro metodi:
+`elenca_nuovi_messaggi()`, `scarica_messaggio_grezzo(id)`, `marca_elaborato(id)`,
+`sposta_in_quarantena(id)`. La sessione 10 ne realizza **una sola**,
+`FonteLocale`, che legge file `.eml` da una cartella. Il collegamento a
+Microsoft Graph arriva con la sessione 11.
+
+**Perche' l'interfaccia prima dell'implementazione.** Non e' astrazione
+preventiva: e' quello che permette di collaudare il motore **adesso**, senza
+nessun accesso alla casella aziendale. I venti casi difficili - l'oggetto con
+`R:` davanti, il messaggio senza codice, il filo di conversazione, il file rotto
+- si scrivono come file e si rileggono all'infinito. Con Outlook di mezzo,
+ciascuno di quei casi sarebbe una mail da farsi mandare da qualcuno.
+
+E' anche la sola forma in cui il collaudo resta possibile per sempre: fra un
+anno, chi tocchera' l'attribuzione potra' rieseguire gli stessi venti file
+(`scripts/genera_email_prova.py`) e sapere se ha rotto qualcosa.
+
+**E' un `Protocol`, non una classe base astratta.** Non c'e' niente da
+ereditare: sono quattro firme, e chi le rispetta va bene. Una classe base con
+quattro metodi che sollevano `NotImplementedError` direbbe la stessa cosa in
+piu' righe e costringerebbe a ereditare da noi anche chi scrivera' l'adattatore
+di Graph.
+
+**Quattro operazioni e non una di piu'.** Non c'e' `cancella`, perche' in Aurora
+non si cancella niente (regola 5 di CLAUDE.md): un messaggio archiviato viene
+**spostato**. Non c'e' `segna_come_letto`, perche' lo stato di lettura appartiene
+alla casella di chi la usa, e Aurora non e' il suo programma di posta.
+
+**`MAIL_PROVIDER=graph` si ferma con una spiegazione** invece di far finta di
+niente. Una fonte che restituisse un elenco vuoto lascerebbe credere che la
+casella sia vuota, che e' il modo peggiore di non funzionare.

@@ -309,4 +309,32 @@
     </div>
 {% endcall %}
 
+{# --- La posta ---
+   Come il riquadro dei documenti: non elenca niente, porta all'elenco vero
+   con i suoi filtri e la sua ricerca. I messaggi si attaccano alla **versione
+   di prodotto** e non al progetto, quindi questo riquadro mostra la
+   corrispondenza della versione su cui il progetto e' aperto. #}
+{% call riquadro("Posta") %}
+    {% if messaggi_del_progetto %}
+        <p>
+            Su questa versione ci sono
+            <strong>{{ messaggi_del_progetto }}</strong>
+            messagg{{ "io" if messaggi_del_progetto == 1 else "i" }} di posta
+            che puoi vedere.
+        </p>
+    {% else %}
+        <p class="campo-aiuto">
+            Su questa versione non c'e' ancora nessun messaggio che tu possa
+            vedere. La posta si archivia da sola: Aurora legge i messaggi e li
+            attacca al prodotto di cui parlano.
+        </p>
+    {% endif %}
+
+    <div class="fila-pulsanti margine-sopra">
+        {{ pulsante_collegamento("Apri la posta",
+                                 "/posta?progetto=" ~ progetto.id,
+                                 icona_nome="posta") }}
+    </div>
+{% endcall %}
+
 {% endblock %}

@@ -127,13 +127,14 @@ import uuid
 from dataclasses import dataclass
 
 from fastapi import HTTPException, Request
-from sqlalchemy import ColumnElement, and_, exists, func, or_, select
+from sqlalchemy import ColumnElement, and_, exists, false, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.models import (
     Assignment,
     Classification,
     Document,
+    EmailMessage,
     PermissionRule,
     Product,
     ProductVersion,
@@ -257,6 +258,7 @@ def puo(db: Session, utente: User, azione: Azione, oggetto: object) -> bool:
       Document              un documento gia' esistente;
       BersaglioCaricamento  un documento che si sta per creare, cioe' la
                             coppia (progetto, classificazione);
+      EmailMessage          un messaggio di posta archiviato;
       Project               un progetto;
       ProductVersion        una versione di prodotto;
       Product               un prodotto;
@@ -304,6 +306,9 @@ def puo(db: Session, utente: User, azione: Azione, oggetto: object) -> bool:
         return _permessi_su_classificazione(
             db, utente, oggetto.progetto, oggetto.classification_id
         ).consente(azione)
+
+    if isinstance(oggetto, EmailMessage):
+        return _permessi_sul_messaggio(db, utente, oggetto).consente(azione)
 
     if isinstance(oggetto, Project):
         return _puo_sul_progetto(db, utente, azione, oggetto)
@@ -456,6 +461,88 @@ def _permessi_di_ruolo(
     )
 
 
+# --- La posta: una classificazione come le altre ---------------------------
+#
+# I messaggi di posta non hanno una colonna "classificazione": ne hanno una
+# sola, sempre la stessa, ed e' quella che si chiama CLASSE_CORRISPONDENZA. La
+# sessione 10 lo stabilisce cosi' apposta - "sono trattate come classificazione
+# Corrispondenza, mappata sulla matrice esistente" - e la conseguenza e' che
+# qui non nasce nessuna regola nuova: un messaggio e' un documento di
+# classificazione Corrispondenza, nel progetto della versione a cui e'
+# attaccato (D-069).
+
+CLASSE_CORRISPONDENZA = "Corrispondenza"
+
+
+def classificazione_corrispondenza(db: Session) -> Classification | None:
+    """La classificazione con cui si decidono i permessi sulla posta.
+
+    E' una riga di `classifications` come le altre - la crea la migrazione
+    `d4b8607e15a2` e la si amministra dalla pagina delle classificazioni -
+    e viene cercata **per nome**, perche' e' l'unico modo di riferirsi a una
+    riga che una persona puo' rinominare senza avvisare nessuno.
+
+    Se manca, la risposta di tutte le domande sulla posta diventa "no" per
+    tutti tranne il creatore. E' l'unico modo prudente di sbagliare: senza la
+    classificazione non esiste nessuna casella della matrice da guardare, e
+    nessuna casella vuol dire nessun permesso deciso. Il guasto finisce nel
+    registro su file, perche' non e' una situazione normale.
+    """
+    trovata = db.scalars(
+        select(Classification).where(
+            func.lower(Classification.name) == CLASSE_CORRISPONDENZA.lower()
+        )
+    ).first()
+
+    if trovata is None:
+        logger.error(
+            "Manca la classificazione '%s': i permessi sui messaggi di posta "
+            "vengono negati a tutti tranne al creatore. Va ricreata dalla "
+            "pagina delle classificazioni.",
+            CLASSE_CORRISPONDENZA,
+        )
+
+    return trovata
+
+
+def _permessi_sul_messaggio(
+    db: Session, utente: User, messaggio: EmailMessage
+) -> Permessi:
+    """Le tre caselle per questa persona su questo messaggio di posta.
+
+    Il messaggio e' attaccato a una **versione di prodotto**; il progetto
+    aperto su quella versione e' quello su cui la matrice ha qualcosa da dire.
+    Da li' in poi la domanda e' identica a quella di un documento, e infatti
+    la risposta la da' la stessa funzione.
+
+    **Due casi valgono zero, e sono voluti.**
+
+    Un messaggio **in quarantena** non e' attaccato a niente: non esiste
+    nessun progetto, quindi nessun ruolo, quindi nessuna casella. Lo vede solo
+    il creatore, a cui `puo()` ha gia' risposto prima di arrivare qui, ed e' il
+    motivo per cui la pagina della quarantena e' riservata (D-069).
+
+    Un messaggio attaccato a una versione **su cui non e' stato aperto nessun
+    progetto** e' nella stessa situazione: la matrice parla di ruoli dentro un
+    progetto, e senza progetto non ci sono ruoli. Capita per la posta che
+    arriva prima che il lavoro cominci, e la risposta giusta e' che la veda chi
+    amministra finche' il progetto non c'e'.
+    """
+    versione = messaggio.product_version
+    if versione is None:
+        return NESSUNO
+
+    progetto = versione.project
+    if progetto is None:
+        return NESSUNO
+
+    classe = classificazione_corrispondenza(db)
+    if classe is None:
+        return NESSUNO
+
+    return _permessi_su_classificazione(db, utente, progetto, classe.id)
+
+
 def _puo_sul_progetto(
     db: Session, utente: User, azione: Azione, progetto: Project
 ) -> bool:
@@ -594,6 +681,7 @@ MESSAGGI_INESISTENTE: dict[type, str] = {
     Project: "Il progetto richiesto non esiste.",
     ProductVersion: "La versione richiesta non esiste.",
     Product: "Il prodotto richiesto non esiste.",
+    EmailMessage: "Il messaggio richiesto non esiste.",
 }
 
 MESSAGGIO_INESISTENTE_GENERICO = "L'oggetto richiesto non esiste."
@@ -778,6 +866,73 @@ def filtro_progetti(utente: User) -> ColumnElement[bool] | None:
             .correlate(Project)
         ),
     )
+
+
+def filtro_email(
+    db: Session, utente: User, azione: Azione = Azione.VEDERE
+) -> ColumnElement[bool] | None:
+    """La condizione che lascia solo i messaggi di posta consentiti.
+
+    E' `puo(..., messaggio)` scritta come SQL, ed e' la stessa regola: il
+    messaggio arriva alla sua versione di prodotto, la versione al progetto
+    aperto su di lei, e li' si guarda la casella della matrice all'incrocio fra
+    il ruolo di questa persona in quel progetto e la classificazione
+    "Corrispondenza".
+
+    Restituisce None per il creatore, che vede tutto.
+
+    **Un messaggio in quarantena non compare in nessun elenco**, per nessuno:
+    non ha versione, quindi tutti e due gli EXISTS sono falsi. La quarantena ha
+    la sua pagina, riservata (D-069).
+
+    Prende la sessione - a differenza di `filtro_documenti()` - perche' deve
+    cercare la classificazione per nome. Senza quella riga non c'e' nessuna
+    casella da guardare, e la condizione diventa "falso": nessuno vede niente,
+    che e' l'unico modo prudente di sbagliare.
+    """
+    if utente.is_creatore:
+        return None
+
+    classe = classificazione_corrispondenza(db)
+    if classe is None:
+        return false()
+
+    colonna = {
+        Azione.VEDERE: PermissionRule.can_view,
+        Azione.CARICARE: PermissionRule.can_upload,
+        Azione.MODIFICARE: PermissionRule.can_edit,
+    }[azione]
+
+    # correlate(EmailMessage) per la stessa ragione di filtro_documenti():
+    # senza, SQLAlchemy correlerebbe via anche le tabelle dell'interrogazione
+    # esterna e la sottointerrogazione resterebbe senza niente da cui leggere.
+    responsabile = exists(
+        select(Project.id).where(
+            Project.product_version_id == EmailMessage.product_version_id,
+            Project.project_manager_id == utente.id,
+        )
+    ).correlate(EmailMessage)
+
+    dalla_matrice = exists(
+        select(Assignment.id)
+        .join(Project, Project.id == Assignment.project_id)
+        .join(
+            PermissionRule,
+            and_(
+                PermissionRule.project_role == Assignment.project_role,
+                PermissionRule.classification_id == classe.id,
+                colonna.is_(True),
+            ),
+        )
+        .where(
+            Project.product_version_id == EmailMessage.product_version_id,
+            Assignment.user_id == utente.id,
+            Assignment.revoked_at.is_(None),
+        )
+        .correlate(EmailMessage)
+    )
+
+    return or_(responsabile, dalla_matrice)
 
 
 # ---------------------------------------------------------------------------

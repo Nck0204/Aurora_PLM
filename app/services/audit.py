@@ -233,14 +233,26 @@ CATALOGO: dict[str, TipoAzione] = _tipi(
     ("phase_template.reactivated", "Modello di fasi riattivato", GRUPPO_FASI),
     # --- Posta -----------------------------------------------------------
     #
-    # La sezione della posta arriva con la sessione 10: oggi in Aurora non
-    # esiste nessuna pagina che assegni un messaggio a un progetto, quindi
-    # queste due righe non le scrive ancora nessuno. Stanno qui lo stesso, e
-    # apposta: il giorno in cui quella pagina nascera', registrare
-    # l'operazione sara' una riga sola invece di una discussione su come
-    # chiamarla. Vedi la nota in docs/STATO.md.
-    ("email.assigned_manual", "Messaggio assegnato a mano", GRUPPO_POSTA),
+    # Le due righe "assigned_manual" e "quarantined" erano gia' qui dalla
+    # sessione 9, scritte in anticipo per il giorno in cui la sezione della
+    # posta sarebbe nata. La sessione 10 le mette in uso e ne aggiunge due:
+    # l'archiviazione di un messaggio - che e' il fatto piu' frequente di
+    # tutti, uno per messaggio letto - e lo scarico, che sulla corrispondenza
+    # con i clienti si registra per la stessa ragione per cui si registra sui
+    # documenti.
+    #
+    # Un messaggio archiviato produce **una riga sola**: "archived" se e' stato
+    # attribuito, "quarantined" se no. Scriverne due per lo stesso fatto
+    # renderebbe illeggibili i conteggi, e la differenza fra i due casi e'
+    # proprio quello che la riga deve dire.
+    ("email.archived", "Messaggio archiviato", GRUPPO_POSTA),
     ("email.quarantined", "Messaggio messo in quarantena", GRUPPO_POSTA),
+    ("email.assigned_manual", "Messaggio assegnato a mano", GRUPPO_POSTA),
+    ("email.download", "Messaggio o allegato scaricato", GRUPPO_POSTA),
+    ("email_reason.created", "Motivo della posta creato", GRUPPO_POSTA),
+    ("email_reason.updated", "Motivo della posta modificato", GRUPPO_POSTA),
+    ("email_reason.deactivated", "Motivo della posta disattivato", GRUPPO_POSTA),
+    ("email_reason.reactivated", "Motivo della posta riattivato", GRUPPO_POSTA),
     # --- Sistema ---------------------------------------------------------
     (ACTION_CONFIG_LOADED, "Configurazione letta all'avvio", GRUPPO_SISTEMA),
     (ACTION_CONFIG_CHANGED, "Configurazione cambiata", GRUPPO_SISTEMA),

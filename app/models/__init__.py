@@ -17,7 +17,7 @@ Le tabelle del rilascio R1, raggruppate per argomento:
   Permessi              classifications, permission_rules
   Documenti             documents, document_versions
   Fasi                  phase_templates, phases, phase_transitions
-  Posta                 email_messages, email_attachments
+  Posta                 email_messages, email_attachments, email_reasons
   Tracciabilita'        audit_logs
 
 Le tabelle di distinta base e articoli arriveranno con il rilascio R3.
@@ -32,6 +32,7 @@ from app.models.document import Document
 from app.models.document_version import DocumentVersion
 from app.models.email_attachment import EmailAttachment
 from app.models.email_message import EmailMessage
+from app.models.email_reason import EmailReason
 from app.models.enums import (
     DocumentState,
     EmailAssignmentState,
@@ -74,6 +75,7 @@ __all__ = [
     "DocumentVersion",
     "EmailAttachment",
     "EmailMessage",
+    "EmailReason",
     "LoginAttempt",
     "PermissionRule",
     "Phase",

@@ -1,0 +1,155 @@
+{# ===========================================================================
+   Elenco della posta archiviata, in ordine cronologico dal piu' recente.
+
+   E' UNA PAGINA SOLA PER DUE USI. Senza parametri mostra tutta la posta che
+   chi guarda puo' vedere; con "?progetto={id}" la restringe a un progetto, ed
+   e' la "sezione Posta" di cui parla il punto 1 della sessione. Due pagine
+   separate avrebbero voluto dire due interrogazioni da tenere allineate e,
+   prima o poi, due elenchi che dicono cose diverse.
+
+   LE RIGHE CHE NON CI SONO. I messaggi che il ruolo di chi guarda non gli
+   permette di vedere non vengono nascosti qui: non escono proprio
+   dall'interrogazione (permissions.filtro_email). Un elenco che nasconde una
+   riga che poi si apre scrivendone l'indirizzo non e' una protezione.
+   =========================================================================== #}
+{% extends "base.html" %}
+
+{% from "components/pulsanti.html" import pulsante_collegamento, modulo_pulsante %}
+{% from "components/tabella.html" import tabella %}
+{% from "components/ricerca.html" import ricerca %}
+{% from "components/impaginazione.html" import impaginazione %}
+{% from "components/stato.html" import etichetta %}
+{% from "components/vuoto.html" import vuoto %}
+{% from "components/avvisi.html" import avviso, notifica %}
+
+{% block titolo %}Posta{% endblock %}
+{% block sezione %}Posta{% endblock %}
+
+{% block notifiche %}
+    {% if request.query_params.get("letti") is not none %}
+        {{ notifica("Letti " ~ request.query_params.get("letti") ~ " messaggi: "
+                    ~ request.query_params.get("archiviati") ~ " attribuiti, "
+                    ~ request.query_params.get("quarantena") ~ " in quarantena, "
+                    ~ request.query_params.get("gia") ~ " gia' archiviati.",
+                    variante="successo", titolo="Posta elaborata", durata=0) }}
+    {% endif %}
+{% endblock %}
+
+{% block contenuto %}
+
+<div class="testata">
+    <div>
+        <h1>Posta</h1>
+        <p class="sottotitolo">
+            {% if progetto_scelto %}
+                I messaggi archiviati sulla versione del progetto
+                <span class="mono">{{ progetto_scelto.product_version.product.code }}</span>
+                v{{ progetto_scelto.product_version.version_number }}.
+            {% else %}
+                La corrispondenza archiviata, attaccata alla versione di
+                prodotto di cui parla. Il file originale si scarica sempre.
+            {% endif %}
+        </p>
+    </div>
+    <div class="testata-azioni">
+        {% if progetto_scelto %}
+            {{ pulsante_collegamento("Il progetto",
+                                     "/progetti/" ~ progetto_scelto.id,
+                                     icona_nome="progetti") }}
+        {% endif %}
+        {% if puo_amministrare %}
+            {{ pulsante_collegamento("Quarantena", "/posta/quarantena",
+                                     icona_nome="attenzione") }}
+            {{ pulsante_collegamento("Motivi", "/posta/motivi",
+                                     icona_nome="permessi") }}
+            {{ modulo_pulsante(request, "/posta/elabora", "Elabora la posta",
+                               variante="primario", icona_nome="carica",
+                               in_linea=true) }}
+        {% endif %}
+    </div>
+</div>
+
+{% if request.query_params.get("problema") %}
+    {{ avviso(request.query_params.get("problema"),
+              variante="errore", titolo="La posta non e' stata letta") }}
+{% endif %}
+
+{% if request.query_params.get("errori") and request.query_params.get("errori") != "0" %}
+    {{ avviso("Su " ~ request.query_params.get("errori") ~ " messaggi qualcosa "
+              "e' andato storto: sono rimasti nella cartella e verranno "
+              "riprovati alla prossima elaborazione. Il dettaglio e' nel "
+              "registro su file.",
+              variante="attenzione", titolo="Qualche messaggio non e' entrato") }}
+{% endif %}
+
+{{ ricerca("/posta", valore=q, nome="q",
+           etichetta="Cerca nella posta",
+           segnaposto="Mittente, oggetto o testo",
+           filtri=filtri,
+           date=[{"nome": "dal", "etichetta": "Dal giorno", "valore": dal},
+                 {"nome": "al", "etichetta": "Al giorno", "valore": al}],
+           nascosti={"progetto": progetto_scelto.id if progetto_scelto else ""}) }}
+
+{% if totale or q or stato_scelto or dal or al %}
+
+    {% set colonne = [
+        {"etichetta": "Data"},
+        {"etichetta": "Mittente"},
+        {"etichetta": "Oggetto"},
+        {"etichetta": "Allegati", "classe": "colonna-numero"},
+        {"etichetta": "Attribuzione"},
+    ] %}
+
+    {% call tabella(colonne,
+                    vuota=(messaggi|length == 0),
+                    messaggio_vuoto="Nessun messaggio con questi filtri. "
+                                    "Prova a svuotare la casella di ricerca "
+                                    "o ad allargare l'intervallo di date.",
+                    riepilogo=(totale ~ " messagg" ~ ("io" if totale == 1 else "i")
+                               ~ " trovat" ~ ("o" if totale == 1 else "i"))) %}
+        {% for messaggio in messaggi %}
+        <tr>
+            <td>{{ (messaggio.sent_at or messaggio.received_at).astimezone().strftime("%d/%m/%Y %H:%M") }}</td>
+            <td class="mono testo-piccolo">{{ messaggio.sender }}</td>
+            <td>
+                <a href="/posta/{{ messaggio.id }}">
+                    {{ messaggio.subject or "(senza oggetto)" }}
+                </a>
+                {% if not progetto_scelto and messaggio.product_version %}
+                <div class="testo-piccolo testo-tenue mono">
+                    {{ messaggio.product_version.product.code }}
+                    v{{ messaggio.product_version.version_number }}
+                </div>
+                {% endif %}
+            </td>
+            <td class="colonna-numero">
+                {% if messaggio.attachments %}{{ messaggio.attachments|length }}
+                {% else %}<span class="testo-tenue">&mdash;</span>{% endif %}
+            </td>
+            <td>
+                {% if messaggio.product_version %}
+                    {{ etichetta(nome_stato(messaggio.assignment_state),
+                                 variante="successo") }}
+                {% else %}
+                    {{ etichetta(nome_stato(messaggio.assignment_state),
+                                 variante="attenzione") }}
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+    {% endcall %}
+
+    {{ impaginazione(pagina_corrente, totale_pagine, "/posta",
+                     parametri=parametri, totale_righe=totale) }}
+
+{% else %}
+
+    {{ vuoto("Non c'e' ancora nessun messaggio",
+             "Aurora legge i file .eml dalla cartella della posta e li attacca "
+             "alla versione di prodotto di cui parlano. Il primo messaggio "
+             "arriva alla prima elaborazione.",
+             icona_nome="posta") }}
+
+{% endif %}
+
+{% endblock %}

@@ -108,6 +108,21 @@ class EmailMessage(Base, UuidPrimaryKeyMixin, TimestampMixin):
         index=True,
     )
 
+    # Perche' il messaggio e' finito in quarantena, in italiano, scritto nel
+    # momento in cui ci e' finito. Serve a chi apre la pagina della quarantena
+    # e deve decidere: "nessun codice prodotto nell'oggetto" e "la versione V7
+    # non esiste" sono due situazioni diverse e vogliono due gesti diversi.
+    # Resta scritta anche dopo l'assegnazione a mano: e' la storia di come il
+    # messaggio e' arrivato dov'e'.
+    quarantine_reason: Mapped[str | None] = mapped_column(String(200), nullable=True)
+
+    # Da dove e' arrivato il messaggio, come lo scrive la fonte che l'ha
+    # letto: "locale:2026-08-26-offerta.eml". Non e' un percorso su disco - il
+    # file viene spostato subito dopo - ma il nome con cui chi indaga lo
+    # ritrova nella cartella "elaborate". Nullo per i messaggi archiviati
+    # prima della sessione 10, che non ne avevano uno.
+    source_reference: Mapped[str | None] = mapped_column(String(400), nullable=True)
+
     # Chi ha fatto lo smistamento a mano. Nullo quando lo ha fatto il
     # programma da solo o quando il messaggio e' ancora in quarantena.
     assigned_by_id: Mapped[uuid.UUID | None] = mapped_column(

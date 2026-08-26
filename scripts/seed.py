@@ -5,7 +5,7 @@ programma sia utilizzabile:
 
   - un utente creatore, "admin", con una password casuale stampata una volta
     sola e da cambiare al primo accesso;
-  - le quattro classificazioni dei documenti;
+  - le cinque classificazioni (quattro dei documenti piu' la corrispondenza);
   - la matrice dei permessi di partenza, tutte e dodici le caselle;
   - il modello di fasi "Standard", versione 1, con le sue sei fasi e le
     due proprieta' che le governano (da Development non si torna
@@ -62,21 +62,34 @@ ADMIN_LAST_NAME = "Aurora"
 # le notifiche destinate all'amministratore non arriveranno a nessuno.
 ADMIN_EMAIL = "admin@aurora.local"
 
-# Le quattro classificazioni, nell'ordine in cui devono comparire.
+# Le cinque classificazioni, nell'ordine in cui devono comparire.
+#
+# "Corrispondenza" e' arrivata con la sessione 10 ed e' diversa dalle altre
+# quattro: non se la sceglie chi carica un documento, ce l'hanno addosso tutti
+# i messaggi di posta archiviati, ed e' con lei che si decide chi li puo'
+# vedere (D-069). Sui database gia' in uso la crea la migrazione
+# d4b8607e15a2; qui c'e' per le installazioni nuove.
 CLASSIFICATIONS = [
     ("Tecnico", "Schemi, disegni, distinte, relazioni di prova, firmware."),
     ("Commerciale", "Offerte, listini, ordini, corrispondenza commerciale."),
     ("Qualità", "Piani della qualità, non conformità, rapporti di audit."),
     ("Amministrativo", "Contratti, accordi di riservatezza, documenti di spesa."),
+    ("Corrispondenza", "I messaggi di posta archiviati e i loro allegati."),
 ]
 
 # La matrice dei permessi di partenza, una riga per ruolo.
 # Le tre lettere sono: V = vedere, C = caricare, M = modificare.
 #
-#                      Tecnico   Commerciale   Qualità   Amministrativo
-#   project_manager    V C M     V C M         V C M     V C M
-#   ingegnere          V C M     - - -         V C M     V - -
-#   lettore            V - -     - - -         - - -     - - -
+#                      Tecnico   Commerciale   Qualità   Amministrativo   Corrispondenza
+#   project_manager    V C M     V C M         V C M     V C M            V C M
+#   ingegnere          V C M     - - -         V C M     V - -            V - M
+#   lettore            V - -     - - -         - - -     - - -            V - -
+#
+# La colonna della corrispondenza e' della sessione 10 e va letta cosi': i
+# messaggi non si "caricano" - arrivano dalla casella - quindi la casella C
+# non serve a nessuno tranne al responsabile; la M e' il permesso di
+# **correggere l'attribuzione** di un messaggio finito sulla versione
+# sbagliata, e l'ingegnere ce l'ha perche' e' lui che se ne accorge.
 #
 # Le regole che la sessione chiede espressamente sono tre: l'ingegnere non vede
 # il Commerciale, il project manager vede tutto del proprio progetto, il lettore
@@ -92,18 +105,21 @@ PERMISSION_MATRIX = {
         "Commerciale": (True, True, True),
         "Qualità": (True, True, True),
         "Amministrativo": (True, True, True),
+        "Corrispondenza": (True, True, True),
     },
     ProjectRole.INGEGNERE: {
         "Tecnico": (True, True, True),
         "Commerciale": (False, False, False),
         "Qualità": (True, True, True),
         "Amministrativo": (True, False, False),
+        "Corrispondenza": (True, False, True),
     },
     ProjectRole.LETTORE: {
         "Tecnico": (True, False, False),
         "Commerciale": (False, False, False),
         "Qualità": (False, False, False),
         "Amministrativo": (False, False, False),
+        "Corrispondenza": (True, False, False),
     },
 }
 

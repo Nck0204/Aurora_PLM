@@ -49,6 +49,7 @@ from app.dependencies import richiedi_creatore, richiedi_login
 from app.models import Phase, PhaseTemplate, Project, User
 from app.services import (
     documents,
+    emails,
     lifecycle,
     permissions,
     phases,
@@ -350,6 +351,9 @@ def scheda(
         # elenco. Il conteggio passa dallo stesso filtro dell'elenco, quindi
         # non puo' dire "tre documenti" a chi poi ne trova due.
         documenti_del_progetto=documents.conta_documenti(db, utente, progetto.id),
+        messaggi_del_progetto=emails.conta_messaggi(
+            db, utente, project_id=progetto.id
+        ),
         puo_caricare=permissions.puo(
             db, utente, permissions.Azione.CARICARE, progetto
         ),

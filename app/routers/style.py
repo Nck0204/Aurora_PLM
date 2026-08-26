@@ -104,6 +104,28 @@ def cerca_esempio(testo: str) -> list[dict[str, str]]:
 # forma esatta dei dizionari che compongono app/routers/audit.py e
 # app/routers/storico.py, perche' il componente disegna quelli; il contenuto e'
 # inventato qui, come tutto il resto della vetrina.
+
+# Due corpi di messaggio inventati, per la vetrina del componente
+# components/messaggio.html. Il primo sta sotto la soglia dell'accorciamento e
+# si vede tutto; il secondo la supera e si taglia. Non vengono da nessun
+# messaggio vero: la vetrina non interroga il database.
+MESSAGGIO_CORTO = "\n".join(
+    (
+        "Buongiorno,",
+        "confermo la modifica concordata al telefono: la tensione di "
+        "ingresso passa da 24 V a 48 V.",
+        "",
+        "Cordiali saluti",
+        "Mario Rossi",
+    )
+)
+
+MESSAGGIO_LUNGO = MESSAGGIO_CORTO + "\n\n" + "\n".join(
+    f"> riga {numero} del messaggio citato in risposta"
+    for numero in range(1, 21)
+)
+
+
 VOCI_DI_ESEMPIO: tuple[dict, ...] = (
     {
         "seq": 4127,
@@ -185,6 +207,8 @@ def vetrina(
         pagina_numero=pagina_numero,
         righe=righe,
         VOCI_DI_ESEMPIO=VOCI_DI_ESEMPIO,
+        MESSAGGIO_CORTO=MESSAGGIO_CORTO,
+        MESSAGGIO_LUNGO=MESSAGGIO_LUNGO,
     )
 
 

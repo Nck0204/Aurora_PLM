@@ -1,0 +1,170 @@
+{# ===========================================================================
+   Scheda di un messaggio di posta archiviato.
+
+   Tre blocchi, in ordine di quello che si cerca guardando una mail: chi
+   scrive e quando, che cosa c'e' scritto, che cosa c'era allegato.
+
+   L'ATTRIBUZIONE STA IN CIMA e non in fondo. La domanda che ci si fa aprendo
+   un messaggio archiviato non e' "che cosa dice" - quello lo si legge subito
+   sotto - ma "perche' sta qui": la riga che lo spiega arriva gia' composta
+   dalla rotta (emails.come_attribuito).
+
+   I pulsanti che si vedono dipendono da quello che si puo' fare, e la
+   risposta arriva gia' decisa dalla rotta (puo_assegnare): qui non si guarda
+   nessun ruolo (D-051).
+   =========================================================================== #}
+{% extends "base.html" %}
+
+{% from "components/pulsanti.html" import pulsante_collegamento %}
+{% from "components/riquadro.html" import riquadro %}
+{% from "components/descrizione.html" import descrizione, voce %}
+{% from "components/stato.html" import etichetta %}
+{% from "components/tabella.html" import tabella %}
+{% from "components/avvisi.html" import avviso, notifica %}
+{% from "components/schede.html" import schede_oggetto %}
+{% from "components/messaggio.html" import corpo_messaggio %}
+
+{% block titolo %}{{ messaggio.subject or "Messaggio" }}{% endblock %}
+{% block sezione %}Posta{% endblock %}
+
+{% block notifiche %}
+    {% if request.query_params.get("assegnato") %}
+        {% set quanti = request.query_params.get("filo") | int %}
+        {{ notifica("Il messaggio e' stato attaccato alla versione scelta"
+                    ~ (", insieme ad altri " ~ quanti ~ " della stessa "
+                       "conversazione." if quanti else "."),
+                    variante="successo", titolo="Messaggio assegnato") }}
+    {% endif %}
+{% endblock %}
+
+{% block contenuto %}
+
+<div class="testata">
+    <div>
+        <h1>{{ messaggio.subject or "Messaggio senza oggetto" }}</h1>
+        <p class="sottotitolo">
+            Da <span class="mono">{{ messaggio.sender }}</span>,
+            {{ (messaggio.sent_at or messaggio.received_at).astimezone().strftime("%d/%m/%Y alle %H:%M") }}.
+        </p>
+    </div>
+    <div class="testata-azioni">
+        {{ pulsante_collegamento("Scarica il messaggio",
+                                 "/posta/" ~ messaggio.id ~ "/scarica",
+                                 icona_nome="scarica") }}
+        {% if puo_assegnare %}
+            {{ pulsante_collegamento("Assegna a un prodotto",
+                                     "/posta/" ~ messaggio.id ~ "/assegna",
+                                     variante="primario", icona_nome="prodotti") }}
+        {% endif %}
+    </div>
+</div>
+
+{{ schede_oggetto("/posta/" ~ messaggio.id, corrente="/posta/" ~ messaggio.id) }}
+
+{% if not messaggio.product_version %}
+    {{ avviso(messaggio.quarantine_reason
+              or "Aurora non ha capito a quale prodotto appartiene questo "
+                 "messaggio.",
+              variante="attenzione", titolo="Messaggio in quarantena") }}
+{% endif %}
+
+{% if difetti %}
+    {% call avviso("", variante="attenzione",
+                   titolo="Il file di questo messaggio non era del tutto in ordine") %}
+        <ul>
+            {% for difetto in difetti %}
+            <li>{{ difetto }}</li>
+            {% endfor %}
+        </ul>
+        <p class="testo-piccolo">
+            Il file originale e' stato archiviato lo stesso e si puo'
+            scaricare: quello che manca qui sopra e' quello che Aurora non ha
+            saputo leggere, non quello che il messaggio non contiene.
+        </p>
+    {% endcall %}
+{% endif %}
+
+{% call riquadro("Il messaggio") %}
+    {% call descrizione(righe=true) %}
+        {{ voce("Mittente", messaggio.sender, monospazio=true) }}
+        {{ voce("A", destinatari | join(", ")) }}
+        {% if copia %}{{ voce("Copia", copia | join(", ")) }}{% endif %}
+        {% if copia_nascosta %}
+            {{ voce("Copia nascosta", copia_nascosta | join(", ")) }}
+        {% endif %}
+        {{ voce("Oggetto", messaggio.subject) }}
+        {{ voce("Spedito il",
+                messaggio.sent_at.astimezone().strftime("%d/%m/%Y %H:%M")
+                if messaggio.sent_at else none) }}
+        {{ voce("Archiviato il",
+                messaggio.received_at.astimezone().strftime("%d/%m/%Y %H:%M")) }}
+    {% endcall %}
+{% endcall %}
+
+{% call riquadro("Dove sta, e perche'") %}
+    {% call descrizione(righe=true) %}
+        {% if messaggio.product_version %}
+            {# Il collegamento si compone con un blocco "set" e non
+               concatenando stringhe con "safe": con la concatenazione il
+               filtro si applicherebbe al solo ultimo pezzo, e il resto
+               uscirebbe con i marcatori scritti in chiaro. #}
+            {% set collegamento_versione %}
+                <a href="/versioni/{{ messaggio.product_version.id }}">{{ messaggio.product_version.product.code }} v{{ messaggio.product_version.version_number }}</a>
+            {% endset %}
+            {{ voce("Prodotto", collegamento_versione) }}
+        {% else %}
+            {{ voce("Prodotto", none) }}
+        {% endif %}
+        {{ voce("Attribuzione", attribuzione) }}
+        {{ voce("Stato", etichetta(nome_stato,
+                                   variante="successo" if messaggio.product_version
+                                            else "attenzione")) }}
+        {% if messaggio.assigned_by %}
+            {{ voce("Assegnato da", messaggio.assigned_by.username,
+                    monospazio=true) }}
+        {% endif %}
+        {% if motivo %}
+            {{ voce("Motivo nell'oggetto",
+                    motivo if motivo_riconosciuto
+                    else motivo ~ " (non e' fra i motivi ammessi)") }}
+        {% endif %}
+        {{ voce("File originale", messaggio.source_reference, monospazio=true) }}
+    {% endcall %}
+{% endcall %}
+
+{% call riquadro("Testo") %}
+    {{ corpo_messaggio(messaggio.body_text) }}
+{% endcall %}
+
+{% call riquadro("Allegati") %}
+    {% if messaggio.attachments %}
+        {% set colonne = [
+            {"etichetta": "Nome"},
+            {"etichetta": "Tipo"},
+            {"etichetta": "Dimensione", "classe": "colonna-numero"},
+        ] %}
+        {% call tabella(colonne) %}
+            {% for allegato in messaggio.attachments %}
+            <tr>
+                <td>
+                    <a href="/posta/{{ messaggio.id }}/allegati/{{ allegato.id }}">
+                        {{ allegato.filename }}
+                    </a>
+                </td>
+                <td class="testo-piccolo testo-tenue">{{ allegato.mime_type }}</td>
+                <td class="colonna-numero">{{ peso(allegato.size_bytes) }}</td>
+            </tr>
+            {% endfor %}
+        {% endcall %}
+        <p class="campo-aiuto margine-sopra">
+            Un allegato non e' un documento di progetto. Se merita di
+            diventarlo, lo si carica come documento: e' un gesto voluto,
+            perche' un allegato e' quello che ha mandato qualcun altro mentre
+            un documento e' quello di cui l'azienda risponde.
+        </p>
+    {% else %}
+        <p class="campo-aiuto">Questo messaggio non ha allegati.</p>
+    {% endif %}
+{% endcall %}
+
+{% endblock %}

@@ -195,6 +195,7 @@ la prova.
 | `barra_caricamento.html` | `barra_caricamento` | quanti byte sono partiti, mentre partono |
 | `vuoto.html` | `vuoto` | quando non c'e' niente da mostrare |
 | `storico.html` | `storico` | le voci del registro delle operazioni |
+| `messaggio.html` | `corpo_messaggio` | il testo di una mail archiviata |
 
 ### Nei template non si decide chi puo' fare che cosa
 
@@ -297,6 +298,33 @@ diventato una frase italiana, il tipo di entita' e' gia' diventato "Documento",
 l'indirizzo della scheda dell'oggetto e' gia' composto o e' `None`. Le compone
 `_voce_per_la_pagina()` in `app/routers/audit.py`, ed e' la regola della
 sezione qui sotto applicata a un caso in cui sarebbe stato comodo sbagliare.
+
+### Il corpo di un messaggio di posta
+
+`messaggio.html` disegna il testo di una mail archiviata, ed e' l'unico blocco
+di Aurora che mostra **testo scritto da qualcun altro**: lungo quanto capita,
+con gli a capo che contano e con righe che nessuno ha impaginato per noi. Sta
+nella sezione 28 di `aurora.css`.
+
+Tre cose che un `<pre>` non farebbe:
+
+- **va a capo da solo.** Le mail arrivano con righe da 200 caratteri e con
+  righe gia' spezzate a 72: un `<pre>` costringerebbe a scorrere di lato per
+  leggere le prime;
+- **non e' a spaziatura fissa.** Il corpo di una mail e' prosa, e la prosa in
+  carattere da terminale si legge peggio;
+- **si accorcia.** Sopra le dodici righe il resto va dentro un `<details>`:
+  una mail con dentro venti risposte citate riempirebbe altrimenti sei
+  schermate prima degli allegati, che sono la cosa che si stava cercando.
+
+L'accorciamento e' un `<details>` e non JavaScript, quindi funziona anche con
+JavaScript spento (D-036). Con il corpo vuoto il macro disegna la riga che lo
+dice: un messaggio senza testo esiste - e' quello con il solo allegato - e la
+pagina non deve sembrare rotta.
+
+Non si usa per una frase scritta da una persona dentro Aurora (la motivazione
+di un passaggio di fase, il perche' di un rifiuto): quella e' `.citazione`, che
+ha la barretta a sinistra ed e' pensata per due righe.
 
 ### Gli elenchi di scelte si compongono in Python, non nei template
 

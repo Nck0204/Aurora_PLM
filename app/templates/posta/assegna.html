@@ -1,0 +1,119 @@
+{# ===========================================================================
+   Assegnare un messaggio a una versione di prodotto.
+
+   DUE MODULI, E SONO DUE APPOSTA. Il primo e' la ricerca del prodotto ed e' un
+   GET: cercare e' una domanda, e le domande si fanno in GET (vedi
+   components/ricerca.html). Il secondo e' l'assegnazione vera ed e' un POST
+   con il suo gettone, perche' cambia qualcosa.
+
+   Se fossero uno solo, premere Invio nella casella di ricerca assegnerebbe il
+   messaggio alla prima versione della tendina: un gesto irreversibile fatto
+   per sbaglio mentre si stava cercando.
+
+   LA SPUNTA DEL FILO E' SEGNATA DI PARTENZA. Una conversazione appartiene
+   tutta allo stesso prodotto: e' quello che si vuole quasi sempre, e chi non
+   lo vuole toglie la spunta. Compare solo quando nel filo c'e' davvero
+   qualcun altro in quarantena - una spunta che non farebbe niente e' una
+   spunta che insegna a non leggerle.
+   =========================================================================== #}
+{% extends "base.html" %}
+
+{% from "components/pulsanti.html" import pulsante, pulsante_collegamento %}
+{% from "components/riquadro.html" import riquadro %}
+{% from "components/campi.html" import tendina, spunta, csrf %}
+{% from "components/ricerca.html" import ricerca %}
+{% from "components/descrizione.html" import descrizione, voce %}
+{% from "components/tabella.html" import tabella %}
+{% from "components/avvisi.html" import avviso %}
+
+{% block titolo %}Assegna il messaggio{% endblock %}
+{% block sezione %}Posta{% endblock %}
+
+{% block contenuto %}
+
+<div class="testata">
+    <div>
+        <h1>Assegna il messaggio</h1>
+        <p class="sottotitolo">
+            Scegli la versione di prodotto a cui questo messaggio appartiene.
+        </p>
+    </div>
+    <div class="testata-azioni">
+        {{ pulsante_collegamento("Il messaggio", "/posta/" ~ messaggio.id,
+                                 icona_nome="posta") }}
+    </div>
+</div>
+
+{% call riquadro("Il messaggio") %}
+    {% call descrizione(righe=true) %}
+        {{ voce("Mittente", messaggio.sender, monospazio=true) }}
+        {{ voce("Oggetto", messaggio.subject) }}
+        {{ voce("Data",
+                (messaggio.sent_at or messaggio.received_at).astimezone().strftime("%d/%m/%Y %H:%M")) }}
+        {{ voce("Perche' e' in quarantena", messaggio.quarantine_reason) }}
+    {% endcall %}
+{% endcall %}
+
+{% call riquadro("Cerca il prodotto") %}
+    {{ ricerca("/posta/" ~ messaggio.id ~ "/assegna", valore=cerca, nome="cerca",
+               etichetta="Cerca il prodotto",
+               segnaposto="Codice o descrizione del prodotto") }}
+    <p class="campo-aiuto margine-sopra">
+        Senza cercare niente, la tendina qui sotto propone le versioni create
+        di recente.
+    </p>
+{% endcall %}
+
+<form method="post" action="/posta/{{ messaggio.id }}/assegna"
+      class="colonna-stretta">
+    {{ csrf(request) }}
+
+    {% call riquadro("A quale versione", piede=pulsante("Assegna", variante="primario")) %}
+        {% if versioni %}
+            {{ tendina("Versione di prodotto", "versione", versioni,
+                       obbligatorio=true,
+                       aiuto="Accanto al codice c'e' lo stato del ciclo di "
+                             "vita: la posta di oggi appartiene quasi sempre "
+                             "alla versione su cui si sta lavorando.") }}
+
+            {% if quanti_nel_filo %}
+                {{ spunta("Assegna anche gli altri " ~ quanti_nel_filo ~
+                          " messaggi di questa conversazione ancora in quarantena",
+                          "tutto_il_filo", spuntata=true,
+                          aiuto="Una conversazione appartiene tutta allo "
+                                "stesso prodotto. I messaggi gia' attribuiti "
+                                "restano dove sono.") }}
+            {% endif %}
+        {% else %}
+            {{ avviso("Nessuna versione corrisponde a quello che hai cercato. "
+                      "Prova con meno lettere, oppure svuota la casella per "
+                      "vedere le versioni piu' recenti.",
+                      variante="attenzione") }}
+        {% endif %}
+    {% endcall %}
+</form>
+
+{% if quanti_nel_filo %}
+    {% call riquadro("Gli altri messaggi della conversazione") %}
+        {% set colonne = [
+            {"etichetta": "Data"},
+            {"etichetta": "Mittente"},
+            {"etichetta": "Oggetto"},
+        ] %}
+        {% call tabella(colonne) %}
+            {% for altro in nel_filo %}
+            <tr>
+                <td>{{ (altro.sent_at or altro.received_at).astimezone().strftime("%d/%m/%Y %H:%M") }}</td>
+                <td class="mono testo-piccolo">{{ altro.sender }}</td>
+                <td>
+                    <a href="/posta/{{ altro.id }}">
+                        {{ altro.subject or "(senza oggetto)" }}
+                    </a>
+                </td>
+            </tr>
+            {% endfor %}
+        {% endcall %}
+    {% endcall %}
+{% endif %}
+
+{% endblock %}

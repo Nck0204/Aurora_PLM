@@ -166,9 +166,12 @@ aurora/
 ├── storage/               archivio dei file caricati (NON in git)
 │   ├── objects/           i file, depositati per impronta SHA-256:
 │   │                   objects/3f/9a/3f9a2c11... (D-004, D-047)
-│   └── tmp/               i file a meta' scrittura. In condizioni normali e'
-│                       vuota: quello che ci resta e' un caricamento
-│                       interrotto, e non lo riferisce nessuno
+│   ├── tmp/               i file a meta' scrittura. In condizioni normali e'
+│   │                   vuota: quello che ci resta e' un caricamento
+│   │                   interrotto, e non lo riferisce nessuno
+│   └── posta/             la cartella della posta (MAIL_LOCAL_PATH): i .eml
+│                       da leggere, piu' elaborate/ e quarantena/ dove
+│                       finiscono dopo l'archiviazione
 └── logs/                  registro applicativo rotativo (NON in git)
 ```
 
@@ -244,7 +247,18 @@ Dove mettere una cosa nuova:
   Python, nella rotta o nel servizio, e arriva al template gia' pronto. Un
   template che trasforma un valore in un'etichetta contiene una regola, e le
   regole non si provano con un test se stanno dentro l'HTML
-  (`docs/GUIDA_STILE.md`, sezione 5).
+  (`docs/GUIDA_STILE.md`, sezione 5);
+- **una sorgente di posta nuova** (Microsoft Graph, IMAP, una cartella su un
+  altro disco) → una classe che rispetta l'interfaccia `FonteEmail` in
+  `app/services/mail_source.py`, e una riga in `fonte_configurata()`. Sono
+  quattro metodi e sono tutti quelli che servono; il motore di
+  `app/services/emails.py` non va toccato (D-076);
+- **una regola su come si legge un messaggio** (un prefisso di risposta in
+  piu', un modo diverso di scomporre l'oggetto) → `app/services/email_parsing.py`,
+  che **non tocca il database**: sono funzioni pure sui byte di un `.eml`, e si
+  provano una per una senza PostgreSQL. Nessuna di loro solleva mai: un file
+  rotto produce un risultato povero e finisce in quarantena, non un'eccezione
+  che ferma l'acquisizione di tutti gli altri.
 
 ## 5. Convenzioni di codice
 
@@ -339,6 +353,17 @@ Tutti dalla radice del progetto (`aurora/`), con l'ambiente virtuale attivo:
 - Cancellare voci vecchie del registro "per fare spazio". La politica di
   conservazione e' l'archiviazione, che **copia** e non sposta
   (`scripts/archivia_audit.py`, D-065).
+- **Scrivere una regola di accesso nuova per la posta.** Un messaggio si vede
+  con la stessa identica regola di un documento: e' un documento di
+  classificazione **"Corrispondenza"** nel progetto della versione a cui e'
+  attaccato (D-069). Non c'e' nessuna colonna in piu' e nessuna seconda
+  matrice: c'e' una riga di `classifications` che si amministra dalla pagina di
+  sempre.
+- **Far fallire l'archiviazione di un messaggio perche' il file e' brutto.** Un
+  `.eml` troncato, senza intestazioni, con la data illeggibile o con dentro dei
+  byte a zero va archiviato lo stesso e messo in quarantena, con scritto
+  perche'. "Mai scartare, mai bloccarsi": un messaggio che Aurora non capisce e'
+  comunque un messaggio che l'azienda ha ricevuto (D-070, D-074, D-075).
 - Mettere una password o un indirizzo di server dentro un file `.py`.
 - Modificare a mano una migrazione gia' applicata in produzione: se ne scrive
   una nuova.

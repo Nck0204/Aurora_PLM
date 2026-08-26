@@ -1,13 +1,14 @@
 # Modello dati — rilascio R1
 
-Ultimo aggiornamento: **26 agosto 2026**, sessione 8 (nessuna tabella nuova:
-`phases` prende due colonne e `phase_transitions` quattro, piu' una rinominata
-- vedi la sezione 4.7).
+Ultimo aggiornamento: **26 agosto 2026**, sessione 10 (una tabella nuova,
+`email_reasons`, e due colonne su `email_messages` - vedi la sezione 4.8).
 
-Questo file descrive le diciannove tabelle create dalla migrazione
-`897359b06e69_modello_dati_r1.py`, con le colonne aggiunte dalle due migrazioni
-successive: `b1c4e2af7d30` (sessione 7) e `c7a3f19b52e4` (sessione 8). Una
-tabella per file in `app/models/`, una classe per tabella.
+Questo file descrive le **venti** tabelle di Aurora: le diciannove create dalla
+migrazione `897359b06e69_modello_dati_r1.py` piu' `email_reasons`, arrivata con
+la posta della sessione 10. Ci sono anche le colonne aggiunte dalle migrazioni
+successive alla prima: `b1c4e2af7d30` (sessione 7), `c7a3f19b52e4` (sessione 8),
+`e2f5a91c73d8` (sessione 9) e `d4b8607e15a2` (sessione 10). Una tabella per file
+in `app/models/`, una classe per tabella.
 
 Come si legge la parte di dettaglio:
 
@@ -106,7 +107,7 @@ giorno della chiusura.
 
 ---
 
-## 3. Le diciannove tabelle, una riga per ciascuna
+## 3. Le venti tabelle, una riga per ciascuna
 
 | # | Tabella | A che cosa serve |
 |---|---|---|
@@ -128,6 +129,7 @@ giorno della chiusura.
 | 16 | `phase_transitions` | La storia dei passaggi di fase di un progetto: da dove, a dove, chi ha chiesto, chi ha approvato, perche'. |
 | 17 | `email_messages` | La posta archiviata e collegata a una versione di prodotto, oppure in quarantena in attesa di essere smistata. |
 | 18 | `email_attachments` | Gli allegati staccati dai messaggi e depositati nell'archivio per impronta, come tutti gli altri file. |
+| 18b | `email_reasons` | I motivi ammessi nella terza parentesi dell'oggetto di un messaggio (SPECS, RFQ, QUOTE...). Si amministrano dall'interfaccia, non da un file di configurazione (D-071). |
 | 19 | `audit_logs` | Il registro di chi ha fatto che cosa, su quale oggetto, quando e da quale indirizzo. Si scrive e non si tocca piu': dalla sessione 9 il divieto lo fanno rispettare i permessi di PostgreSQL, e una catena di impronte rende visibile chi lo aggirasse. |
 
 ---
@@ -453,6 +455,31 @@ e' esattamente quello che e' successo.
 | `body_text` | text | Corpo in testo semplice, per la ricerca a parole. |
 | `assignment_state` | `email_assignment_state` | `NN` `IX`. `automatica`, `manuale`, `quarantena`. |
 | `assigned_by_id` | UUID | -> `users.id`. Chi ha smistato a mano. |
+| `quarantine_reason` | varchar(200) | Perche' il messaggio non e' stato attribuito, in italiano, scritto quando e' successo (migrazione `d4b8607e15a2`). **Resta scritta anche dopo l'assegnazione a mano**: e' la storia di come il messaggio e' arrivato dov'e'. |
+| `source_reference` | varchar(400) | Da quale file e' arrivato, come lo chiama la fonte che l'ha letto (`19-quarantena-filo-1.eml`). Serve a ritrovarlo nella cartella `elaborate/` quando si indaga. Nulla per i messaggi archiviati prima della sessione 10. |
+
+**Che cosa c'e' dentro `subject_parsed`.** E' un dato ricavato come
+`products.code_parts`: serve a spiegare in pagina perche' un messaggio e'
+finito dov'e', e ricalcolarlo domani con regole diverse non farebbe danni.
+
+| Chiave | Che cosa dice |
+|---|---|
+| `oggetto_pulito` | l'oggetto senza i prefissi di risposta |
+| `prefissi` | quelli tolti, nell'ordine (`["Re", "Fwd"]`) |
+| `formattato` | vero se l'oggetto rispettava la convenzione delle parentesi |
+| `via` | quale delle quattro strade ha attribuito il messaggio: `subject_format`, `subject_text`, `thread`, `manual` |
+| `codice`, `versione`, `motivo` | quello che c'era scritto nelle tre parentesi |
+| `motivo_riconosciuto` | falso quando la sigla non e' fra quelle di `email_reasons`. **Non impedisce l'attribuzione** (D-071) |
+| `difetti` | l'elenco in italiano di quello che non tornava leggendo il file |
+| `identificativo_costruito` | vero quando il `Message-ID` se l'e' inventato Aurora (D-074) |
+
+**L'identificativo di un messaggio si scrive senza le parentesi angolari.**
+L'intestazione dice `<abc@host>`, la colonna contiene `abc@host`: le parentesi
+appartengono all'intestazione, non all'identificativo, e lasciarle dentro a
+meta' dei valori spezzerebbe il confronto con `references` di un altro
+messaggio. Chi non ne dichiara nessuno ne riceve uno ricavato dall'impronta del
+file (D-074), che e' stabile e rende ripetibile l'acquisizione anche per i file
+rotti.
 
 #### `email_attachments` — gli allegati
 
@@ -468,6 +495,40 @@ Un allegato **non** e' un documento di progetto. Se merita di diventarlo,
 qualcuno lo promuove creando un `document`: e' un gesto voluto, non
 automatico, perche' un allegato e' quello che ha mandato qualcun altro mentre
 un documento e' quello di cui l'azienda risponde.
+
+#### `email_reasons` — i motivi ammessi nell'oggetto
+
+| Colonna | Tipo | Note |
+|---|---|---|
+| `code` | varchar(30) | `NN` `UQ`. La sigla come si scrive nella terza parentesi: `SPECS`, `RFQ`, `QUOTE`. Sempre in maiuscolo, normalizzata dal servizio. |
+| `description` | text | A che cosa serve quel motivo. Si legge nella pagina che li amministra e basta. |
+| `sort_order` | integer | `NN`. Ordine negli elenchi. |
+| `is_active` | boolean | `NN`, vero di partenza. Falso per i motivi messi da parte: smettono di essere riconosciuti, ma i messaggi che ce l'hanno addosso continuano a mostrarli. |
+
+Arrivata con la migrazione `d4b8607e15a2`, che ci mette dentro le otto voci di
+partenza. **Si amministra dall'interfaccia** (`/posta/motivi`) e non da un file
+di `config/`: chi la cambia e' chi usa Aurora, dal browser, e ogni cambiamento
+lascia una riga nel registro delle operazioni - due cose che un file di testo
+non sa fare (D-071).
+
+**Il motivo non decide niente.** Un messaggio con una sigla che non e' in
+elenco viene attribuito lo stesso: quello che conta e' il codice prodotto. La
+sigla sconosciuta resta scritta in `email_messages.subject_parsed`, cosi' chi
+amministra si accorge che ne serve una nuova.
+
+**Nessuna colonna punta a questa tabella.** Il motivo di un messaggio e' una
+copia dentro `subject_parsed`, scritta il giorno in cui il messaggio e'
+arrivato: e' il motivo per cui il codice di un motivo si puo' correggere senza
+rompere niente.
+
+#### La classificazione "Corrispondenza"
+
+Non e' una tabella: e' una **riga di `classifications`**, creata dalla stessa
+migrazione insieme alle sue tre caselle di `permission_rules`. E' con lei che si
+decide chi puo' vedere un messaggio di posta: un messaggio e' trattato come un
+documento di classificazione "Corrispondenza" nel progetto aperto sulla versione
+a cui e' attaccato (D-069). Non nasce nessuna regola di accesso nuova, e non
+c'e' nessuna colonna in piu' da nessuna parte.
 
 ### 4.9 Tracciabilita'
 

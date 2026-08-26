@@ -43,6 +43,7 @@ from app.routers import audit as router_audit
 from app.routers import auth as router_auth
 from app.routers import customers as router_customers
 from app.routers import documents as router_documents
+from app.routers import emails as router_emails
 from app.routers import home as router_home
 from app.routers import permissions as router_permissions
 from app.routers import phases as router_phases
@@ -437,6 +438,7 @@ app.include_router(router_home.router)
 app.include_router(router_auth.router)
 app.include_router(router_customers.router)
 app.include_router(router_documents.router)
+app.include_router(router_emails.router)
 app.include_router(router_products.router)
 app.include_router(router_versions.router)
 app.include_router(router_projects.router)
