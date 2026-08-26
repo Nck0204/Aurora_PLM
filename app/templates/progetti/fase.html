@@ -1,0 +1,259 @@
+{# ===========================================================================
+   IL PASSAGGIO DI FASE DI UN PROGETTO.
+
+   E' UNA PAGINA E NON UNA FINESTRA MODALE, per la stessa ragione della
+   conferma del ciclo di vita: una finestra ha bisogno di JavaScript per
+   aprirsi, e se non si aprisse il passaggio partirebbe senza che nessuno
+   abbia letto niente (docs/GUIDA_STILE.md).
+
+   QUELLO CHE SI VEDE DIPENDE DA QUELLO CHE SI PUO' FARE, e la risposta arriva
+   gia' decisa dalla rotta (puo_avanzare, puo_richiedere): qui non si guarda
+   nessun ruolo (D-051).
+
+     - chi governa il progetto vede due moduli: avanza e torna indietro;
+     - chi ci lavora ne vede uno solo, quello della richiesta;
+     - chi governa il progetto e ha una richiesta in attesa la vede in cima,
+       perche' e' la cosa che qualcun altro sta aspettando.
+
+   LA MOTIVAZIONE E' SEMPRE OBBLIGATORIA. Non e' burocrazia: lo storico delle
+   fasi e' l'unico posto in cui, fra due anni, si potra' leggere perche' un
+   progetto e' andato avanti a marzo e non a febbraio.
+   =========================================================================== #}
+{% extends "base.html" %}
+
+{% from "components/campi.html" import area_testo, tendina, csrf %}
+{% from "components/pulsanti.html" import pulsante, pulsante_collegamento %}
+{% from "components/riquadro.html" import riquadro %}
+{% from "components/avanzamento.html" import avanzamento as barra_fasi %}
+{% from "components/avvisi.html" import avviso %}
+
+{% block titolo %}Passaggio di fase{% endblock %}
+{% block sezione %}Progetti{% endblock %}
+
+{% block contenuto %}
+
+<div class="testata">
+    <div>
+        <h1>Passaggio di fase</h1>
+        <p class="sottotitolo">
+            <span class="mono">{{ prodotto.code }}</span>
+            versione {{ versione.version_number }} &middot;
+            {% if progetto.current_phase %}
+                adesso in <strong>{{ progetto.current_phase.name }}</strong>
+                {%- if in_corso_da %}, da {{ in_corso_da }}{% endif %}
+            {% else %}
+                non ancora entrato in nessuna fase
+            {% endif %}
+        </p>
+    </div>
+    <div class="testata-azioni">
+        {{ pulsante_collegamento("Torna al progetto", "/progetti/" ~ progetto.id,
+                                 icona_nome="progetti") }}
+    </div>
+</div>
+
+{# L'avviso lo compone questa pagina e non base.html - per questo la rotta
+   passa "problema" e non "errore" - perche' dentro ci va il pulsante del
+   rimedio: un divieto che non dice come si fa invece e' un divieto che fa
+   telefonare qualcuno. #}
+{% if problema %}
+    {% call avviso("", variante="errore", titolo="Il passaggio non si puo' fare") %}
+        <p>{{ problema }}</p>
+        {% if rimedio %}
+        {# Il collegamento al rimedio e' la meta' utile del divieto: chi legge
+           "da qui non si torna indietro" ha bisogno di sapere che cosa si fa
+           invece, e di poterlo fare senza cercarlo. #}
+        <div class="fila-pulsanti margine-sopra">
+            {{ pulsante_collegamento(etichetta_rimedio, rimedio,
+                                     variante="primario",
+                                     icona_nome="prodotti") }}
+        </div>
+        {% endif %}
+    {% endcall %}
+{% endif %}
+
+{% call riquadro("A che punto siamo") %}
+    {% if avanzamento %}
+        {{ barra_fasi(avanzamento) }}
+    {% else %}
+        <p class="campo-aiuto">
+            Il modello di fasi di questo progetto non ha nessuna fase.
+        </p>
+    {% endif %}
+{% endcall %}
+
+<div class="colonna-stretta">
+
+{# --- La richiesta che aspetta una risposta --------------------------------
+   Sta in cima perche' e' l'unica cosa in questa pagina che qualcun altro sta
+   aspettando. #}
+{% if richiesta_in_attesa and puo_avanzare %}
+    <div class="margine-sopra">
+    <form method="post"
+          action="/progetti/{{ progetto.id }}/richieste/{{ richiesta_in_attesa.id }}"
+          class="modulo">
+        {{ csrf(request) }}
+
+        {% call riquadro("Una richiesta aspetta la tua risposta",
+                         piede=pulsante("Approva il passaggio",
+                                        variante="primario",
+                                        icona_nome="spunta",
+                                        nome="esito", valore="approva")
+                               ~ pulsante("Respingi",
+                                          variante="pericolo",
+                                          icona_nome="errore",
+                                          nome="esito", valore="respingi")) %}
+
+            <p>
+                <strong>{{ richiesta_in_attesa.requested_by.full_name }}</strong>
+                chiede di passare a
+                <strong>{{ richiesta_in_attesa.to_phase.name }}</strong>.
+            </p>
+
+            {% if richiesta_in_attesa.reason %}
+            <p class="citazione margine-sopra">
+                {{ richiesta_in_attesa.reason }}
+            </p>
+            {% endif %}
+
+            {{ area_testo("Motivazione della tua decisione", "motivazione",
+                          valore=motivazione, righe=3, obbligatorio=true,
+                          aiuto="La legge chi ha chiesto il passaggio, insieme "
+                                "all'esito. Vale sia se approvi sia se "
+                                "respingi.") }}
+
+        {% endcall %}
+    </form>
+    </div>
+{% endif %}
+
+{# --- Avanzare: chi governa il progetto ----------------------------------- #}
+{% if puo_avanzare %}
+    <div class="margine-sopra">
+    {% if prossima_fase %}
+        <form method="post" action="/progetti/{{ progetto.id }}/fase/avanza"
+              class="modulo">
+            {{ csrf(request) }}
+
+            {% call riquadro("Avanza alla fase successiva",
+                             piede=pulsante("Passa a «" ~ prossima_fase.name ~ "»",
+                                            variante="primario")) %}
+                <p>
+                    Il progetto passera' a
+                    <strong>{{ prossima_fase.name }}</strong>.
+                    {% if prossima_fase.closes_project %}
+                        <strong>E' la fase che chiude il progetto</strong>: da
+                        quel momento si potra' soltanto leggere, e a
+                        rimetterci le mani sara' solo chi ha il ruolo di
+                        creatore.
+                    {% elif prossima_fase.blocks_return %}
+                        Da questa fase <strong>non si torna piu' indietro</strong>:
+                        se poi servira' rimettere le mani al progetto, si
+                        creera' una versione nuova del prodotto.
+                    {% endif %}
+                </p>
+
+                {{ area_testo("Perche' il progetto puo' avanzare", "motivazione",
+                              valore=motivazione, righe=3, obbligatorio=true,
+                              id="motivazione_avanza",
+                              aiuto="Resta nello storico delle fasi. Fra due "
+                                    "anni sara' l'unica risposta a «perche' e' "
+                                    "andato avanti quel giorno?».") }}
+            {% endcall %}
+        </form>
+    {% else %}
+        {{ avviso("Il progetto e' nell'ultima fase del suo percorso: da qui "
+                  "non si avanza piu'.",
+                  variante="informazione",
+                  titolo="Non c'e' una fase successiva") }}
+    {% endif %}
+    </div>
+{% endif %}
+
+{# --- Chiedere: chi lavora nel progetto ----------------------------------- #}
+{% if puo_richiedere %}
+    <div class="margine-sopra">
+    {% if richiesta_in_attesa %}
+        {{ avviso("C'e' gia' una richiesta in attesa su questo progetto, "
+                  "chiesta da " ~ richiesta_in_attesa.requested_by.full_name
+                  ~ ". Il project manager la vede nel suo cruscotto.",
+                  variante="informazione",
+                  titolo="Una richiesta e' gia' in attesa") }}
+    {% elif prossima_fase %}
+        <form method="post" action="/progetti/{{ progetto.id }}/fase/richiedi"
+              class="modulo">
+            {{ csrf(request) }}
+
+            {% call riquadro("Chiedi il passaggio alla fase successiva",
+                             piede=pulsante("Chiedi il passaggio a «"
+                                            ~ prossima_fase.name ~ "»",
+                                            variante="primario")) %}
+                <p>
+                    La richiesta <strong>non cambia niente da sola</strong>:
+                    resta in attesa e compare al project manager
+                    ({{ progetto.project_manager.full_name }}), che la approva
+                    o la respinge. In tutti e due i casi ne vedrai l'esito
+                    sulla tua pagina iniziale.
+                </p>
+
+                {{ area_testo("Perche' chiedi il passaggio", "motivazione",
+                              valore=motivazione, righe=3, obbligatorio=true,
+                              id="motivazione_richiedi",
+                              aiuto="E' quello che leggera' il project manager "
+                                    "per decidere.") }}
+            {% endcall %}
+        </form>
+    {% else %}
+        {{ avviso("Il progetto e' nell'ultima fase del suo percorso: non c'e' "
+                  "niente da chiedere.",
+                  variante="informazione",
+                  titolo="Non c'e' una fase successiva") }}
+    {% endif %}
+    </div>
+{% endif %}
+
+{# --- Tornare indietro: solo chi governa il progetto ---------------------- #}
+{% if puo_avanzare %}
+    <div class="margine-sopra">
+    {% if fasi_precedenti %}
+        <form method="post" action="/progetti/{{ progetto.id }}/fase/indietro"
+              class="modulo">
+            {{ csrf(request) }}
+
+            {% call riquadro("Torna a una fase precedente",
+                             piede=pulsante("Riporta il progetto indietro",
+                                            variante="pericolo")) %}
+                <p class="campo-aiuto">
+                    Un passo indietro e' un fatto come tutti gli altri: resta
+                    nello storico con il tuo nome e la tua motivazione.
+                    {% if progetto.current_phase and progetto.current_phase.blocks_return %}
+                        Da <strong>{{ progetto.current_phase.name }}</strong>
+                        pero' non si torna indietro: premendo qui leggerai
+                        perche' e che cosa si fa invece.
+                    {% endif %}
+                </p>
+
+                {{ tendina("A quale fase", "destinazione",
+                           opzioni=fasi_precedenti, obbligatorio=true,
+                           vuoto="Scegli la fase") }}
+
+                {{ area_testo("Perche' il progetto deve tornare indietro",
+                              "motivazione", valore=motivazione, righe=3,
+                              obbligatorio=true, id="motivazione_indietro",
+                              aiuto="Un passo indietro senza una ragione "
+                                    "scritta e' la cosa piu' difficile da "
+                                    "spiegare fra un anno.") }}
+            {% endcall %}
+        </form>
+    {% else %}
+        {{ avviso("Il progetto e' nella prima fase del suo percorso: non c'e' "
+                  "nessuna fase precedente a cui tornare.",
+                  variante="informazione",
+                  titolo="Non si torna indietro dalla prima") }}
+    {% endif %}
+    </div>
+{% endif %}
+
+</div>
+
+{% endblock %}

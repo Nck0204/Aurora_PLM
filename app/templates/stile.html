@@ -35,6 +35,7 @@
 {% from "components/impaginazione.html" import impaginazione %}
 {% from "components/schede.html" import schede, scheda, schede_collegamento %}
 {% from "components/avanzamento.html" import avanzamento %}
+{% from "components/griglia_fasi.html" import griglia_fasi %}
 {% from "components/descrizione.html" import descrizione, voce %}
 {% from "components/area_file.html" import area_file %}
 {% from "components/barra_caricamento.html" import barra_caricamento %}
@@ -192,7 +193,7 @@
                          "clienti", "diagnostica", "stile", "casa", "cerca", "esci",
                          "chiave", "piu", "spunta", "attenzione", "errore",
                          "informazione", "carica", "scarica", "ripristina",
-                         "cartella-vuota", "permessi", "freccia-su",
+                         "cartella-vuota", "permessi", "fasi", "freccia-su",
                          "freccia-giu", "freccia-sinistra",
                          "freccia-destra"] %}
     <div class="campioni">
@@ -754,6 +755,33 @@
         ]) }}
     {% endcall %}
     </div>
+
+    <h2>Griglia delle fasi di un modello</h2>
+    <p class="testo-tenue">
+        Il modulo con cui si scrive un modello di fasi. Righe fisse e non un
+        pulsante "aggiungi fase": quel pulsante avrebbe bisogno di JavaScript,
+        e senza JavaScript il modulo non si compilerebbe piu'. Le righe vuote
+        si saltano e il numero d'ordine lo mette il programma.
+    </p>
+    <p class="testo-tenue">
+        Le etichette dei campi ci sono ma sono nascoste alla vista: dieci volte
+        "Nome della fase" renderebbe illeggibile proprio quello che si vuole
+        leggere. Le due spunte portano il numero della riga dentro il nome del
+        campo, perche' una casella non segnata il browser non la invia.
+    </p>
+
+    {% call riquadro("Le fasi, in ordine di attraversamento") %}
+        {{ griglia_fasi([
+            {"nome": "Bozza", "descrizione": "Schema di massima.",
+             "blocca_ritorno": false, "chiude_progetto": false},
+            {"nome": "Montaggio", "descrizione": "Costruzione del prototipo.",
+             "blocca_ritorno": true, "chiude_progetto": false},
+            {"nome": "Consegnato", "descrizione": "Il progetto si chiude.",
+             "blocca_ritorno": false, "chiude_progetto": true},
+            {"nome": "", "descrizione": "",
+             "blocca_ritorno": false, "chiude_progetto": false},
+        ]) }}
+    {% endcall %}
 
     <h2>Schede</h2>
     <p class="testo-tenue">

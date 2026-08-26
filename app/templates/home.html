@@ -17,7 +17,7 @@
 
 {% from "components/campi.html" import csrf %}
 {% from "components/pulsanti.html" import pulsante, pulsante_collegamento %}
-{% from "components/avvisi.html" import notifica %}
+{% from "components/avvisi.html" import avviso, notifica %}
 {% from "components/riquadro.html" import riquadro %}
 {% from "components/descrizione.html" import descrizione, voce %}
 {% from "components/stato.html" import etichetta, etichetta_ciclo_vita %}
@@ -57,6 +57,68 @@
     </div>
     {% endif %}
 </div>
+
+{# --- Quello che aspetta te ------------------------------------------------
+   In cima a tutto, prima dei progetti: sono le due cose che qualcuno sta
+   aspettando, e una pagina iniziale che le mettesse in fondo sarebbe una
+   pagina iniziale in cui non si guarda mai in fondo.
+
+   Sono avvisi in linea e non notifiche temporanee: su queste si deve agire, e
+   le notifiche spariscono (docs/GUIDA_STILE.md). #}
+{% for richiesta in richieste_da_decidere %}
+    {% call avviso("", variante="attenzione",
+                   titolo="Una richiesta di passaggio aspetta la tua risposta") %}
+        <p>
+            <strong>{{ richiesta.requested_by.full_name }}</strong>
+            chiede di portare
+            <span class="mono">{{ richiesta.project.product_version.product.code }}</span>
+            a <strong>{{ richiesta.to_phase.name }}</strong>,
+            dal {{ richiesta.created_at.strftime("%d/%m/%Y") }}.
+        </p>
+        {% if richiesta.reason %}
+        <p class="citazione margine-sopra">{{ richiesta.reason }}</p>
+        {% endif %}
+        <div class="fila-pulsanti margine-sopra">
+            {{ pulsante_collegamento("Approva o respingi",
+                                     "/progetti/" ~ richiesta.project_id ~ "/fase",
+                                     variante="primario", icona_nome="fasi") }}
+        </div>
+    {% endcall %}
+{% endfor %}
+
+{# Titolo, frase e tinta arrivano gia' scelti dal servizio delle fasi: la
+   differenza fra "e' stata approvata" e "ha approvato" e' una regola della
+   lingua, e le regole non stanno dentro l'HTML. #}
+{% for esito in esiti_da_leggere %}
+    {% call avviso("", variante=esito.variante, titolo=esito.titolo) %}
+        <p>
+            {{ esito.frase }}
+            Il progetto e'
+            <span class="mono">{{ esito.passaggio.project.product_version.product.code }}</span>
+            versione {{ esito.passaggio.project.product_version.version_number }}.
+        </p>
+        {% if esito.passaggio.decision_reason %}
+        <p class="citazione margine-sopra">
+            {{ esito.passaggio.decision_reason }}
+        </p>
+        {% endif %}
+        <div class="fila-pulsanti margine-sopra">
+            {{ pulsante_collegamento("Apri il progetto",
+                                     "/progetti/" ~ esito.passaggio.project_id,
+                                     icona_nome="progetti") }}
+            {# "Ho letto" e' un POST perche' cambia i dati: segna la notifica
+               come vista, e da quel momento non compare piu'. Il campo
+               nascosto dice dove tornare, che e' questa stessa pagina. #}
+            <form method="post"
+                  action="/progetti/{{ esito.passaggio.project_id }}/esiti/{{ esito.passaggio.id }}"
+                  class="modulo-in-linea">
+                {{ csrf(request) }}
+                <input type="hidden" name="ritorno" value="/">
+                {{ pulsante("Ho letto", icona_nome="spunta") }}
+            </form>
+        </div>
+    {% endcall %}
+{% endfor %}
 
 {% if totale_progetti %}
 

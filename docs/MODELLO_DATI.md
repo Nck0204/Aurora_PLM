@@ -1,11 +1,13 @@
 # Modello dati — rilascio R1
 
-Ultimo aggiornamento: **25 agosto 2026**, sessione 6 (nessuna tabella
-cambiata: aggiornate le sezioni 4.5, 4.6 e 7).
+Ultimo aggiornamento: **26 agosto 2026**, sessione 8 (nessuna tabella nuova:
+`phases` prende due colonne e `phase_transitions` quattro, piu' una rinominata
+- vedi la sezione 4.7).
 
 Questo file descrive le diciannove tabelle create dalla migrazione
-`897359b06e69_modello_dati_r1.py`. Una tabella per file in `app/models/`, una
-classe per tabella.
+`897359b06e69_modello_dati_r1.py`, con le colonne aggiunte dalle due migrazioni
+successive: `b1c4e2af7d30` (sessione 7) e `c7a3f19b52e4` (sessione 8). Una
+tabella per file in `app/models/`, una classe per tabella.
 
 Come si legge la parte di dettaglio:
 
@@ -230,7 +232,12 @@ Vincolo di unicita' su `(product_id, version_number)`: due volte la "versione
 | `current_phase_id` | UUID | `IX` -> `phases.id`. Nullo solo fra la creazione del progetto e l'ingresso nella prima fase. |
 | `standards` | jsonb | `NN`, `[]` di partenza. Le norme applicabili: partono da quelle del modello e si possono allargare o restringere sul singolo progetto. |
 | `opened_at` | timestamptz | `NN` |
-| `closed_at` | timestamptz | Un progetto si chiude, non si cancella. |
+| `closed_at` | timestamptz | Un progetto si chiude, non si cancella. Lo valorizza l'ingresso nella fase con `closes_project`; un ritorno a una fase precedente lo azzera, riaprendo il progetto (D-058). |
+
+**Un progetto chiuso e' in sola lettura** per tutti tranne il creatore: resta
+visibile a chi lo vedeva - un archivio si consulta - ma non accetta piu'
+documenti nuovi, cambi di stato o passaggi di fase. La regola sta in
+`permissions.py` e in nessun altro posto (D-058).
 
 #### `assignments` — chi lavora a che cosa
 
@@ -383,10 +390,19 @@ approvazioni registrate sarebbero riferite a passaggi mai avvenuti.
 | `name` | varchar(80) | `NN` |
 | `sort_order` | integer | `NN`. Ordine di attraversamento. |
 | `description` | text | |
+| `blocks_return` | boolean | `NN`, falso di partenza. Da questa fase non si torna a una precedente (D-055, migrazione `c7a3f19b52e4`). |
+| `closes_project` | boolean | `NN`, falso di partenza. Entrando in questa fase, `projects.closed_at` viene valorizzato. Ce n'e' una sola per modello, ed e' l'ultima. |
 
 Unicita' su `(phase_template_id, sort_order)` e su `(phase_template_id, name)`.
 Due modelli che hanno entrambi una fase chiamata "Concept" hanno due righe
 distinte: e' la conseguenza dell'immutabilita' dei modelli.
+
+**Le due colonne booleane sono la parte importante di questa tabella.** Le fasi
+sono dati e non codice: il programma non sa come si chiamano, sa che una fase
+con `blocks_return` blocca il ritorno e una con `closes_project` chiude il
+progetto. Senza di loro, "da Development non si torna indietro" sarebbe un `if`
+sul nome di una fase, e rinominare una fase sarebbe una modifica al programma
+(D-055). C'e' un test che legge i sorgenti e lo verifica.
 
 #### `phase_transitions` — i passaggi
 
@@ -395,13 +411,27 @@ distinte: e' la conseguenza dell'immutabilita' dei modelli.
 | `project_id` | UUID | `NN` `IX` -> `projects.id` |
 | `from_phase_id` | UUID | -> `phases.id`. Nullo per il primo passaggio: prima non c'era nessuna fase da cui uscire. |
 | `to_phase_id` | UUID | `NN` -> `phases.id` |
-| `requested_by_id` | UUID | `NN` -> `users.id` |
-| `approved_by_id` | UUID | -> `users.id`. Nullo finche' il passaggio e' solo richiesto. |
-| `reason` | text | |
+| `state` | `phase_transition_state` | `NN` `IX`. `richiesta`, `approvata`, `respinta`. Di partenza `approvata`: un passaggio scritto da chi lo puo' fare e' gia' avvenuto. |
+| `requested_by_id` | UUID | `NN` `IX` -> `users.id`. Chi ha chiesto, o chi ha fatto. |
+| `decided_by_id` | UUID | -> `users.id`. Chi ha risposto: **anche chi ha respinto** (D-057). Nullo finche' il passaggio e' solo richiesto. |
+| `decided_at` | timestamptz | Quando la decisione e' stata presa. **Non e' `created_at`**: una richiesta scritta lunedi' e approvata giovedi' ha cambiato la fase giovedi', ed e' su questa data che si misura quanto e' durata ciascuna fase. |
+| `reason` | text | Il motivo del passaggio, scritto da chi lo chiede. |
+| `decision_reason` | text | Il motivo dell'approvazione o del rifiuto, scritto da chi decide. |
+| `seen_at` | timestamptz | Quando chi ha chiesto ha letto l'esito. Finche' e' nullo, l'esito compare sul suo cruscotto: e' la notifica dentro l'applicazione, in attesa della tabella delle notifiche della sessione 10 (D-060). |
 
-Registro: le righe si aggiungono, non si modificano e non si tolgono. Messe in
-fila per data raccontano tutta la storia del progetto, compresi i passi
-indietro.
+Registro: le righe si aggiungono, non si tolgono. L'unica cosa che cambia dopo
+la scrittura e' l'esito di una riga ancora `richiesta`, che diventa `approvata`
+o `respinta` quando il project manager la guarda: la domanda non si riscrive,
+le si mette accanto la risposta.
+
+Messe in fila per data raccontano tutta la storia del progetto, compresi i
+passi indietro e **le richieste respinte**, che non hanno cambiato niente e si
+tengono lo stesso: un progetto fermo per due settimane ha una ragione, e quella
+riga e' l'unica che la conserva.
+
+Chi chiede e chi decide sono due colonne diverse anche quando sono la stessa
+persona: un project manager che avanza per conto suo compare in tutte e due, ed
+e' esattamente quello che e' successo.
 
 ### 4.8 Posta
 
@@ -467,7 +497,7 @@ l'unico modo di rimettere i fatti nell'ordine giusto.
 
 ## 5. I tipi enumerati
 
-Sei tipi enumerati veri di PostgreSQL. Il nome della classe Python e' in
+Sette tipi enumerati veri di PostgreSQL. Il nome della classe Python e' in
 inglese, come tutti gli identificatori; il **valore** e' in italiano perche'
 non e' un identificatore ma un dato scritto nel database e mostrato all'utente.
 Stanno tutti in `app/models/enums.py`.
@@ -480,6 +510,7 @@ Stanno tutti in `app/models/enums.py`.
 | `project_role` | `project_manager`, `ingegnere`, `lettore` | `assignments.project_role`, `permission_rules.project_role` |
 | `document_state` | `bozza`, `in_verifica`, `rilasciato`, `superato` | `documents.state` |
 | `email_assignment_state` | `automatica`, `manuale`, `quarantena` | `email_messages.assignment_state` |
+| `phase_transition_state` | `richiesta`, `approvata`, `respinta` | `phase_transitions.state` (sessione 8, migrazione `c7a3f19b52e4`) |
 
 Aggiungere o togliere un valore vuole una migrazione, non una modifica di
 `enums.py`: il tipo vive nel database. Vedi anche il commento in cima alla
@@ -568,6 +599,20 @@ chi parte da li' non se li puo' dimenticare.
 | Dove | Come |
 |---|---|
 | Documenti | `documents._visibili()`: toglie i ritirati **e** applica `permissions.filtro_visibilita()`. E' l'unico punto in cui i due filtri vengono messi. |
+
+Aggiornamento della sessione 8. Il filtro nuovo e' **il progetto chiuso**, che
+non toglie righe da nessun elenco - un progetto chiuso si continua a vedere,
+D-058 - ma chiude i permessi di scrittura su tutto quello che contiene. Segue
+lo stesso principio delle volte precedenti, con una differenza che vale la pena
+di scrivere: **non e' un filtro di elenco, e' una condizione dentro la regola**.
+Sta dentro `permissions.puo()` e dentro `permissions.filtro_documenti()`, cioe'
+nei due punti che sono gia' la strada obbligata di ogni domanda sui permessi,
+e non in una funzione nuova che qualcuno dovrebbe ricordarsi di chiamare.
+
+| Dove | Come |
+|---|---|
+| Progetti | `permissions._puo_sul_progetto()`: `closed_at` valorizzato chiude tutto quello che non e' "vedere". |
+| Documenti di un progetto chiuso | `permissions._permessi_su_classificazione()` per la scheda, `permissions.filtro_documenti()` per gli elenchi. Le due strade dicono la stessa cosa, come sempre. |
 | Documenti ritirati | `documents.documenti_ritirati()`, che non passa da `_visibili()` apposta: e' la sezione da cui si ripristinano, ed e' l'unico posto in cui compaiono. La rotta che la usa dichiara `Depends(richiedi_creatore)`, che e' il lucchetto vero. |
 
 E' sempre il modello di D-032 - **un controllo solo sulla strada obbligata** -

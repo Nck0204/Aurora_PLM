@@ -210,6 +210,10 @@ Dove mettere una cosa nuova:
   Per gli elenchi c'e' la stessa regola scritta come condizione SQL,
   `filtro_documenti()` e `filtro_progetti()`: il filtro va
   nell'interrogazione, mai nel template, e vale **anche per i conteggi**;
+- **una regola che riguarda una fase in particolare** ("da questa non si torna
+  indietro", "questa chiude il progetto") → una **colonna di `phases`**, con la
+  sua migrazione, e una spunta nel modulo che crea il modello. Mai un confronto
+  sul nome della fase: le fasi sono dati e si cambiano dall'interfaccia (D-055);
 - **una regola che l'azienda potrebbe cambiare** (come si legge un codice
   prodotto, quali sono i tipi di documento) → un file in `config/`, con il suo
   percorso dichiarato in `.env`.
@@ -298,6 +302,15 @@ Tutti dalla radice del progetto (`aurora/`), con l'ambiente virtuale attivo:
 - Confrontare due stati del ciclo di vita fuori da `app/services/lifecycle.py`:
   i grafi delle transizioni stanno li' e in nessun altro posto. Sono **due**:
   quello di una versione di prodotto e quello di un documento (D-042, D-044).
+  Le fasi di un progetto **non sono il terzo grafo** e stanno in
+  `app/services/phases.py`: non sono un elenco chiuso scritto in Python, sono
+  righe di una tabella in un ordine che sceglie chi crea il modello (D-059).
+- **Scrivere un `if` sul nome di una fase.** Le fasi sono dati: aggiungerne
+  una, rinominarla o riordinarla non deve costare una riga di programma. Se
+  una regola riguarda una fase in particolare, quella regola diventa una
+  **colonna di `phases`** - come `blocks_return` e `closes_project` - e la
+  spunta la mette chi crea il modello. Ci sono due test che leggono i sorgenti
+  e diventano rossi se un nome di fase ricompare dentro `app/` (D-055).
 - Mettere una password o un indirizzo di server dentro un file `.py`.
 - Modificare a mano una migrazione gia' applicata in produzione: se ne scrive
   una nuova.

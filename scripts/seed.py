@@ -7,7 +7,9 @@ programma sia utilizzabile:
     sola e da cambiare al primo accesso;
   - le quattro classificazioni dei documenti;
   - la matrice dei permessi di partenza, tutte e dodici le caselle;
-  - il modello di fasi "Standard", versione 1, con le sue sei fasi.
+  - il modello di fasi "Standard", versione 1, con le sue sei fasi e le
+    due proprieta' che le governano (da Development non si torna
+    indietro, "Chiuso" chiude il progetto).
 
 Come si esegue, dalla radice del progetto e con l'ambiente virtuale attivo:
 
@@ -112,14 +114,29 @@ PHASE_TEMPLATE_DESCRIPTION = (
     "dell'idea alla chiusura del progetto."
 )
 
-# Le fasi, nell'ordine di attraversamento.
+# Le fasi, nell'ordine di attraversamento. Le due colonne dopo la descrizione
+# sono le proprieta' che governano il comportamento del percorso:
+#
+#   blocks_return    da questa fase non si torna a una precedente;
+#   closes_project   entrando in questa fase il progetto si chiude.
+#
+# Sono dati e non codice, ed e' il punto (D-055). Il programma non sa che la
+# fase da cui non si torna indietro si chiami "Development": sa che una fase
+# con blocks_return blocca il ritorno. Cambiarle nome, riordinarle o scrivere
+# un percorso completamente diverso non costa una riga di programma.
 PHASES = [
-    ("Idea screening", "Vaglio iniziale dell'idea: vale la pena di studiarla?"),
-    ("Concept", "Definizione di che cosa deve fare il prodotto."),
-    ("Feasibility", "Verifica tecnica ed economica di fattibilità."),
-    ("Quoted", "Offerta presentata al cliente, in attesa di risposta."),
-    ("Development", "Progettazione, prototipi, prove, industrializzazione."),
-    ("Chiuso", "Progetto concluso, per rilascio o per rinuncia."),
+    ("Idea screening", "Vaglio iniziale dell'idea: vale la pena di studiarla?",
+     False, False),
+    ("Concept", "Definizione di che cosa deve fare il prodotto.",
+     False, False),
+    ("Feasibility", "Verifica tecnica ed economica di fattibilità.",
+     False, False),
+    ("Quoted", "Offerta presentata al cliente, in attesa di risposta.",
+     False, False),
+    ("Development", "Progettazione, prototipi, prove, industrializzazione.",
+     True, False),
+    ("Chiuso", "Progetto concluso, per rilascio o per rinuncia.",
+     False, True),
 ]
 
 
@@ -244,13 +261,15 @@ def ensure_phase_template(db: Session) -> int:
     db.add(template)
     db.flush()
 
-    for position, (name, description) in enumerate(PHASES, start=1):
+    for position, (name, description, blocks, closes) in enumerate(PHASES, start=1):
         db.add(
             Phase(
                 phase_template_id=template.id,
                 name=name,
                 sort_order=position,
                 description=description,
+                blocks_return=blocks,
+                closes_project=closes,
             )
         )
 

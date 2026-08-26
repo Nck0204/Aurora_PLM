@@ -318,8 +318,18 @@ def mostra_nuovo(
 
     Un documento sta in un progetto, quindi il progetto si sceglie prima: non
     esiste una pagina "carica un documento" da cui decidere dopo dove finisce.
+
+    **Il modulo non si apre se in questo progetto non si puo' caricare
+    niente**: non ha nessuna classificazione fra cui scegliere, o il progetto
+    e' chiuso (D-058). Mostrarlo lo stesso vorrebbe dire una pagina con il
+    menu a tendina vuoto e un pulsante che risponde 403, che e' il modo piu'
+    lungo di dire di no.
     """
     progetto_scelto = _progetto_o_errore(db, progetto, utente)
+    permissions.pretendi(
+        db, utente, permissions.Azione.CARICARE, progetto_scelto
+    )
+
     caricabili = permissions.classificazioni_caricabili(
         db, progetto_scelto, utente
     )

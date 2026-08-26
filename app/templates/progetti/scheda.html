@@ -5,8 +5,13 @@
    che fanno tutti: "a che punto siamo?". Le fasi sono quelle del modello
    congelato alla nascita del progetto, non quelle del modello di adesso.
 
-   Il passaggio di fase - richiesta e approvazione - e' lavoro della sessione
-   6: qui la fase corrente si legge e basta.
+   Subito sotto lo storico, che risponde alla seconda domanda: "come ci siamo
+   arrivati?". Chi, quando, da dove a dove, con quale motivazione e quanto e'
+   durata ciascuna fase.
+
+   I pulsanti che si vedono dipendono da quello che si puo' fare, e la
+   risposta arriva gia' decisa dalla rotta (puo_avanzare, puo_richiedere):
+   qui non si guarda nessun ruolo (D-051).
    =========================================================================== #}
 {% extends "base.html" %}
 
@@ -16,7 +21,7 @@
 {% from "components/stato.html" import etichetta, etichetta_ciclo_vita %}
 {% from "components/tabella.html" import tabella %}
 {% from "components/avanzamento.html" import avanzamento as barra_fasi %}
-{% from "components/avvisi.html" import notifica %}
+{% from "components/avvisi.html" import avviso, notifica %}
 
 {% block titolo %}{{ prodotto.code }} v{{ versione.version_number }}{% endblock %}
 {% block sezione %}Progetti{% endblock %}
@@ -26,6 +31,30 @@
         {{ notifica("Il progetto e' nella prima fase del modello scelto e la "
                     "squadra e' stata assegnata.",
                     variante="successo", titolo="Progetto aperto") }}
+    {% endif %}
+    {# I quattro esiti di un passaggio di fase. Le frasi sono quattro e non una
+       con un valore dentro perche' dicono quattro cose diverse: una e' una
+       conferma, una e' un rifiuto, una e' un'attesa. #}
+    {% if fase_cambiata == "avanzata" %}
+        {{ notifica("Il passaggio e' scritto nello storico con la tua "
+                    "motivazione.",
+                    variante="successo", titolo="Il progetto e' avanzato") }}
+    {% elif fase_cambiata == "tornata" %}
+        {{ notifica("Il passo indietro e' scritto nello storico con la tua "
+                    "motivazione.",
+                    variante="attenzione", titolo="Il progetto e' tornato indietro") }}
+    {% elif fase_cambiata == "richiesta" %}
+        {{ notifica("Il project manager la vede nel suo cruscotto. L'esito "
+                    "comparira' sulla tua pagina iniziale.",
+                    variante="successo", titolo="Richiesta inviata") }}
+    {% elif fase_cambiata == "approvata" %}
+        {{ notifica("La fase e' cambiata e chi l'aveva chiesto ne e' stato "
+                    "informato.",
+                    variante="successo", titolo="Richiesta approvata") }}
+    {% elif fase_cambiata == "respinta" %}
+        {{ notifica("Il progetto resta dov'era e chi l'aveva chiesto ne e' "
+                    "stato informato.",
+                    variante="attenzione", titolo="Richiesta respinta") }}
     {% endif %}
 {% endblock %}
 
@@ -46,8 +75,46 @@
     <div class="testata-azioni">
         {{ pulsante_collegamento("La versione", "/versioni/" ~ versione.id,
                                  icona_nome="prodotti") }}
+        {% if puo_avanzare or puo_richiedere %}
+            {{ pulsante_collegamento("Passaggio di fase",
+                                     "/progetti/" ~ progetto.id ~ "/fase",
+                                     variante="primario", icona_nome="fasi") }}
+        {% endif %}
     </div>
 </div>
+
+{% if progetto.closed_at %}
+    {{ avviso("Questo progetto e' stato chiuso il "
+              ~ progetto.closed_at.strftime("%d/%m/%Y")
+              ~ ". Si legge, non si cambia: niente documenti nuovi, niente "
+                "passaggi di fase. Chi ha il ruolo di creatore puo' riaprirlo "
+                "riportandolo a una fase precedente.",
+              variante="informazione", titolo="Progetto chiuso") }}
+{% endif %}
+
+{# --- La richiesta in attesa ---
+   Un avviso in linea e non una notifica: e' una cosa su cui qualcuno deve
+   agire, e le notifiche spariscono (docs/GUIDA_STILE.md). #}
+{% if richiesta_in_attesa %}
+    {% call avviso("", variante="attenzione",
+                   titolo="Una richiesta di passaggio e' in attesa") %}
+        <p>
+            <strong>{{ richiesta_in_attesa.requested_by.full_name }}</strong>
+            chiede di passare a
+            <strong>{{ richiesta_in_attesa.to_phase.name }}</strong>.
+        </p>
+        {% if richiesta_in_attesa.reason %}
+        <p class="citazione margine-sopra">{{ richiesta_in_attesa.reason }}</p>
+        {% endif %}
+        {% if puo_avanzare %}
+        <div class="fila-pulsanti margine-sopra">
+            {{ pulsante_collegamento("Approva o respingi",
+                                     "/progetti/" ~ progetto.id ~ "/fase",
+                                     variante="primario", icona_nome="fasi") }}
+        </div>
+        {% endif %}
+    {% endcall %}
+{% endif %}
 
 {% call riquadro("A che punto siamo") %}
     {% if avanzamento %}
@@ -58,12 +125,20 @@
         </p>
     {% endif %}
     <p class="campo-aiuto margine-sopra">
+        {% if progetto.current_phase %}
+            Il progetto e' in <strong>{{ progetto.current_phase.name }}</strong>
+            {%- if in_corso_da %} da {{ in_corso_da }}{% endif %}.
+            {% if prossima_fase %}
+                La fase successiva e' <strong>{{ prossima_fase.name }}</strong>.
+            {% else %}
+                E' l'ultima fase del percorso.
+            {% endif %}
+        {% endif %}
         Le fasi sono quelle del modello
         <strong>{{ progetto.phase_template.name }}
         v{{ progetto.phase_template.version }}</strong>, congelato quando il
         progetto e' stato aperto: se il modello verra' sostituito, questo
-        progetto continuera' a seguire queste. Il passaggio da una fase
-        all'altra arrivera' nella sessione 6.
+        progetto continuera' a seguire queste.
     </p>
 {% endcall %}
 
@@ -105,6 +180,64 @@
     {% endcall %}
 
 </div>
+
+{# --- Lo storico delle fasi ---
+   Dalla piu' recente alla piu' vecchia: una storia si guarda dalla fine,
+   perche' la domanda e' quasi sempre "che cosa e' successo per ultimo". #}
+{% call riquadro("Storico delle fasi", nudo=true) %}
+
+    {% set colonne = [
+        {"etichetta": "Quando"},
+        {"etichetta": "Da"},
+        {"etichetta": "A"},
+        {"etichetta": "Esito"},
+        {"etichetta": "Chi"},
+        {"etichetta": "Durata", "classe": "colonna-numero",
+         "titolo": "Quanto e' durata la fase che questo passaggio ha chiuso"},
+        {"etichetta": "Motivazione"},
+    ] %}
+
+    {% call tabella(colonne,
+                    vuota=(storico|length == 0),
+                    messaggio_vuoto="Nessun passaggio di fase registrato.",
+                    riepilogo=(storico|length ~ " passagg"
+                               ~ ("io" if storico|length == 1 else "i"))) %}
+        {% for voce_storico in storico %}
+        <tr>
+            <td>{{ voce_storico.quando.strftime("%d/%m/%Y %H:%M") }}</td>
+            <td>
+                {% if voce_storico.da %}
+                    {{ voce_storico.da }}
+                {% else %}
+                    <span class="testo-tenue">&mdash;</span>
+                {% endif %}
+            </td>
+            <td>{{ voce_storico.a }}</td>
+            <td>{{ etichetta(voce_storico.esito,
+                             variante=voce_storico.variante) }}</td>
+            <td>{{ voce_storico.chi }}</td>
+            <td class="colonna-numero">
+                {% if voce_storico.durata %}
+                    {{ voce_storico.durata }}
+                {% else %}
+                    <span class="testo-tenue">&mdash;</span>
+                {% endif %}
+            </td>
+            <td>
+                {% if voce_storico.motivazione %}
+                    {{ voce_storico.motivazione }}
+                {% endif %}
+                {% if voce_storico.motivazione_decisione %}
+                    <div class="testo-tenue testo-piccolo margine-sopra">
+                        Decisione: {{ voce_storico.motivazione_decisione }}
+                    </div>
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+    {% endcall %}
+
+{% endcall %}
 
 {# --- La squadra --- #}
 {% call riquadro("La squadra", nudo=true) %}

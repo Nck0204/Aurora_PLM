@@ -42,9 +42,8 @@
     </div>
 </div>
 
-{% if errore %}
-    {{ avviso(errore, variante="errore") }}
-{% endif %}
+{# L'avviso dell'errore lo disegna base.html, che riceve "errore" dal
+   contesto: scriverlo anche qui lo farebbe comparire due volte. #}
 
 {% set colonne = [
     {"etichetta": "Ordine", "classe": "colonna-numero"},

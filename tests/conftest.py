@@ -358,41 +358,89 @@ def crea_prodotto(
     return prodotto, versione
 
 
-def crea_progetto(db: Session, versione, project_manager, autore=None, squadra=()):
-    """Apre un progetto su una versione, con il modello di fasi disponibile.
+# Le fasi del modello di comodo usato dai test delle fasi (sessione 8).
+# Riproducono in piccolo la forma del percorso vero: una fase qualunque, una
+# da cui non si torna indietro, una che chiude il progetto.
+#
+# I nomi non contano - il programma non ne guarda nessuno - ma sono scritti
+# per esteso perche' un test che fallisce li mostra, e "Studio" si legge
+# meglio di "fase 1".
+FASI_DI_PROVA = (
+    # nome, blocca il ritorno, chiude il progetto
+    ("Studio", False, False),
+    ("Offerta", False, False),
+    ("Costruzione", True, False),
+    ("Consegnato", False, True),
+)
 
-    Se nel database non c'e' nessun modello di fasi attivo - succede su un
-    database appena migrato, senza scripts/seed.py - ne crea uno con due fasi:
-    il test deve poter girare comunque.
+
+def crea_modello_di_fasi(db: Session, fasi=FASI_DI_PROVA, nome: str | None = None):
+    """Un modello di fasi con un nome che nel database non puo' gia' esserci.
+
+    Il nome e' irripetibile come i codici prodotto e per la stessa ragione:
+    phase_templates ha un vincolo di unicita' su (name, version), il database
+    di sviluppo contiene i modelli veri, e un test che si inventasse
+    "Standard" diventerebbe rosso senza che il programma sia sbagliato.
+
+    Le fasi arrivano come triple (nome, blocca il ritorno, chiude il
+    progetto): sono le due proprieta' che rendono il percorso un dato invece
+    che un pezzo di programma, e un test che non le potesse scegliere non
+    potrebbe provare niente di quello che la sessione 8 ha aggiunto.
     """
     from app.models import Phase, PhaseTemplate
-    from app.services import projects
+
+    modello = PhaseTemplate(
+        name=nome or f"Percorso di prova {uuid.uuid4().hex[:8]}",
+        description="Creato da un test.",
+        standards=["EN 50155"],
+        is_active=True,
+        version=1,
+    )
+    db.add(modello)
+    db.flush()
+
+    for ordine, (nome_fase, blocca, chiude) in enumerate(fasi, start=1):
+        db.add(
+            Phase(
+                phase_template_id=modello.id,
+                name=nome_fase,
+                sort_order=ordine,
+                blocks_return=blocca,
+                closes_project=chiude,
+            )
+        )
+    db.flush()
+    return modello
+
+
+def crea_progetto(
+    db: Session,
+    versione,
+    project_manager,
+    autore=None,
+    squadra=(),
+    modello=None,
+    lettori=(),
+):
+    """Apre un progetto su una versione, con il modello di fasi disponibile.
+
+    Senza "modello" prende il primo modello attivo del database - di solito lo
+    "Standard" di scripts/seed.py - e, se non ce n'e' nessuno, se ne crea uno:
+    il test deve poter girare anche su un database appena migrato.
+
+    I test delle fasi passano invece il loro, perche' devono sapere quale fase
+    blocca il ritorno e quale chiude il progetto.
+    """
+    from app.services import phases, projects
 
     if autore is None:
         autore = project_manager
 
-    modello = projects.modelli_di_fasi(db)
-    if modello:
-        scelto = modello[0]
+    if modello is not None:
+        scelto = modello
     else:
-        scelto = PhaseTemplate(
-            name=f"Modello di prova {uuid.uuid4().hex[:6]}",
-            description="Creato da un test.",
-            standards=["EN 50155"],
-            is_active=True,
-            version=1,
-        )
-        db.add(scelto)
-        db.flush()
-        for ordine, nome in enumerate(("Concept", "Sviluppo"), start=1):
-            db.add(
-                Phase(
-                    phase_template_id=scelto.id,
-                    name=nome,
-                    sort_order=ordine,
-                )
-            )
-        db.flush()
+        attivi = phases.modelli_di_fasi(db)
+        scelto = attivi[0] if attivi else crea_modello_di_fasi(db)
 
     progetto = projects.apri_progetto(
         db,
@@ -401,7 +449,7 @@ def crea_progetto(db: Session, versione, project_manager, autore=None, squadra=(
         modello=scelto,
         norme=["EN 50155"],
         ingegneri=list(squadra),
-        lettori=[],
+        lettori=list(lettori),
         autore=autore,
     )
     db.flush()

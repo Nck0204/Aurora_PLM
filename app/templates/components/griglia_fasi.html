@@ -1,0 +1,107 @@
+{# ===========================================================================
+   GRIGLIA DELLE FASI DI UN MODELLO
+
+   QUANDO SI USA. Solo dentro il modulo che scrive un modello di fasi
+   (`/fasi/nuovo` e la versione successiva di un modello). E' la griglia in
+   cui si scrivono le fasi in ordine, ciascuna con il suo nome, la sua
+   descrizione e le due proprieta' che ne governano il comportamento.
+
+   QUANDO NON SI USA. Per **mostrare** le fasi di un modello o di un progetto:
+   quello e' un elenco, e si disegna con la tabella o con il componente
+   `avanzamento`. Questa e' una griglia da compilare, non da leggere.
+
+   PERCHE' RIGHE FISSE E NON UN PULSANTE "AGGIUNGI FASE". Un pulsante che
+   aggiunge una riga ha bisogno di JavaScript, e senza JavaScript il modulo
+   non si compilerebbe piu': e' esattamente quello che D-036 vieta. Le righe
+   sono dieci, le vuote vengono saltate, e chi ne vuole undici crea il modello
+   con dieci e ne fa subito la versione successiva - che e' una cosa che non
+   capita, perche' i percorsi dell'azienda ne hanno sei.
+
+   IL NUMERO NEL NOME DELLE SPUNTE. Le due caselle di spunta hanno il numero
+   della riga scritto dentro il nome del campo (`fase_blocca_3`). Non e' un
+   vezzo: il browser invia una casella di spunta **solo quando e' segnata**,
+   quindi da dieci righe con due segni arrivano due campi e non venti, e senza
+   il numero non ci sarebbe modo di sapere a quale riga appartengono. E' la
+   stessa trappola risolta nella griglia dei permessi, con una medicina
+   diversa perche' qui le righe sono numerate e li' no.
+
+   COME SI USA. Si passa un elenco di righe, ciascuna con quattro attributi -
+   nome, descrizione, blocca_ritorno, chiude_progetto - che e' esattamente
+   quello che il servizio delle fasi chiama `FaseScritta`:
+
+       {% raw %}{% from "components/griglia_fasi.html" import griglia_fasi %}
+
+       {{ griglia_fasi(righe) }}{% endraw %}
+   =========================================================================== #}
+
+{% from "components/campi.html" import campo %}
+
+
+{% macro griglia_fasi(righe) -%}
+<div class="griglia-fasi">
+
+    {# Le intestazioni sono scritte una volta sola in cima: dentro le righe le
+       etichette dei campi ci sono ma sono nascoste alla vista, perche' dieci
+       volte "Nome della fase" renderebbe illeggibile proprio quello che si
+       sta cercando di leggere. Nascoste alla vista, non alla pagina: i
+       lettori di schermo le leggono tutte. #}
+    <div class="griglia-fasi-intestazione" aria-hidden="true">
+        <span class="griglia-fasi-numero">#</span>
+        <span>Nome della fase</span>
+        <span>Descrizione</span>
+        <span>Comportamento</span>
+    </div>
+
+    {%- for riga in righe %}
+    <fieldset class="griglia-fasi-riga">
+        <legend class="solo-lettura-vocale">Fase numero {{ loop.index }}</legend>
+
+        <span class="griglia-fasi-numero" aria-hidden="true">{{ loop.index }}</span>
+
+        {{ campo("Nome della fase " ~ loop.index, "fase_nome",
+                 valore=riga.nome, id="fase_nome_" ~ loop.index0,
+                 segnaposto="Lasciala vuota per saltare la riga",
+                 etichetta_nascosta=true) }}
+
+        {{ campo("Descrizione della fase " ~ loop.index, "fase_descrizione",
+                 valore=riga.descrizione, id="fase_descrizione_" ~ loop.index0,
+                 segnaposto="A che cosa serve questa fase",
+                 etichetta_nascosta=true) }}
+
+        <div class="griglia-fasi-spunte">
+            {{ _spunta_fase("fase_blocca_" ~ loop.index0,
+                            "Da qui non si torna indietro",
+                            riga.blocca_ritorno,
+                            "Fase " ~ loop.index ~ ": da qui non si torna indietro") }}
+            {{ _spunta_fase("fase_chiude_" ~ loop.index0,
+                            "Chiude il progetto",
+                            riga.chiude_progetto,
+                            "Fase " ~ loop.index ~ ": entrando qui il progetto si chiude") }}
+        </div>
+    </fieldset>
+    {%- endfor %}
+
+</div>
+{%- endmacro %}
+
+
+{# La singola spunta di una riga.
+
+   Non passa dal macro "spunta" di campi.html per la stessa ragione per cui non
+   ci passano le caselle della matrice dei permessi: quel macro si porta dietro
+   il contenitore del campo con i suoi margini, pensato per un modulo in
+   colonna, e venti volte in una griglia diventerebbero venti spaziature di
+   troppo. L'etichetta collegata pero' c'e', e "aria_etichetta" dice per esteso
+   di quale fase si tratta: chi usa un lettore di schermo sente "Fase 5:
+   chiude il progetto", non venti volte "chiude il progetto". #}
+{% macro _spunta_fase(nome, testo, segnata, aria_etichetta) -%}
+<label class="campo-spunta campo-spunta--stretta" for="{{ nome }}">
+    <input type="checkbox"
+           id="{{ nome }}"
+           name="{{ nome }}"
+           value="si"
+           aria-label="{{ aria_etichetta }}"
+           {%- if segnata %} checked{% endif %}>
+    <span class="testo"><span>{{ testo }}</span></span>
+</label>
+{%- endmacro %}

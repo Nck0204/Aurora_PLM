@@ -51,14 +51,22 @@
    Usare il tipo giusto non e' un dettaglio: e' quello che fa comparire la
    tastiera numerica sui portatili con schermo tattile e che fa riconoscere il
    modulo ai gestori di password. #}
+{# "etichetta_nascosta" toglie l'etichetta dalla vista ma non dalla pagina:
+   resta collegata al campo e i lettori di schermo la leggono. Si usa **solo**
+   dove l'etichetta e' gia' scritta altrove e ripeterla per ogni riga
+   renderebbe illeggibile quello che c'e' intorno: la casella di ricerca, la
+   griglia delle fasi di un modello. Non si usa per far stare un modulo in
+   meno spazio - un campo senza etichetta visibile e' un campo che si compila
+   a indovinare. #}
 {% macro campo(etichetta, nome, valore="", tipo="text", obbligatorio=false,
                errore=none, aiuto=none, segnaposto=none, autocomplete=none,
                autofocus=false, sola_lettura=false, disabilitato=false,
                monospazio=false, lunghezza_massima=none, lunghezza_minima=none,
-               id=none, attributi="") -%}
+               id=none, attributi="", etichetta_nascosta=false) -%}
 {%- set campo_id = id or nome -%}
 <div class="campo{% if errore %} campo--con-errore{% endif %}">
-    <label class="campo-etichetta" for="{{ campo_id }}">
+    <label class="campo-etichetta{% if etichetta_nascosta %} solo-lettura-vocale{% endif %}"
+           for="{{ campo_id }}">
         {{ etichetta }}
         {%- if obbligatorio %}<span class="obbligatorio" title="obbligatorio">*<span class="solo-lettura-vocale"> obbligatorio</span></span>{% endif %}
     </label>

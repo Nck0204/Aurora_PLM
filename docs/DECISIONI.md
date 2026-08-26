@@ -1629,3 +1629,253 @@ governano piu' nessun documento, e non ne governeranno.
 guarda se una classificazione e' in uso. Un ritirato non e' sparito, e' solo
 fuori dagli elenchi: se lo si ripristinasse e la sua classificazione non ci
 fosse piu', si ricadrebbe esattamente nel caso che questa decisione evita.
+
+---
+
+## D-055 — Le fasi sono dati: il comportamento sta in una colonna, non in un `if`
+
+**Data:** 26 agosto 2026 · **Stato:** attiva
+
+**Decisione.** Il programma non sa come si chiamano le fasi. Aggiungere una
+fase, rinominarla, riordinarla o costruire un percorso completamente diverso si
+fa dall'interfaccia (`/fasi`) e non costa nessuna riga di codice.
+
+Le due fasi che si comportano in modo particolare portano il loro comportamento
+addosso, come colonne di `phases` (migrazione `c7a3f19b52e4`):
+
+| Colonna | Che cosa dice |
+|---|---|
+| `blocks_return` | da questa fase non si torna a una precedente |
+| `closes_project` | entrando in questa fase, `projects.closed_at` viene valorizzato |
+
+Le spunte le mette chi crea il modello, e il modulo pretende che ce ne sia
+**una e una sola** che chiude, e che sia **l'ultima**.
+
+**Motivazione.** La sessione 8 chiedeva due regole che parlano di fasi precise:
+"da Development non si torna indietro" e "la fase finale chiude il progetto".
+Scritte come sono enunciate diventano due `if` sul nome di una fase, e da quel
+momento rinominare "Development" sarebbe una modifica al programma - con un
+progetto aperto due anni fa che continua a chiamarla in un altro modo e che
+quindi non seguirebbe piu' la stessa regola. Le fasi sono dati; una regola che
+parla di dati deve stare nei dati.
+
+C'e' un **test che legge i sorgenti** (`test_fasi.py`,
+`test_nessun_file_del_programma_confronta_il_nome_di_una_fase`) e diventa rosso
+se in `app/` ricompare uno dei nomi veri delle fasi come stringa usata dal
+programma. Guarda l'albero sintattico e non il testo, cosi' le docstring che
+citano "Concept" come esempio restano lecite. Ce n'e' un secondo per i
+template, che cerca i confronti su `.name`.
+
+**Conseguenza.** I nomi veri delle fasi compaiono in due posti soli, e tutti e
+due sono dati: `scripts/seed.py`, che li scrive, e la migrazione
+`c7a3f19b52e4`, che ha tradotto in spunte la regola che fino a ieri non era
+scritta da nessuna parte. Il commento della migrazione lo dice per esteso,
+perche' e' l'unico posto di Aurora in cui un nome di fase compare accanto a una
+condizione.
+
+Il divieto di tornare indietro **non e' un permesso**: sta in
+`phases.torna_a()` e vale anche per il creatore. Un creatore che potesse
+riavvolgere un progetto in costruzione riscriverebbe una storia avvenuta, che e'
+proprio quello che nessun ruolo deve poter fare.
+
+---
+
+## D-056 — Chi lavora al progetto chiede, chi lo governa decide
+
+**Data:** 26 agosto 2026 · **Stato:** attiva
+
+**Decisione.** `Azione` prende un quinto valore, `RICHIEDERE`, e
+`permissions.puo()` lo decide cosi' su un progetto:
+
+| Chi | Che cosa puo' |
+|---|---|
+| il **creatore** | tutto, come sempre |
+| il **project manager** del progetto | avanzare, tornare indietro, decidere le richieste altrui (`MODIFICARE`) |
+| chi e' **assegnato** al progetto e non lo governa | **chiedere** l'avanzamento (`RICHIEDERE`) |
+| tutti gli altri | niente: il progetto non lo vedono nemmeno |
+
+**Motivazione.** La sessione dice "l'ingegnere puo' richiedere l'avanzamento".
+Il permesso e' stato scritto come "chi e' nella squadra e non e' il
+responsabile" e non come "chi ha il ruolo di progetto `ingegnere`", per due
+ragioni. La prima e' che i ruoli di progetto sono governati dalla matrice dei
+permessi, che parla di **documenti**: aggiungerci un significato che riguarda
+le fasi vorrebbe dire due tabelle di ruoli da tenere allineate. La seconda e'
+che una richiesta non cambia niente da sola - la decide il responsabile -
+quindi allargarla a chi e' assegnato non apre nessuna porta.
+
+`RICHIEDERE` e `AMMINISTRARE` sono le due azioni che **non** sono colonne della
+matrice: `Permessi.consente()` risponde "no" a tutte e due, perche' nessuna
+delle due parla di documenti.
+
+**Conseguenza.** Il project manager non puo' "chiedere" a se' stesso: `puo()`
+risponde no. Il creatore invece puo' tutto, quindi puo' anche chiedere, e la
+pagina gli mostrerebbe due moduli - avanza e chiedi - uno dei quali gli
+proporrebbe di chiedere il permesso a se' stesso. Quale modulo disegnare lo
+decide la rotta (`_contesto_fasi`), con una riga sola: chi puo' avanzare non
+chiede. **Non e' una decisione di permesso** ed e' per questo che non sta in
+`permissions.py`: il permesso il creatore ce l'ha, e una richiesta costruita a
+mano verrebbe accolta.
+
+---
+
+## D-057 — `approved_by_id` diventa `decided_by_id`
+
+**Data:** 26 agosto 2026 · **Stato:** attiva
+
+**Decisione.** La colonna di `phase_transitions` che dice chi ha risposto a una
+richiesta si chiama `decided_by_id` e non piu' `approved_by_id`. Accanto a lei
+ci sono `state` (`richiesta`, `approvata`, `respinta`), `decided_at`,
+`decision_reason` e `seen_at`.
+
+**Motivazione.** Una richiesta di passaggio si puo' anche **respingere**, e in
+quel caso chi ha deciso va scritto esattamente come quando ha approvato: e' la
+riga che fra un anno risponde a "perche' a marzo il progetto e' rimasto fermo".
+Una colonna chiamata "approvato da" che contiene il nome di chi ha detto di no
+mente a chi la legge, e chi la legge fra due anni non ha modo di accorgersene.
+
+Il rinomino e' stato possibile senza costi perche' la tabella era **vuota su
+tutti i database**: esisteva dalla sessione 2 e il flusso che la riempie nasce
+adesso.
+
+**Conseguenza.** `decided_at` non e' `created_at`. Una richiesta scritta lunedi'
+e approvata giovedi' ha cambiato la fase **giovedi'**, e la durata delle fasi si
+misura su quello: misurarla su lunedi' direbbe che il progetto e' stato in due
+fasi contemporaneamente per tre giorni.
+
+---
+
+## D-058 — Un progetto chiuso e' in sola lettura, tranne che per il creatore
+
+**Data:** 26 agosto 2026 · **Stato:** attiva
+
+**Decisione.** Quando un progetto entra nella fase che lo chiude, `closed_at`
+viene valorizzato e da quel momento tutto quello che c'e' dentro smette di
+cambiare: niente documenti nuovi, niente cambi di stato dei documenti, niente
+passaggi di fase, niente richieste. Resta **visibile** a chi lo vedeva prima.
+Il creatore continua a poter tutto, ed e' l'unico che possa **riaprirlo**,
+riportandolo a una fase precedente.
+
+**Motivazione.** Un progetto chiuso e' un archivio, e un archivio si consulta:
+nasconderlo perderebbe la parte utile. Ma un archivio a cui si continua ad
+aggiungere non e' piu' la fotografia di com'e' finito il lavoro, ed e' proprio
+quella fotografia che serve quando il cliente telefona due anni dopo.
+
+La regola sta in `permissions.py` e in nessun altro posto - dentro
+`_permessi_su_classificazione` per i documenti, dentro `_puo_sul_progetto` per
+il progetto, piu' la sua copia SQL in `filtro_documenti` - perche' le strade che
+portano a caricare un documento sono tre, e una regola messa su due di quelle
+tre e' una regola che non c'e' (D-051).
+
+**Conseguenza.** Il messaggio del 403 e' a parte e non dipende dal ruolo di chi
+chiede: "questo progetto e' chiuso" e' vero per tutti allo stesso modo,
+responsabile compreso, e dirgli "il tuo ruolo non permette" lo manderebbe a
+cercare un permesso che non esiste.
+
+**Il ritorno a una fase precedente riapre il progetto**, azzerando `closed_at`.
+E' il caso raro ma reale della chiusura sbagliata: se il ritorno e' consentito -
+e da una fase che blocca non lo e' - allora il progetto sta ricominciando a
+muoversi, e lasciarlo segnato come chiuso sarebbe una contraddizione scritta in
+due colonne.
+
+---
+
+## D-059 — Le fasi non sono un terzo grafo di transizioni
+
+**Data:** 26 agosto 2026 · **Stato:** attiva
+
+**Decisione.** Il flusso delle fasi sta in `app/services/phases.py` e non in
+`app/services/lifecycle.py`, dove CLAUDE.md dice che stanno **tutti** i grafi
+delle transizioni.
+
+**Motivazione.** Non e' un'eccezione alla regola: e' che le fasi non sono un
+grafo. Gli stati di un ciclo di vita sono un elenco chiuso scritto in
+`enums.py`, con delle frecce decise dal programma e scritte in una tabella
+Python; le fasi sono **righe di una tabella del database**, in un ordine che
+stabilisce chi crea il modello. In `phases.py` non c'e' nessun elenco di
+transizioni ammesse: c'e' "la successiva e' quella con `sort_order` piu' alto",
+che e' una lettura, non una regola.
+
+Un grafo di fasi scritto in Python sarebbe esattamente l'errore che la
+sessione 8 doveva evitare (D-055).
+
+**Conseguenza.** La regola di CLAUDE.md resta com'e': i grafi sono due e stanno
+tutti e due in `lifecycle.py`. Una nota in cima a `phases.py` spiega perche'
+quel file non ne e' il terzo, cosi' chi legge la regola e poi trova questo file
+non deve chiederselo.
+
+---
+
+## D-060 — La notifica dell'esito e' una colonna, non una tabella
+
+**Data:** 26 agosto 2026 · **Stato:** attiva
+
+**Decisione.** Chi ha chiesto un passaggio di fase viene informato dell'esito
+con un avviso sul proprio cruscotto, che sparisce quando lo chiude. Il "l'ho
+letto" e' la colonna `phase_transitions.seen_at`. Non c'e' nessuna tabella
+`notifications`.
+
+**Motivazione.** La tabella delle notifiche e' lavoro della sessione 10, che le
+progettera' insieme alla posta e ai modelli dei messaggi. Inventarla adesso per
+un caso solo vorrebbe dire progettarla senza sapere che cosa dovra' contenere, e
+la sessione 10 si troverebbe fra le mani una tabella da correggere invece che da
+scrivere - che e' il modo in cui i progetti si impantanano (CLAUDE.md, sezione
+7, regola 2).
+
+**Conseguenza.** Quando la tabella delle notifiche arrivera', `seen_at`
+diventera' una sua riga e questa colonna sparira' con la sua migrazione. Fino ad
+allora la notifica funziona, e questo era quello che la sessione chiedeva ("in
+questa sessione basta una notifica dentro l'applicazione").
+
+Il "l'ho letto" **non finisce nell'audit trail**: aver chiuso un avviso non e'
+un'operazione sui dati dell'azienda, e una riga di registro per ogni notifica
+letta renderebbe illeggibile il registro delle cose che contano.
+
+---
+
+## D-061 — Le milestone si innestano sulle fasi, e non toccano il flusso (R2)
+
+**Data:** 26 agosto 2026 · **Stato:** attiva, ma non realizzata
+
+**Decisione.** Le milestone sono del rilascio R2 e la sessione 8 **non le
+realizza**. Il modello dati e l'interfaccia sono pero' stati lasciati nella
+forma che permette di aggiungerle senza rifare niente di quello che c'e'.
+Questa voce dice come, perche' fra sei mesi la domanda sara' "dove le attacco?".
+
+**Dove si attaccano.** Una tabella nuova, `milestones`, con una riga per
+milestone di un **modello di fasi**:
+
+| Colonna | Note |
+|---|---|
+| `phase_id` | `NN` -> `phases.id`. La milestone appartiene a una fase, non al modello: e' una cosa che va fatta *dentro* quella fase. |
+| `name`, `description` | come per le fasi |
+| `sort_order` | l'ordine dentro la fase |
+| `is_required` | se il passaggio alla fase successiva la pretende |
+
+E una seconda, `project_milestones`, con una riga per (progetto, milestone): chi
+l'ha completata, quando, con quale nota. E' lo stesso schema di
+`phases`/`phase_transitions`: il modello descrive il percorso, l'altra tabella
+racconta che cosa e' successo su un progetto.
+
+**Perche' il flusso non cambia.** L'unico punto che le milestone toccano e'
+`phases.avanza()`, che oggi ha una condizione sola ("c'e' una fase
+successiva?") e ne avra' due ("...e le milestone obbligatorie di questa fase
+sono tutte completate?"). Il rifiuto e' gia' previsto: si solleva
+`PassaggioNonAmmesso` con il messaggio giusto, come fa oggi il divieto di
+tornare indietro, e la pagina lo mostra senza sapere che cosa sia una
+milestone. La richiesta, l'approvazione, il rifiuto, lo storico e la chiusura
+non cambiano di una riga.
+
+**Perche' l'interfaccia non cambia.** La barra dell'avanzamento
+(`components/avanzamento.html`) prende un elenco di dizionari e disegna quello
+che c'e' dentro: le milestone di una fase diventano una riga in piu' sotto il
+pallino, oppure il contatore "3 su 5" accanto al nome, senza toccare il
+componente. La griglia delle fasi del modello (`components/griglia_fasi.html`)
+ha gia' due spunte per riga: le milestone saranno una colonna in piu' della
+stessa griglia, o una pagina figlia della scheda del modello.
+
+**Quello che gia' oggi le rende possibili.** I modelli di fasi sono immutabili e
+versionati (D-016): le milestone nascono dentro una versione del modello e i
+progetti gia' avviati non le vedono comparire a meta' strada. Se i modelli si
+potessero correggere, aggiungere una milestone obbligatoria bloccherebbe di
+colpo dei progetti in corso, ed e' esattamente il genere di sorpresa che questo
+progetto evita.

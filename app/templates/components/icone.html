@@ -88,6 +88,11 @@
     {# Un lucchetto chiuso. E' la sezione della matrice dei permessi, e il
        lucchetto e' l'unico disegno che non ha bisogno di essere spiegato. #}
     <rect x="4.5" y="10.5" width="15" height="10" rx="1.5"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"/><path d="M12 14.5v2"/>
+{%- elif nome == "fasi" %}
+    {# Tre pallini in fila uniti da un filo: e' la barra di avanzamento delle
+       fasi ridotta a icona, cosi' la voce di menu e la pagina che apre si
+       riconoscono come la stessa cosa. #}
+    <circle cx="5" cy="12" r="2.2"/><circle cx="12" cy="12" r="2.2"/><circle cx="19" cy="12" r="2.2"/><path d="M7.2 12h2.6M14.2 12h2.6"/>
 {%- elif nome == "freccia-su" %}
     <path d="M12 19V5"/><path d="m6 11 6-6 6 6"/>
 {%- elif nome == "freccia-giu" %}

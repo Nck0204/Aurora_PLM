@@ -12,6 +12,16 @@ E' la pagina che tutti aprono la mattina, e questo detta due scelte:
     non lo vede. Il filtro non e' grafico, e' nell'interrogazione (vedi
     app/services/projects.py).
 
+Dalla sessione 8 il cruscotto porta anche **quello che aspetta una risposta**:
+
+  - le richieste di passaggio di fase sui progetti di cui si e' responsabili,
+    che sono cose che qualcun altro sta aspettando e vanno in cima;
+  - gli esiti delle proprie richieste che non si sono ancora letti, che sono
+    la notifica dentro l'applicazione chiesta dalla sessione.
+
+Tutti e due arrivano gia' filtrati dal servizio delle fasi: una richiesta di
+un progetto che non e' tuo non esce nemmeno dal database.
+
 Il profilo e le sessioni aperte restano piu' in basso: sono cose che si
 guardano una volta ogni tanto, ma toglierle vorrebbe dire togliere anche
 "Esci da tutti i dispositivi", che e' l'unico modo che una persona ha di
@@ -25,7 +35,7 @@ from sqlalchemy.orm import Session
 from app.db import get_db
 from app.dependencies import richiedi_login
 from app.models import User
-from app.services import auth, projects, users
+from app.services import auth, phases, projects, users
 from app.templating import pagina
 
 router = APIRouter(tags=["pagine"])
@@ -69,4 +79,9 @@ def home(
         q=q,
         stato_scelto=stato,
         fase_scelta=fase,
+        # Le due code delle fasi. Sono liste gia' filtrate: la prima contiene
+        # solo le richieste sui progetti di cui questa persona e'
+        # responsabile, la seconda solo gli esiti delle sue.
+        richieste_da_decidere=phases.richieste_da_decidere(db, utente),
+        esiti_da_leggere=phases.esiti_da_leggere(db, utente),
     )

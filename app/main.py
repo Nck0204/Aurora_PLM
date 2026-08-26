@@ -43,6 +43,7 @@ from app.routers import customers as router_customers
 from app.routers import documents as router_documents
 from app.routers import home as router_home
 from app.routers import permissions as router_permissions
+from app.routers import phases as router_phases
 from app.routers import products as router_products
 from app.routers import projects as router_projects
 from app.routers import style as router_style
@@ -396,6 +397,7 @@ app.include_router(router_products.router)
 app.include_router(router_versions.router)
 app.include_router(router_projects.router)
 app.include_router(router_permissions.router)
+app.include_router(router_phases.router)
 app.include_router(router_users.router)
 app.include_router(router_style.router)
 

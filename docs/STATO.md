@@ -1,6 +1,6 @@
 # Stato di avanzamento
 
-Ultimo aggiornamento: **25 agosto 2026**, fine della sessione 7.
+Ultimo aggiornamento: **26 agosto 2026**, fine della sessione 8.
 
 Il progetto e' diviso in 13 sessioni di lavoro. Questa tabella dice a che
 punto siamo. Va aggiornata **alla fine di ogni sessione**, prima del commit.
@@ -21,7 +21,7 @@ Stati possibili: `da fare` · `in corso` · `completata`
 | 5 | Prodotti, versioni e progetti | **completata** | Clienti e contatti, prodotti con la scomposizione del codice configurabile, versioni e derivazioni, grafo del ciclo di vita con superamento automatico, apertura dei progetti, cruscotto iniziale. Dettaglio sotto. |
 | 6 | Archivio documenti | **completata** | Deposito per impronta SHA-256 con deduplicazione e scrittura atomica, caricamento con barra di avanzamento reale, versioni con nota obbligatoria, stato del documento e immutabilita' del rilasciato, ritiro logico con ripristino, scarico registrato, filigrana sui PDF delle versioni superate, permessi calcolati sulla matrice. Dettaglio sotto. |
 | 7 | Regole di accesso | **completata** | Una funzione sola che decide tutti i permessi (`permissions.puo`), filtro a livello di interrogazione e di conteggio, 404 al posto del 403, matrice dei permessi modificabile con conferma e registro, gestione delle classificazioni, verifica degli accessi di una persona. Dettaglio sotto. |
-| 8 | Fasi, revisioni e approvazioni | da fare | Il ciclo bozza / in verifica / rilasciato / superato e' stato fatto nella sessione 6. Restano: **passaggi di fase** con richiesta e approvazione, modifica della squadra a progetto avviato, chiusura di un progetto, il flusso di **approvazione** con verificatore e approvatore distinti, la presa in carico (R2) e le notifiche a chi deve verificare. |
+| 8 | Fasi e flusso di avanzamento | **completata** | Amministrazione dei modelli di fasi immutabili e versionati, barra dell'avanzamento con date e durate, avanzamento diretto e per richiesta con approvazione o rifiuto, divieto di tornare indietro da una fase che lo blocca, chiusura del progetto e sola lettura, storico completo. Dettaglio sotto. |
 | 9 | Interfaccia completa | da fare | Struttura di navigazione, ricerca, elenchi con filtri e paginazione, rifinitura del tema scuro. |
 | 10 | Notifiche e posta | da fare | Adattatore di posta doppio (locale/Graph), archiviazione dei messaggi, smistamento automatico e quarantena, allegati, modelli dei messaggi, notifiche. |
 | 11 | Lavori pianificati e manutenzione | da fare | APScheduler, controlli notturni, procedura di backup e di ripristino. |
@@ -33,6 +33,13 @@ Stati possibili: `da fare` · `in corso` · `completata`
 > poi le fasi), e poi la 7 e' diventata le **regole di accesso**, con le fasi e
 > le approvazioni riunite nella 8. Le tredici sessioni restano tredici.
 >
+> La sessione 8 ha fatto **le fasi**, che erano la meta' piu' grossa di quel
+> raggruppamento. Le altre tre cose che ci erano finite dentro non le ha
+> chieste e restano da fare: il flusso di **approvazione dei documenti** con
+> verificatore e approvatore distinti, la **modifica della squadra** a progetto
+> avviato, e le **notifiche a chi deve verificare**. Sono elencate fra i
+> sospesi in fondo a questa sezione.
+>
 > Il contenuto delle sessioni da 3 a 13 era gia' stato riscritto
 > alla fine della sessione 2, dopo che il modello dati e' stato realizzato tutto
 > insieme invece che una tabella per sessione (vedi `docs/DECISIONI.md`, D-021).
@@ -40,6 +47,273 @@ Stati possibili: `da fare` · `in corso` · `completata`
 > comportamento. Resta una **domanda aperta**: le tabelle di distinta base e
 > articoli sono del rilascio R3 e in questo piano non compaiono; va chiarito se
 > le 13 sessioni coprono il solo R1 o arrivano anche a R2 e R3.
+
+---
+
+## Sessione 8 — Fasi e flusso di avanzamento · completata (26 agosto 2026)
+
+La sessione aveva un principio vincolante e tutto il resto ne discende: **le
+fasi sono dati, non codice.** Aggiungere una fase, rinominarla, riordinarla o
+scrivere un percorso completamente diverso si fa da una pagina, e il programma
+non cambia di una riga. In `app/` non c'e' nessun confronto fra il nome di una
+fase e una stringa scritta a mano, e ci sono **due test che leggono i sorgenti**
+per tenerlo vero.
+
+> **Le due regole che parlavano di fasi precise sono diventate due colonne.**
+> "Da Development non si torna indietro" e "la fase finale chiude il progetto"
+> sono, nel programma, `phases.blocks_return` e `phases.closes_project`: due
+> spunte che mette chi crea il modello. Il programma non sa come si chiami la
+> fase che blocca il ritorno; sa che una fase con quella spunta lo blocca
+> (D-055).
+
+> **Una migrazione, `c7a3f19b52e4`.** Nessuna tabella nuova: le tabelle delle
+> fasi ci sono dalla sessione 2. Aggiunge le due spunte a `phases`, quattro
+> colonne a `phase_transitions` e ne rinomina una - `approved_by_id` diventa
+> `decided_by_id`, perche' adesso ci finisce dentro anche chi **respinge**
+> (D-057). Il rinomino e' costato zero: la tabella era vuota su tutti i
+> database, il flusso che la riempie nasce adesso.
+
+### Realizzato
+
+**L'amministrazione dei modelli** (`/fasi`, riservata al creatore) — l'elenco
+dei modelli con quante fasi e **quanti progetti** ciascuno, la scheda di un
+modello con l'anteprima del percorso, la creazione e la versione successiva.
+
+Non c'e' nessuna pagina che **modifica** un modello, e non e' una
+dimenticanza: i modelli sono immutabili (D-016). Correggerne uno vuol dire
+scriverne la versione successiva, che nasce accanto a quella vecchia; quella
+vecchia resta intatta con i suoi progetti appesi e smette soltanto di essere
+proponibile. La pagina lo dice in un avviso prima che si cominci a scrivere.
+
+Il modulo pretende tre cose, e ciascuna evita un modello che poi non
+funzionerebbe: almeno una fase, nomi diversi fra loro, e **una e una sola fase
+che chiude il progetto, che dev'essere l'ultima**.
+
+**La barra dell'avanzamento** (scheda del progetto) — le fasi in fila:
+concluse con la spunta e la data in cui il progetto ne e' uscito, quella
+corrente evidenziata, le future in grigio. Il componente c'era gia' dalla
+sessione 4; questa sessione gli ha dato i dati veri, comprese le date, e ha
+aggiunto sotto la frase che dice da quanto tempo il progetto e' li' dentro.
+
+**Le quattro strade di un progetto** (`app/services/phases.py`):
+
+| Strada | Chi | Che cosa succede |
+|---|---|---|
+| **avanza** | project manager, creatore | il progetto passa alla fase successiva, subito |
+| **richiedi** | chi e' assegnato e non governa il progetto | non succede niente: la richiesta resta in attesa |
+| **decidi** | project manager, creatore | la richiesta viene accolta (e la fase cambia) o respinta |
+| **torna indietro** | project manager, creatore | il progetto rientra in una fase gia' attraversata |
+
+Tutte e quattro vogliono una **motivazione**, tutte e quattro lasciano una riga
+in `phase_transitions` e una nell'audit trail, e nessuna cancella niente. Una
+richiesta respinta resta con la sua motivazione: un progetto fermo per due
+settimane ha una ragione, e quella riga e' l'unica che la conserva.
+
+**Il permesso di chiedere e' un'azione nuova**, `RICHIEDERE` (D-056). Non e'
+una colonna della matrice - la matrice parla di documenti - ed e' decisa da una
+regola scritta in `permissions.py` come tutte le altre: chi e' nella squadra e
+non e' il responsabile puo' chiedere; chi governa il progetto non chiede, fa.
+
+**Il cruscotto porta le due code.** Al project manager le richieste che aspettano
+la sua risposta, sui progetti di cui e' responsabile; a chi ha chiesto, l'esito
+che non ha ancora letto, con la motivazione di chi ha deciso e un pulsante "Ho
+letto" che lo chiude. Tutti e due sono avvisi in linea e non notifiche
+temporanee: sono cose su cui si deve agire, e le notifiche spariscono.
+
+**Il divieto di tornare indietro non e' un permesso.** Da una fase con
+`blocks_return` non si torna indietro **nemmeno essendo il creatore**: il
+rifiuto arriva da `phases.torna_a()`, spiega perche', e porta con se' il
+collegamento diretto alla creazione di una versione nuova di prodotto. Un
+divieto che non dice come si fa invece e' un divieto che fa telefonare
+qualcuno.
+
+**La chiusura non e' un'operazione a parte**: e' la conseguenza di essere
+entrati nell'ultima casella del percorso. Entrando nella fase con
+`closes_project`, `closed_at` viene valorizzato e da quel momento il progetto
+**si legge e non si cambia** - niente documenti nuovi, niente cambi di stato,
+niente passaggi di fase - per tutti tranne il creatore, che e' anche l'unico
+che possa riaprirlo riportandolo indietro (D-058).
+
+**Lo storico delle fasi**, nella scheda del progetto: chi, quando, da dove a
+dove, con quale motivazione, e **quanto e' durata** la fase che il passaggio ha
+chiuso. La durata sta sulla riga che chiude la fase perche' e' li' che il numero
+si conosce, e si misura su `decided_at` e non su `created_at`: una richiesta
+scritta lunedi' e approvata giovedi' ha cambiato la fase giovedi'.
+
+Chi ha chiesto e chi ha deciso compaiono **tutti e due**: "Prova Sessione5, su
+richiesta di Piero Bertoli". La frase la compone Python, non il template.
+
+**Grafica** — un componente nuovo, `griglia_fasi` (sezione 27 di `aurora.css`,
+in vetrina su `/stile`): il modulo con cui si scrivono le fasi di un modello,
+dieci righe fisse con due spunte ciascuna. Righe fisse e non un pulsante
+"aggiungi fase", perche' quel pulsante avrebbe bisogno di JavaScript e senza
+JavaScript il modulo non si compilerebbe piu' (D-036). Un'icona nuova, `fasi`
+(tre pallini uniti da un filo), che porta le icone a ventisette. Un parametro
+nuovo su `campo`, `etichetta_nascosta`, e una classe di utilita', `.citazione`,
+per le frasi scritte da una persona e riportate dentro una pagina.
+
+**La barra laterale** — "Fasi" si accende, riservata al creatore. Restano
+spente Posta (sessione 10) e Diagnostica (11).
+
+### Verificato
+
+**Test automatici: 337, tutti superati** (erano 300 alla fine della sessione 7).
+I 37 nuovi stanno in `tests/test_fasi.py`, diviso in sette sezioni.
+
+| Criterio di accettazione | Come e' stato verificato | Esito |
+|---|---|---|
+| Creo un modello nuovo con fasi diverse, lo assegno a un progetto nuovo, i progetti esistenti restano invariati | `test_un_modello_nuovo_non_tocca_i_progetti_gia_aperti`, piu' la prova a mano: creato "Prototipo rapido", "Standard v1" continua a governare i suoi due progetti | superato |
+| Un ingegnere richiede, il project manager lo vede nel cruscotto e approva: la fase cambia e lo storico riporta entrambi i nomi | `test_l_ingegnere_chiede_il_pm_lo_vede_e_approva`, che fa il giro intero da due browser, piu' la prova a mano con i due utenti veri | superato |
+| Un tentativo di tornare indietro da Development viene rifiutato con il messaggio corretto e il collegamento alla creazione di versione | `test_da_una_fase_che_blocca_non_si_torna_indietro`, che verifica anche l'indirizzo del collegamento, piu' la prova a mano | superato |
+| Test pytest sulle regole di autorizzazione | `test_chi_puo_avanzare_e_chi_puo_soltanto_chiedere` e i cinque test dei 403 e dei 404 | superato |
+| Test pytest sul divieto di ritorno da Development | i due sopra, piu' `test_il_divieto_di_tornare_indietro_vale_anche_per_il_creatore` | superato |
+
+I due test che leggono i sorgenti meritano una riga a parte, come i quattro
+della sessione 7: non provano un comportamento, proteggono il **principio
+vincolante** della sessione, e un principio senza un test dura fino alla
+prossima fretta.
+
+- `test_nessun_file_del_programma_confronta_il_nome_di_una_fase`, che legge
+  l'albero sintattico di ogni `.py` di `app/` e diventa rosso se uno dei nomi
+  veri delle fasi ricompare come stringa **usata**. Guarda l'albero e non il
+  testo apposta: la docstring di `app/models/phase.py` cita "Concept" come
+  esempio, ed e' giusto cosi';
+- `test_nessun_template_confronta_il_nome_di_una_fase`, che cerca i confronti
+  su `.name` dentro l'HTML.
+
+**Prova nel browser**, con il server avviato e il database di sviluppo:
+
+| Passo | Esito |
+|---|---|
+| `/fasi` mostra "Standard v1", 6 fasi, **2 progetti** | superato |
+| La scheda del modello mostra l'anteprima del percorso e le due spunte su Development e Chiuso | superato |
+| Creo "Prototipo rapido" scrivendo tre fasi nelle righe 1, 3 e 6 del modulo | superato: escono le fasi 1, 2, 3 e le spunte seguono le righe giuste |
+| Creo la versione successiva: il modulo arriva precompilato e il nome e' in sola lettura | superato |
+| Salvo la v2: la v1 diventa "superato", la v2 "proponibile", "Standard v1" non si muove | superato |
+| Provo a segnare come "chiude il progetto" una fase che non e' l'ultima | superato: 400 e la frase che spiega perche' |
+| Avanzo il progetto `CVT2200-48-24DC` da "Idea screening" a "Concept" | superato: la barra segna la conclusa con la data, lo storico scrive la riga |
+| Entro come `piero.bertoli` (ingegnere): vede **solo** il modulo della richiesta | superato |
+| Chiede il passaggio a "Feasibility" | superato: la fase non cambia, la richiesta compare nello storico come "in attesa" |
+| Rientro come project manager: la richiesta e' sul cruscotto, con la motivazione per esteso | superato |
+| Approvo con una motivazione | superato: la fase cambia e lo storico dice "Prova Sessione5, su richiesta di Piero Bertoli" |
+| Porto il progetto fino a Development e provo a riportarlo a "Concept" | superato: 400, il messaggio giusto e il pulsante che porta a `/versioni/{id}/deriva` |
+| Avanzo a "Chiuso" | superato: `closed_at` valorizzato, avviso "Progetto chiuso" sulla scheda |
+| Con l'ingegnere: la scheda del progetto chiuso si apre, il passaggio di fase e il caricamento no | superato: 200, 403, 403 |
+| Con il creatore, sullo stesso progetto chiuso | superato: 200, 200, 200 |
+| Nessun errore nella consolle del browser, nessun errore non gestito nel registro | superato |
+
+Provata anche la **discesa e la risalita della migrazione** (`downgrade -1`,
+`upgrade head`), come vuole D-019: il tipo enumerato nuovo viene creato e
+cancellato a mano, e al secondo giro le due UPDATE dei dati rimettono le spunte
+dove devono stare.
+
+### Difetti trovati e corretti durante la sessione
+
+1. **Il progetto si spostava e la pagina non se ne accorgeva.** Il servizio
+   scriveva `progetto.current_phase_id` e basta; il collegamento
+   `progetto.current_phase`, se qualcuno l'aveva gia' letto, restava sulla fase
+   di prima. Chi leggeva subito dopo - la pagina che si disegna, il test che
+   verifica - vedeva il progetto ancora dov'era. Adesso si assegnano tutte e
+   due, la chiave esterna e il collegamento.
+
+2. **Il creatore vedeva due moduli, e uno gli proponeva di chiedere il permesso
+   a se' stesso.** `puo()` risponde "si" al creatore su tutto, quindi anche su
+   `RICHIEDERE`: la pagina del passaggio gli mostrava sia "Avanza" sia "Chiedi
+   il passaggio". Quale modulo disegnare lo decide adesso la rotta, con una riga
+   sola - chi puo' avanzare non chiede - e non `permissions.py`, perche' non e'
+   una decisione di permesso: il permesso il creatore ce l'ha, e una richiesta
+   costruita a mano verrebbe accolta (D-056).
+
+3. **L'avviso di errore compariva due volte, in tre pagine gia' scritte.**
+   `base.html` disegna da se' quello che una rotta passa come `errore=`, e
+   `documenti/nuovo.html`, `documenti/versione.html` e
+   `permessi/classificazioni.html` lo riscrivevano. Due avvisi identici uno
+   sotto l'altro si leggono come uno, ed e' per questo che nessuno se n'era
+   accorto dalla sessione 6. Tolti i tre doppioni; la pagina del passaggio di
+   fase, che l'avviso lo deve comporre da se' perche' ci va dentro il pulsante
+   del rimedio, riceve il messaggio con un altro nome (`problema`). La regola e'
+   scritta in `docs/GUIDA_STILE.md`, sezione 6.
+
+4. **Il modulo di caricamento si apriva su progetti in cui non si poteva
+   caricare niente.** `GET /documenti/nuovo` mostrava la pagina con il menu a
+   tendina vuoto e un pulsante che poi rispondeva 403. Adesso chiede il permesso
+   prima: e' la stessa regola, chiesta un momento prima invece che un momento
+   dopo. Si e' visto provando il progetto chiuso, ma valeva gia' per chi non
+   aveva nessuna classificazione con cui caricare.
+
+5. **Una fase che chiude il progetto in mezzo al percorso rende irraggiungibili
+   quelle dopo.** Trovato costruendo a mano un modello con la spunta sulla terza
+   fase di quattro: il progetto si chiude entrando nella terza, e un progetto
+   chiuso non avanza piu'. Il modulo adesso pretende che la fase che chiude sia
+   l'ultima.
+
+### Scelte prese durante la sessione
+
+Sette decisioni nuove in `docs/DECISIONI.md`, dalla D-055 alla D-061:
+
+- **D-055**, le fasi sono dati: il comportamento sta in una colonna, non in un
+  `if`, ed e' verificato leggendo i sorgenti;
+- **D-056**, chi lavora al progetto chiede, chi lo governa decide;
+- **D-057**, `approved_by_id` diventa `decided_by_id`, perche' una richiesta si
+  puo' anche respingere;
+- **D-058**, un progetto chiuso e' in sola lettura, tranne che per il creatore;
+- **D-059**, le fasi non sono un terzo grafo di transizioni, ed e' per questo
+  che non stanno in `lifecycle.py`;
+- **D-060**, la notifica dell'esito e' una colonna e non una tabella: quella
+  arriva con la sessione 10;
+- **D-061**, **come si innestano le milestone** (R2) senza rifare il flusso.
+
+### Le milestone: dove si attaccheranno
+
+Le milestone sono del rilascio R2 e questa sessione **non le ha fatte**, come
+chiesto. Il modo di aggiungerle senza rifare niente e' scritto per esteso in
+D-061, e in due righe e' questo: una tabella `milestones` appesa a `phases` (la
+milestone sta *dentro* una fase) e una `project_milestones` che racconta che
+cosa e' successo su un progetto - lo stesso schema di `phases` e
+`phase_transitions`.
+
+L'unico punto del flusso che cambieranno e' `phases.avanza()`, che oggi ha una
+condizione sola ("c'e' una fase successiva?") e ne avra' due. Il rifiuto e' gia'
+previsto: si solleva `PassaggioNonAmmesso` con il messaggio giusto, come fa oggi
+il divieto di tornare indietro, e la pagina lo mostra senza sapere che cosa sia
+una milestone. Richiesta, approvazione, rifiuto, storico e chiusura non cambiano
+di una riga.
+
+### Rimasto in sospeso per le sessioni successive
+
+- **Il flusso di approvazione dei documenti** con verificatore e approvatore
+  distinti. Era finito nel raggruppamento della sessione 8 insieme alle fasi e
+  questa sessione non l'ha chiesto: i documenti hanno il loro ciclo di vita
+  dalla sessione 6, ma chi verifica e chi approva sono ancora la stessa persona.
+  Portera' con se' la colonna "approva" nella matrice dei permessi, che la
+  sessione 7 aveva gia' previsto.
+
+- **La squadra di un progetto avviato non si modifica dall'interfaccia.** E' in
+  sospeso dalla sessione 7 e questa sessione non l'ha chiesto. Le assegnazioni
+  si danno all'apertura del progetto e si revocano solo dal codice.
+
+- **Il cambio di ruolo globale di un utente non si fa.** In sospeso dalla
+  sessione 3.
+
+- **Le notifiche a chi deve verificare** e la posta: sessione 10. La notifica
+  dell'esito di una richiesta di fase c'e' e funziona, ma e' una colonna su
+  `phase_transitions` e non una tabella (D-060).
+
+- **Una fase non si puo' saltare.** L'avanzamento va sempre alla fase
+  immediatamente successiva; per saltarne una si fanno due passaggi. Non e'
+  stato chiesto e non e' chiaro che sia desiderabile: due passaggi lasciano due
+  righe nello storico, che raccontano che quella fase e' stata attraversata in
+  un minuto - il che e' esattamente quello che e' successo.
+
+- **Sul database di sviluppo restano i dati di questa verifica**: il modello di
+  fasi **"Prototipo rapido"** in tre versioni (la v1 e la v2 superate, la v3
+  proponibile), e il progetto `CVT2200-48-24DC` v1, che adesso e' **chiuso**,
+  con cinque passaggi di fase nello storico - compresa una richiesta di Piero
+  Bertoli approvata da Prova Sessione5. Non si cancellano (regola 5) e fanno
+  comodo: sono il primo caso vero di un progetto arrivato in fondo, ed e' quello
+  che serve per provare la sessione 12, che sui progetti chiusi dovra' fare i
+  rapporti. Il progetto si riapre riportandolo a una fase precedente, dal
+  creatore.
 
 ---
 

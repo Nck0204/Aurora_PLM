@@ -44,9 +44,8 @@
     </div>
 </div>
 
-{% if errore %}
-    {{ avviso(errore, variante="errore", titolo="Il caricamento non e' partito") }}
-{% endif %}
+{# L'avviso dell'errore lo disegna base.html, che riceve "errore" dal
+   contesto: scriverlo anche qui lo farebbe comparire due volte. #}
 
 {% if problema_tipi %}
     {{ avviso(problema_tipi ~ " Nel frattempo l'elenco dei tipi e' quello "

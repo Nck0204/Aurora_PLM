@@ -1,0 +1,112 @@
+{# ===========================================================================
+   I MODELLI DI FASI. Riservata al creatore.
+
+   Un modello di fasi e' il percorso che un progetto attraversa. Le fasi sono
+   dati: aggiungerne una, rinominarla o riordinarle si fa da qui, e il
+   programma non cambia di una riga.
+
+   NON C'E' NESSUN PULSANTE "MODIFICA", e non e' una dimenticanza. I modelli
+   sono immutabili (D-016): correggerne uno vuol dire scriverne la versione
+   successiva, che nasce accanto a quella vecchia e vale solo per i progetti
+   aperti da domani. I progetti gia' avviati continuano a seguire il percorso
+   con cui sono nati.
+
+   PER QUESTO LA COLONNA "PROGETTI" E' LA PIU' IMPORTANTE. Davanti a
+   "Standard v1" e "Standard v2" la domanda che ci si fa e' quale delle due si
+   sta guardando, e quanti lavori ci sono appesi e' la risposta piu' breve.
+   =========================================================================== #}
+{% extends "base.html" %}
+
+{% from "components/pulsanti.html" import pulsante_collegamento %}
+{% from "components/tabella.html" import tabella %}
+{% from "components/stato.html" import etichetta %}
+{% from "components/avvisi.html" import notifica %}
+{% from "components/vuoto.html" import vuoto %}
+
+{% block titolo %}Modelli di fasi{% endblock %}
+{% block sezione %}Fasi{% endblock %}
+
+{% block notifiche %}
+    {% if creata %}
+        {{ notifica("Il modello e' pronto e si puo' scegliere aprendo un "
+                    "progetto nuovo.",
+                    variante="successo", titolo="Modello salvato") }}
+    {% endif %}
+{% endblock %}
+
+{% block contenuto %}
+
+<div class="testata">
+    <div>
+        <h1>Modelli di fasi</h1>
+        <p class="sottotitolo">
+            Il percorso che un progetto attraversa, dalla prima fase alla
+            chiusura. Un progetto sceglie il suo quando viene aperto e lo
+            tiene per tutta la vita.
+        </p>
+    </div>
+    <div class="testata-azioni">
+        {{ pulsante_collegamento("Crea un modello", "/fasi/nuovo",
+                                 variante="primario", icona_nome="piu") }}
+    </div>
+</div>
+
+{% if modelli %}
+
+    {% set colonne = [
+        {"etichetta": "Modello"},
+        {"etichetta": "Versione", "classe": "colonna-numero"},
+        {"etichetta": "Fasi", "classe": "colonna-numero"},
+        {"etichetta": "Progetti", "classe": "colonna-numero",
+         "titolo": "Quanti progetti stanno seguendo questa versione del modello"},
+        {"etichetta": "Norme applicabili"},
+        {"etichetta": "Stato",
+         "titolo": "Se il modello si puo' ancora scegliere per un progetto nuovo"},
+    ] %}
+
+    {% call tabella(colonne,
+                    riepilogo=(modelli|length ~ " modell"
+                               ~ ("o" if modelli|length == 1 else "i"))) %}
+        {% for modello in modelli %}
+        <tr>
+            <td><a href="/fasi/{{ modello.id }}">{{ modello.name }}</a></td>
+            <td class="colonna-numero">v{{ modello.version }}</td>
+            <td class="colonna-numero">{{ modello.phases|length }}</td>
+            <td class="colonna-numero">{{ usi.get(modello.id, 0) }}</td>
+            <td>
+                {% if modello.standards %}
+                    {{ modello.standards|join(", ") }}
+                {% else %}
+                    <span class="testo-tenue">&mdash;</span>
+                {% endif %}
+            </td>
+            <td>
+                {% if modello.is_active %}
+                    {{ etichetta("proponibile", variante="successo") }}
+                {% else %}
+                    {{ etichetta("superato", variante="neutra") }}
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+    {% endcall %}
+
+    <p class="campo-aiuto margine-sopra">
+        Un modello <strong>superato</strong> non si propone piu' quando si
+        apre un progetto, ma continua a governare quelli che lo stanno gia'
+        usando: i modelli non si toccano mai, nemmeno quelli vecchi.
+    </p>
+
+{% else %}
+
+    {{ vuoto("Nessun modello di fasi",
+             "Senza un modello non si puo' aprire nessun progetto: il modello "
+             "e' l'elenco ordinato delle fasi che il progetto attraversera'.",
+             azione=(pulsante_collegamento("Crea il primo modello", "/fasi/nuovo",
+                                           variante="primario",
+                                           icona_nome="piu")),
+             icona_nome="fasi") }}
+
+{% endif %}
+
+{% endblock %}

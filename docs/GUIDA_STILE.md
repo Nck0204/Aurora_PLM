@@ -176,7 +176,7 @@ la prova.
 
 | File | Macro | A che serve |
 |---|---|---|
-| `icone.html` | `icona` | i ventisei simboli, disegnati a mano in SVG |
+| `icone.html` | `icona` | i ventisette simboli, disegnati a mano in SVG |
 | `pulsanti.html` | `pulsante`, `pulsante_collegamento`, `modulo_pulsante` | ogni azione |
 | `campi.html` | `campo`, `area_testo`, `tendina`, `spunta`, `scelta`, `csrf` | ogni campo di un modulo |
 | `tabella.html` | `tabella` | gli elenchi, con intestazione ferma e ordinamento |
@@ -189,6 +189,7 @@ la prova.
 | `impaginazione.html` | `impaginazione` | le pagine di un elenco lungo |
 | `schede.html` | `schede`, `scheda`, `schede_collegamento` | le linguette |
 | `avanzamento.html` | `avanzamento` | le fasi di un progetto in fila |
+| `griglia_fasi.html` | `griglia_fasi` | il modulo con cui si scrivono le fasi di un modello |
 | `descrizione.html` | `descrizione`, `voce` | la scheda di dettaglio etichetta/valore |
 | `area_file.html` | `area_file` | il caricamento dei documenti |
 | `barra_caricamento.html` | `barra_caricamento` | quanti byte sono partiti, mentre partono |
@@ -224,6 +225,35 @@ moduli porta con se' etichetta, aiuto e margini, che in una griglia di
 trentasei quadretti sarebbero trentasei etichette di troppo. Qui l'etichetta e'
 l'intestazione della colonna, e ogni casella ha il suo `aria-label` per esteso
 ("Ingegnere, Commerciale, visualizza").
+
+### La griglia delle fasi di un modello
+
+`griglia_fasi` e' il modulo con cui si scrive un modello di fasi: una riga per
+fase, con il nome, la descrizione e le due spunte che ne governano il
+comportamento (`da qui non si torna indietro`, `chiude il progetto`). Sta nella
+sezione 27 di `aurora.css`.
+
+Ha due cose che vale la pena di sapere prima di toccarla.
+
+**Le righe sono dieci e fisse.** Un pulsante "aggiungi fase" avrebbe bisogno di
+JavaScript, e senza JavaScript il modulo non si compilerebbe piu' (D-036). Le
+righe vuote vengono saltate e il numero d'ordine lo mette il programma: chi
+scrive tre fasi nelle righe 1, 3 e 6 ottiene le fasi 1, 2 e 3.
+
+**Le spunte hanno il numero della riga dentro il nome** (`fase_blocca_3`). E'
+la stessa trappola della griglia dei permessi con una medicina diversa: il
+browser invia una casella di spunta solo quando e' segnata, quindi da dieci
+righe con due segni arrivano due campi e non venti, e senza il numero non ci
+sarebbe modo di sapere a quale riga appartengono. La griglia dei permessi la
+risolve con un campo nascosto perche' le sue caselle non sono numerate; qui le
+righe hanno gia' un numero, e usarlo costa meno.
+
+Le etichette dei campi ci sono ma sono **nascoste alla vista**
+(`etichetta_nascosta=true` sul macro `campo`): dieci volte "Nome della fase"
+renderebbe illeggibile proprio quello che si sta cercando di leggere. Nascoste
+alla vista, non alla pagina - restano collegate al campo, e i lettori di
+schermo le leggono tutte. E' l'unico altro posto in cui si usa quel parametro
+oltre alla casella di ricerca.
 
 ### Gli elenchi di scelte si compongono in Python, non nei template
 
@@ -297,6 +327,17 @@ la dipendenza dichiarata sulla rotta.
 
 **Ogni modulo POST porta il gettone.** `{{ csrf(request) }}` come prima riga
 dentro il `<form>`, altrimenti la richiesta viene rifiutata con un 400 (D-028).
+
+**L'errore di un modulo rifiutato lo disegna `base.html`, non la pagina.** Una
+rotta che chiama `pagina(..., errore="...")` ha gia' finito: l'avviso rosso
+compare in cima al contenuto. Riscriverlo dentro la pagina lo fa comparire due
+volte, ed e' un difetto che e' passato inosservato in tre template fino alla
+sessione 8, perche' due avvisi identici uno sotto l'altro si leggono come uno.
+
+Una pagina che l'avviso lo debba comporre da se' - perche' ci va dentro un
+pulsante, come il divieto di tornare indietro che offre di creare una versione
+nuova di prodotto - **non usa il nome `errore`**: la rotta le passa il
+messaggio con un altro nome (`problema`), e la pagina se lo disegna.
 
 ---
 

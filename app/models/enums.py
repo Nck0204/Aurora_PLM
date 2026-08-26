@@ -97,3 +97,22 @@ class EmailAssignmentState(str, enum.Enum):
     AUTOMATICA = "automatica"
     MANUALE = "manuale"
     QUARANTENA = "quarantena"
+
+
+class PhaseTransitionState(str, enum.Enum):
+    """A che punto e' un passaggio di fase scritto in "phase_transitions".
+
+    Un passaggio non e' sempre un fatto avvenuto: puo' essere una domanda
+    ancora senza risposta. Chi ha il permesso di muovere il progetto scrive
+    direttamente una riga "approvata"; chi puo' solo chiedere ne scrive una
+    "richiesta", che resta li' finche' il project manager non la guarda.
+
+    "respinta" e' una riga che non ha cambiato niente, e si tiene lo stesso:
+    fra un anno "perche' a marzo il progetto e' rimasto fermo" e' una domanda
+    a cui si deve poter rispondere, e la risposta e' una richiesta respinta
+    con la sua motivazione.
+    """
+
+    RICHIESTA = "richiesta"
+    APPROVATA = "approvata"
+    RESPINTA = "respinta"

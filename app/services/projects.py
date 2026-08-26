@@ -7,6 +7,12 @@ lavoro nuovo, con la sua squadra e le sue fasi.
 
 Due regole di questo modulo meritano di essere lette prima del codice.
 
+**Le fasi non stanno qui.** Il percorso di un progetto - com'e' fatto, come
+lo si attraversa, chi lo puo' muovere - sta tutto in
+`app/services/phases.py`. Qui restano l'apertura, la squadra e il cruscotto.
+Quando un progetto nasce, e' quel servizio a farlo entrare nella prima fase e
+a scriverne il primo passaggio.
+
 **Il modello di fasi si congela.** Alla nascita il progetto si tiene
 l'identificatore del modello scelto e si **copia dentro** le norme
 applicabili. I modelli sono immutabili per costruzione (una correzione
@@ -47,7 +53,7 @@ from app.models import (
     ProjectRole,
     User,
 )
-from app.services import audit, lifecycle, permissions
+from app.services import audit, lifecycle, permissions, phases
 
 logger = logging.getLogger("aurora.progetti")
 
@@ -58,8 +64,6 @@ ACTION_ASSIGNMENT_REVOKED = "assignment.revoked"
 ENTITY_PROJECTS = "projects"
 ENTITY_ASSIGNMENTS = "assignments"
 
-ACTION_PHASE_ENTERED = "project.phase_entered"
-
 
 # --- Lettura ----------------------------------------------------------------
 
@@ -67,33 +71,6 @@ ACTION_PHASE_ENTERED = "project.phase_entered"
 def trova_progetto(db: Session, project_id: uuid.UUID) -> Project | None:
     """Cerca un progetto dal suo identificatore."""
     return db.get(Project, project_id)
-
-
-def modelli_di_fasi(db: Session) -> list[PhaseTemplate]:
-    """I modelli di fasi proponibili per un progetto nuovo.
-
-    Solo quelli attivi: un modello disattivato resta valido per i progetti che
-    lo stanno gia' usando - i modelli non si toccano mai - ma non si propone
-    piu' per i lavori nuovi.
-    """
-    return list(
-        db.scalars(
-            select(PhaseTemplate)
-            .where(PhaseTemplate.is_active.is_(True))
-            .order_by(PhaseTemplate.name, PhaseTemplate.version)
-        ).all()
-    )
-
-
-def fasi_del_modello(db: Session, phase_template_id: uuid.UUID) -> list[Phase]:
-    """Le fasi di un modello, in ordine di attraversamento."""
-    return list(
-        db.scalars(
-            select(Phase)
-            .where(Phase.phase_template_id == phase_template_id)
-            .order_by(Phase.sort_order)
-        ).all()
-    )
 
 
 def assegnazioni_attive(db: Session, project_id: uuid.UUID) -> list[Assignment]:
@@ -297,7 +274,9 @@ def apri_progetto(
 
       1. crea il progetto, congelando il modello di fasi scelto e copiandoci
          dentro le norme applicabili;
-      2. lo mette nella **prima fase** del modello;
+      2. lo fa entrare nella **prima fase** del modello, passando dal servizio
+         delle fasi: l'ingresso e' un passaggio come tutti gli altri e lascia
+         la sua riga nello storico;
       3. assegna il project manager e poi ingegneri e lettori;
       4. registra tutto nel registro delle operazioni.
 
@@ -315,10 +294,6 @@ def apri_progetto(
     db.add(progetto)
     db.flush()
 
-    fasi = fasi_del_modello(db, modello.id)
-    if fasi:
-        progetto.current_phase_id = fasi[0].id
-
     audit.record(
         db,
         action=ACTION_PROJECT_CREATED,
@@ -334,21 +309,14 @@ def apri_progetto(
         },
     )
 
-    if fasi:
-        # L'ingresso nella prima fase e' un fatto che succede adesso e va
-        # scritto adesso: se non lo si scrive, la storia delle fasi comincera'
-        # dal secondo passaggio e nessuno sapra' piu' quando il progetto e'
-        # entrato nel primo. La richiesta e l'approvazione dei passaggi
-        # successivi sono lavoro della sessione 6.
-        audit.record(
-            db,
-            action=ACTION_PHASE_ENTERED,
-            entity_type=ENTITY_PROJECTS,
-            entity_id=progetto.id,
-            user_id=autore.id,
-            request=request,
-            new_value={"phase": fasi[0].name},
-        )
+    # L'ingresso nella prima fase e' un fatto che succede adesso e va scritto
+    # adesso: se non lo si scrive, la storia delle fasi comincia dal secondo
+    # passaggio e nessuno sa piu' quando il progetto e' entrato nel primo -
+    # ne' da quanto tempo ci sta dentro. Lo scrive il servizio delle fasi,
+    # che e' l'unico che muove un progetto lungo il suo percorso.
+    phases.entra_nella_prima_fase(
+        db, progetto=progetto, autore=autore, request=request
+    )
 
     # Il project manager e' anche un assegnato: il suo permesso non deve
     # dipendere da quale delle due colonne si guarda. Cosi' "chi vede questo

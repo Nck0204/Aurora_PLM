@@ -13,7 +13,7 @@ vede nell'elenco non lo apre nemmeno scrivendone l'indirizzo.
 import uuid
 
 from app.models import GlobalRole, LifecycleState, ProjectRole
-from app.services import lifecycle, permissions, projects
+from app.services import lifecycle, permissions, phases, projects
 from tests.conftest import (
     PASSWORD_DI_PROVA,
     contenuto_leggibile,
@@ -44,7 +44,7 @@ def test_il_progetto_nasce_nella_prima_fase_del_modello(db_session):
     )
 
     assert progetto.current_phase_id is not None
-    fasi = projects.fasi_del_modello(db_session, progetto.phase_template_id)
+    fasi = phases.fasi_del_modello(db_session, progetto.phase_template_id)
     assert progetto.current_phase_id == fasi[0].id
 
 
@@ -378,7 +378,7 @@ def test_si_apre_un_progetto_dall_interfaccia(client, db_session):
     modulo = client.get(f"/progetti/nuovo?versione={versione.id}")
     assert modulo.status_code == 200
 
-    modelli = projects.modelli_di_fasi(db_session)
+    modelli = phases.modelli_di_fasi(db_session)
     assert modelli, "serve almeno un modello di fasi attivo"
 
     risposta = client.post(

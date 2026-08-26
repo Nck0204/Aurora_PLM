@@ -37,6 +37,7 @@ from app.models.enums import (
     EmailAssignmentState,
     GlobalRole,
     LifecycleState,
+    PhaseTransitionState,
     ProjectRole,
     SessionKind,
 )
@@ -60,6 +61,7 @@ __all__ = [
     "EmailAssignmentState",
     "GlobalRole",
     "LifecycleState",
+    "PhaseTransitionState",
     "ProjectRole",
     "SessionKind",
     # Tabelle

@@ -47,6 +47,8 @@
      23. La vetrina /stile
      24. Adattamento alla larghezza dello schermo
      25. Barra di caricamento dei file
+     26. La griglia della matrice dei permessi
+     27. La griglia delle fasi di un modello
    ========================================================================== */
 
 
@@ -1828,6 +1830,16 @@ fieldset.gruppo-campi legend {
     gap: var(--spazio-5);
 }
 
+/* Una frase scritta da una persona e riportata dentro una pagina: la
+   motivazione di un passaggio di fase, il perche' di un rifiuto. La barretta
+   a sinistra dice "questo non l'ha scritto il programma", che in una pagina
+   fatta di etichette e numeri e' una distinzione che si perde. */
+.citazione {
+    padding: var(--spazio-2) var(--spazio-4);
+    border-left: 3px solid var(--colore-bordo-marcato);
+    color: var(--colore-testo);
+}
+
 .affianca {
     display: flex;
     align-items: center;
@@ -2237,4 +2249,98 @@ fieldset.gruppo-campi legend {
 .cambiamento-dopo {
     color: var(--colore-testo);
     font-weight: 600;
+}
+
+
+/* ==========================================================================
+   27. LA GRIGLIA DELLE FASI DI UN MODELLO
+   Il modulo con cui si scrive un modello di fasi: una riga per fase, con il
+   nome, la descrizione e le due spunte che ne governano il comportamento.
+   Il componente e' in components/griglia_fasi.html.
+
+   Perche' righe fisse e non un pulsante "aggiungi fase": un pulsante del
+   genere ha bisogno di JavaScript, e senza JavaScript il modulo non si
+   compilerebbe piu' (D-036).
+   ========================================================================== */
+
+.griglia-fasi {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spazio-2);
+}
+
+/* Le intestazioni, scritte una volta sola in cima. Dentro le righe le
+   etichette dei campi ci sono ma sono nascoste alla vista: dieci volte "Nome
+   della fase" renderebbe illeggibile proprio quello che si vuole leggere. */
+.griglia-fasi-intestazione,
+.griglia-fasi-riga {
+    display: grid;
+    grid-template-columns: 32px minmax(140px, 1fr) minmax(180px, 1.6fr) minmax(220px, 1fr);
+    gap: var(--spazio-3);
+    align-items: center;
+}
+
+.griglia-fasi-intestazione {
+    padding: 0 var(--spazio-3);
+    color: var(--colore-testo-tenue);
+    font-size: var(--testo-piccolo);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.griglia-fasi-riga {
+    margin: 0;
+    padding: var(--spazio-2) var(--spazio-3);
+    border: 1px solid var(--colore-bordo-tenue);
+    border-radius: var(--raggio-piccolo);
+    background-color: var(--colore-superficie);
+}
+
+/* Una riga con qualcosa scritto dentro si stacca da quelle vuote: scorrendo
+   la griglia si vede subito dove finisce il percorso. */
+.griglia-fasi-riga:focus-within {
+    border-color: var(--colore-bordo-marcato);
+}
+
+.griglia-fasi-numero {
+    color: var(--colore-testo-tenue);
+    font-family: var(--carattere-mono);
+    font-size: var(--testo-piccolo);
+    text-align: center;
+}
+
+/* Dentro la griglia i campi perdono il margine che hanno dentro un modulo in
+   colonna: qui l'aria fra una riga e l'altra la da' gia' la griglia. */
+.griglia-fasi-riga .campo {
+    margin: 0;
+}
+
+.griglia-fasi-spunte {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spazio-1);
+}
+
+/* La spunta dentro una griglia: niente margine e testo piccolo, perche' qui
+   le etichette sono venti e non due. */
+.campo-spunta--stretta {
+    gap: var(--spazio-2);
+    font-size: var(--testo-piccolo);
+}
+
+/* Sotto i 1100 pixel la griglia diventa una colonna: quattro colonne in
+   meno di tanto renderebbero i campi troppo stretti per leggerci dentro. */
+@media (max-width: 1100px) {
+    .griglia-fasi-intestazione {
+        display: none;
+    }
+
+    .griglia-fasi-riga {
+        grid-template-columns: 32px 1fr;
+    }
+
+    .griglia-fasi-riga .campo,
+    .griglia-fasi-spunte {
+        grid-column: 2;
+    }
 }

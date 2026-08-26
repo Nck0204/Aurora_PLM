@@ -1,0 +1,140 @@
+{# ===========================================================================
+   IL MODULO DI UN MODELLO DI FASI. Riservata al creatore.
+
+   La stessa pagina serve a due cose, e la differenza la fa "partenza":
+
+     - senza, e' la creazione di un modello nuovo, alla versione 1;
+     - con, e' la **versione successiva** di un modello che esiste gia': i
+       campi arrivano riempiti con quelli di adesso e il nome non si tocca.
+
+   Sono la stessa pagina perche' sono lo stesso modulo. Due file separati
+   sarebbero due griglie di fasi da tenere allineate, e alla prima aggiunta
+   una delle due resterebbe indietro.
+
+   NON ESISTE UNA PAGINA CHE MODIFICA UN MODELLO. Correggerne uno vuol dire
+   scriverne la versione successiva: quella vecchia resta intatta, con i suoi
+   progetti appesi (D-016). E' per questo che questa pagina, quando arriva da
+   un modello esistente, spiega in un avviso che cosa sta per succedere.
+   =========================================================================== #}
+{% extends "base.html" %}
+
+{% from "components/campi.html" import campo, area_testo, csrf %}
+{% from "components/pulsanti.html" import pulsante, pulsante_collegamento %}
+{% from "components/riquadro.html" import riquadro %}
+{% from "components/avvisi.html" import avviso %}
+{% from "components/griglia_fasi.html" import griglia_fasi %}
+
+{% set in_versione = partenza is defined and partenza %}
+
+{% block titolo %}
+    {{ "Nuova versione del modello" if in_versione else "Nuovo modello di fasi" }}
+{% endblock %}
+{% block sezione %}Fasi{% endblock %}
+
+{% block contenuto %}
+
+<div class="testata">
+    <div>
+        <h1>
+            {% if in_versione %}
+                {{ partenza.name }} v{{ prossima_versione }}
+            {% else %}
+                Nuovo modello di fasi
+            {% endif %}
+        </h1>
+        <p class="sottotitolo">
+            {% if in_versione %}
+                Stai scrivendo la versione successiva di
+                <strong>{{ partenza.name }} v{{ partenza.version }}</strong>.
+            {% else %}
+                Il percorso che i progetti aperti su questo modello
+                attraverseranno, dalla prima fase alla chiusura.
+            {% endif %}
+        </p>
+    </div>
+</div>
+
+{# L'avviso dell'errore lo disegna base.html, che riceve "errore" dal
+   contesto: scriverlo anche qui lo farebbe comparire due volte. #}
+
+{% if in_versione %}
+    {% call avviso("", variante="attenzione",
+                   titolo="La versione di adesso non viene toccata") %}
+        <p>
+            <strong>{{ partenza.name }} v{{ partenza.version }}</strong> resta
+            esattamente com'e', con le sue fasi e i progetti che la stanno
+            seguendo: un progetto e' passato per le fasi di quando e' nato, e
+            la sua storia deve continuare a raccontare quelle.
+        </p>
+        <p class="margine-sopra">
+            Quello che stai scrivendo e' un modello nuovo, per i progetti
+            aperti da adesso in poi. Quando salvi, la versione
+            v{{ partenza.version }} smette di comparire nella tendina di chi
+            apre un progetto.
+        </p>
+    {% endcall %}
+{% endif %}
+
+<form method="post"
+      action="{{ '/fasi/' ~ partenza.id ~ '/versione' if in_versione else '/fasi/nuovo' }}"
+      class="modulo">
+    {{ csrf(request) }}
+
+    {% call riquadro("Il modello") %}
+        {% if in_versione %}
+            {# Il nome tiene insieme le versioni di uno stesso percorso:
+               cambiarlo vorrebbe dire creare un modello diverso, e per quello
+               c'e' l'altra pagina. #}
+            {{ campo("Nome del modello", "nome_modello", valore=nome_modello,
+                     sola_lettura=true,
+                     aiuto="Il nome non cambia: e' quello che tiene insieme le "
+                           "versioni di uno stesso percorso.") }}
+        {% else %}
+            {{ campo("Nome del modello", "nome_modello", valore=nome_modello,
+                     obbligatorio=true, autofocus=true,
+                     segnaposto="Standard",
+                     aiuto="Come lo chiamano in azienda: «Standard», "
+                           "«Prodotto su commessa», «Prototipo rapido».") }}
+        {% endif %}
+
+        {{ area_testo("Descrizione", "descrizione", valore=descrizione, righe=3,
+                      aiuto="A che genere di lavori serve questo percorso.") }}
+
+        {{ area_testo("Norme applicabili", "norme", valore=norme, righe=4,
+                      aiuto="Una per riga. Sono il punto di partenza: aprendo "
+                            "un progetto si possono allargare o restringere, e "
+                            "da quel momento vivono di vita propria.") }}
+    {% endcall %}
+
+    <div class="margine-sopra">
+    {% set etichetta_salva = ("Salva la versione " ~ prossima_versione)
+                             if in_versione else "Crea il modello" %}
+    {% set indirizzo_annulla = ("/fasi/" ~ partenza.id) if in_versione else "/fasi" %}
+
+    {% call riquadro("Le fasi, in ordine di attraversamento",
+                     piede=pulsante(etichetta_salva, variante="primario")
+                           ~ pulsante_collegamento("Annulla", indirizzo_annulla)) %}
+
+        <p class="campo-aiuto">
+            Scrivile nell'ordine in cui si attraversano. Le righe lasciate
+            vuote non contano, e il numero d'ordine lo mette il programma.
+        </p>
+
+        {{ griglia_fasi(righe) }}
+
+        <p class="campo-aiuto margine-sopra">
+            <strong>Da qui non si torna indietro</strong>: un progetto arrivato
+            in questa fase non si riporta a una precedente, nemmeno da chi ha
+            il ruolo di creatore. Chi ci prova legge che si crea invece una
+            versione nuova del prodotto, con il collegamento gia' pronto.
+            <br>
+            <strong>Chiude il progetto</strong>: e' l'ultima casella del
+            percorso. Entrandoci, il progetto si chiude e da quel momento si
+            legge soltanto. Va segnata su una fase, e su una sola.
+        </p>
+
+    {% endcall %}
+    </div>
+</form>
+
+{% endblock %}

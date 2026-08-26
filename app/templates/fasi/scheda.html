@@ -1,0 +1,175 @@
+{# ===========================================================================
+   LA SCHEDA DI UN MODELLO DI FASI. Riservata al creatore.
+
+   Le fasi in ordine, con le loro due proprieta', e quanti progetti stanno
+   seguendo questa versione.
+
+   L'unica azione che cambia il modello e' "Crea la versione successiva", e
+   non e' una modifica: e' un modello nuovo che nasce accanto a questo. Questo
+   resta com'e' per sempre, perche' i progetti che lo seguono sono passati per
+   queste fasi e la loro storia deve continuare a raccontarle (D-016).
+
+   L'altra azione, la proponibilita', non tocca nessun progetto: dice solo se
+   il modello si puo' ancora scegliere aprendone uno nuovo.
+   =========================================================================== #}
+{% extends "base.html" %}
+
+{% from "components/pulsanti.html" import pulsante_collegamento, modulo_pulsante %}
+{% from "components/riquadro.html" import riquadro %}
+{% from "components/descrizione.html" import descrizione, voce %}
+{% from "components/tabella.html" import tabella %}
+{% from "components/stato.html" import etichetta %}
+{% from "components/avanzamento.html" import avanzamento as barra_fasi %}
+{% from "components/avvisi.html" import avviso, notifica %}
+
+{% block titolo %}{{ modello.name }} v{{ modello.version }}{% endblock %}
+{% block sezione %}Fasi{% endblock %}
+
+{% block notifiche %}
+    {% if creata %}
+        {{ notifica("Da adesso i progetti nuovi possono seguire questo "
+                    "percorso.",
+                    variante="successo", titolo="Modello salvato") }}
+    {% endif %}
+{% endblock %}
+
+{% block contenuto %}
+
+<div class="testata">
+    <div>
+        <h1>{{ modello.name }} <span class="mono">v{{ modello.version }}</span></h1>
+        <p class="sottotitolo">
+            {{ modello.description or "Nessuna descrizione." }}
+        </p>
+    </div>
+    <div class="testata-azioni">
+        {{ pulsante_collegamento("Tutti i modelli", "/fasi", icona_nome="fasi") }}
+        {{ pulsante_collegamento("Crea la versione successiva",
+                                 "/fasi/" ~ modello.id ~ "/versione",
+                                 variante="primario", icona_nome="piu") }}
+    </div>
+</div>
+
+{% call riquadro("Come si vedra' in un progetto") %}
+    {# La stessa barra che vedra' chi apre la scheda di un progetto su questo
+       modello. Vederla qui, mentre si decide l'ordine delle fasi, e' il modo
+       piu' rapido di accorgersi che ce n'e' una di troppo o che due sono
+       nell'ordine sbagliato. #}
+    {% if anteprima %}
+        {{ barra_fasi(anteprima, etichetta="Le fasi di questo modello") }}
+    {% else %}
+        <p class="campo-aiuto">
+            Questo modello non ha nessuna fase.
+        </p>
+    {% endif %}
+{% endcall %}
+
+<div class="griglia-riquadri">
+
+    {% call riquadro("Il modello") %}
+        {% call descrizione(stretta=true) %}
+            {{ voce("Nome", modello.name) }}
+            {{ voce("Versione", modello.version) }}
+            {{ voce("Fasi", fasi|length) }}
+            {{ voce("Progetti che lo usano", progetti_che_lo_usano) }}
+            {{ voce("Stato",
+                    etichetta("proponibile", variante="successo")
+                    if modello.is_active
+                    else etichetta("superato", variante="neutra")) }}
+            {{ voce("Creato il", modello.created_at.strftime("%d/%m/%Y")) }}
+        {% endcall %}
+
+        <div class="fila-pulsanti margine-sopra">
+            {% if modello.is_active %}
+                {{ modulo_pulsante(request,
+                                   "/fasi/" ~ modello.id ~ "/proponibilita",
+                                   "Togli dai proponibili",
+                                   misura="piccolo",
+                                   nome="proponibile", valore="no",
+                                   conferma="I progetti che seguono questo "
+                                            "modello non cambiano. Sparira' "
+                                            "soltanto dalla tendina di chi apre "
+                                            "un progetto nuovo. Procedo?") }}
+            {% else %}
+                {{ modulo_pulsante(request,
+                                   "/fasi/" ~ modello.id ~ "/proponibilita",
+                                   "Rimetti fra i proponibili",
+                                   misura="piccolo", icona_nome="ripristina",
+                                   nome="proponibile", valore="si") }}
+            {% endif %}
+        </div>
+    {% endcall %}
+
+    {% call riquadro("Norme applicabili") %}
+        {% if modello.standards %}
+            <ul class="impila">
+                {% for norma in modello.standards %}
+                    <li>{{ norma }}</li>
+                {% endfor %}
+            </ul>
+        {% else %}
+            <p class="campo-aiuto">
+                Questo modello non porta con se' nessuna norma.
+            </p>
+        {% endif %}
+        <p class="campo-aiuto margine-sopra">
+            Sono il punto di partenza: aprendo un progetto vengono copiate
+            dentro di lui, e da quel momento vivono di vita propria.
+        </p>
+    {% endcall %}
+
+</div>
+
+{% if progetti_che_lo_usano %}
+    {{ avviso("Questa versione del modello e' seguita da "
+              ~ progetti_che_lo_usano ~ " progett"
+              ~ ("o" if progetti_che_lo_usano == 1 else "i")
+              ~ ". Non cambiera' mai: se serve correggere il percorso, si crea "
+                "la versione successiva e quei progetti continuano con questa.",
+              variante="informazione",
+              titolo="Il modello e' in uso") }}
+{% endif %}
+
+{% call riquadro("Le fasi, in ordine di attraversamento", nudo=true) %}
+
+    {% set colonne = [
+        {"etichetta": "#", "classe": "colonna-numero"},
+        {"etichetta": "Fase"},
+        {"etichetta": "Descrizione"},
+        {"etichetta": "Comportamento",
+         "titolo": "Le proprieta' che governano come il progetto attraversa "
+                   "questa fase"},
+    ] %}
+
+    {% call tabella(colonne,
+                    vuota=(fasi|length == 0),
+                    messaggio_vuoto="Questo modello non ha nessuna fase: un "
+                                    "progetto aperto su di lui non si "
+                                    "muoverebbe.") %}
+        {% for fase in fasi %}
+        <tr>
+            <td class="colonna-numero">{{ fase.sort_order }}</td>
+            <td>{{ fase.name }}</td>
+            <td>{{ fase.description or "" }}</td>
+            <td>
+                <div class="fila-pulsanti">
+                    {% if fase.blocks_return %}
+                        {{ etichetta("da qui non si torna indietro",
+                                     variante="attenzione") }}
+                    {% endif %}
+                    {% if fase.closes_project %}
+                        {{ etichetta("chiude il progetto",
+                                     variante="successo") }}
+                    {% endif %}
+                    {% if not fase.blocks_return and not fase.closes_project %}
+                        <span class="testo-tenue">&mdash;</span>
+                    {% endif %}
+                </div>
+            </td>
+        </tr>
+        {% endfor %}
+    {% endcall %}
+
+{% endcall %}
+
+{% endblock %}

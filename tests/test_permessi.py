@@ -1175,7 +1175,13 @@ def test_le_rotte_chiedono_i_permessi_alla_funzione_centrale(db_session):
     sulla strada obbligata. Un router che tocca documenti o progetti senza mai
     nominare permissions o richiedi_creatore sta decidendo per conto suo.
     """
-    da_controllare = ("documents.py", "projects.py", "versions.py", "permissions.py")
+    da_controllare = (
+        "documents.py",
+        "projects.py",
+        "versions.py",
+        "permissions.py",
+        "phases.py",
+    )
 
     for nome in da_controllare:
         testo = (RADICE / "routers" / nome).read_text(encoding="utf-8")

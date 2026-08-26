@@ -92,6 +92,23 @@ le sue caselle (crea_classificazione), quindi in condizioni normali non manca
 mai niente.
 
 
+UN PROGETTO CHIUSO E' IN SOLA LETTURA
+-------------------------------------
+
+Quando un progetto entra nella fase che lo chiude, tutto quello che c'e'
+dentro smette di cambiare: niente documenti nuovi, niente cambi di stato,
+niente passaggi di fase. Resta visibile a chi lo vedeva - un progetto chiuso
+e' un archivio, e un archivio si consulta - e resta modificabile dal solo
+creatore, che e' l'unico che possa riaprirlo riportandolo indietro (D-058).
+
+La regola sta scritta qui in due punti, uno per ciascuna delle due strade:
+dentro `_permessi_su_classificazione` per i documenti e dentro
+`_puo_sul_progetto` per il progetto, piu' la sua copia SQL in
+`filtro_documenti`. Non e' in una rotta apposta: le strade che portano a
+caricare un documento sono tre, e una regola messa su due di quelle tre e'
+una regola che non c'e'.
+
+
 LA MATRICE SI MODIFICA, E L'EFFETTO E' IMMEDIATO
 -------------------------------------------------
 
@@ -135,23 +152,33 @@ logger = logging.getLogger("aurora.permessi")
 
 
 class Azione(str, enum.Enum):
-    """Le quattro cose che si possono chiedere di fare.
-
-    Sono quattro e non di piu' perche' i permessi che l'azienda distingue sono
-    quattro. Aggiungerne una vuol dire aggiungere una colonna alla matrice e
-    una migrazione: non e' una cosa che capita per sbaglio.
+    """Le cinque cose che si possono chiedere di fare.
 
     vedere        sapere che l'oggetto esiste, aprirlo, scaricarlo;
     caricare      mettere dentro qualcosa di nuovo (un documento, una
                   versione);
-    modificare    cambiare l'oggetto: lo stato, il ritiro, il ciclo di vita;
+    modificare    cambiare l'oggetto: lo stato, il ritiro, il ciclo di vita,
+                  la fase di un progetto;
+    richiedere    **chiedere** un cambiamento che non si ha il permesso di
+                  fare: oggi e' l'avanzamento di fase, che un ingegnere puo'
+                  domandare e il project manager decide (sessione 8);
     amministrare  le sezioni riservate al creatore: utenti, clienti, matrice
-                  dei permessi, documenti ritirati, vetrina dello stile.
+                  dei permessi, modelli di fasi, documenti ritirati, vetrina
+                  dello stile.
+
+    **TRE DI QUESTE SONO COLONNE DELLA MATRICE, DUE NO.** Vedere, caricare e
+    modificare sono le tre caselle di `permission_rules`: aggiungerne una
+    vorrebbe dire aggiungere una colonna alla tabella e una migrazione, e non
+    e' una cosa che capita per sbaglio. Amministrare e richiedere non sono
+    caselle - la matrice governa i documenti, e nessuna di queste due parla di
+    documenti: sono decise da una regola scritta qui sotto, ed e' per questo
+    che `Permessi.consente()` risponde "no" a tutte e due.
     """
 
     VEDERE = "vedere"
     CARICARE = "caricare"
     MODIFICARE = "modificare"
+    RICHIEDERE = "richiedere"
     AMMINISTRARE = "amministrare"
 
 
@@ -206,8 +233,9 @@ class Permessi:
             return self.caricare
         if azione is Azione.MODIFICARE:
             return self.modificare
-        # AMMINISTRARE non e' una casella della matrice: e' del creatore, e
-        # chi e' creatore non arriva mai fin qui.
+        # AMMINISTRARE e RICHIEDERE non sono caselle della matrice. La prima
+        # e' del creatore, e chi e' creatore non arriva mai fin qui; la
+        # seconda riguarda le fasi di un progetto, non i suoi documenti.
         return False
 
 
@@ -356,7 +384,30 @@ def _permessi_su_classificazione(
 
     E' il cuore del modello. Il creatore non arriva mai fin qui: gli ha gia'
     risposto puo().
+
+    **Un progetto chiuso e' in sola lettura**, per tutti quelli che non sono
+    il creatore, project manager compreso (D-058). I documenti restano
+    visibili - un progetto chiuso e' un archivio, e un archivio si consulta -
+    ma non se ne carica piu' e non se ne cambia lo stato. Il filtro sta qui e
+    non in una rotta perche' le strade che portano a caricare un documento
+    sono tre, e una regola messa su due di quelle tre e' una regola che non
+    c'e'.
     """
+    permessi = _permessi_di_ruolo(db, utente, progetto, classification_id)
+
+    if progetto.closed_at is not None:
+        return Permessi(vedere=permessi.vedere, caricare=False, modificare=False)
+
+    return permessi
+
+
+def _permessi_di_ruolo(
+    db: Session,
+    utente: User,
+    progetto: Project,
+    classification_id: uuid.UUID,
+) -> Permessi:
+    """Le tre caselle che il ruolo di questa persona le da', progetto aperto."""
     # Il responsabile del progetto puo' tutto sui documenti del suo progetto,
     # qualunque cosa dica la matrice. Vedi la spiegazione in cima al file.
     if progetto.project_manager_id == utente.id:
@@ -398,14 +449,38 @@ def _puo_sul_progetto(
     caricare      chi ha almeno una classificazione con cui caricare qui:
                   serve al pulsante "Carica un documento", che altrimenti
                   porterebbe a un modulo con il menu a tendina vuoto;
-    modificare    il responsabile e il creatore: e' chi decide del lavoro;
+    modificare    il responsabile e il creatore: e' chi decide del lavoro.
+                  E' anche il permesso con cui si avanza di fase, si torna a
+                  una fase precedente e si decide una richiesta altrui;
+    richiedere    chi e' nella squadra ma non la governa: puo' **chiedere**
+                  l'avanzamento di fase, che poi decidera' il responsabile
+                  (D-056);
     amministrare  il creatore, a cui pero' ha gia' risposto puo().
+
+    **Un progetto chiuso e' in sola lettura** per tutti tranne il creatore
+    (D-058): non si avanza, non si torna indietro, non si chiede e non si
+    carica. Resta visibile a chi lo vedeva, perche' un progetto chiuso e'
+    un archivio e un archivio si consulta.
     """
     if azione is Azione.AMMINISTRARE:
         return False
 
+    # Il creatore non arriva mai qui: gli ha gia' risposto puo(). Quindi
+    # questa riga chiude fuori tutti gli altri, responsabile compreso.
+    if progetto.closed_at is not None and azione is not Azione.VEDERE:
+        return False
+
     if azione is Azione.MODIFICARE:
         return progetto.project_manager_id == utente.id
+
+    if azione is Azione.RICHIEDERE:
+        # Chi governa il progetto non chiede: fa. Se questa riga non ci
+        # fosse, il responsabile si troverebbe davanti due pulsanti che fanno
+        # la stessa cosa in due modi diversi, e uno dei due gli chiederebbe
+        # il permesso a se' stesso.
+        if progetto.project_manager_id == utente.id:
+            return False
+        return ruolo_nel_progetto(db, progetto.id, utente.id) is not None
 
     if azione is Azione.CARICARE:
         return bool(classificazioni_caricabili(db, progetto, utente))
@@ -438,7 +513,7 @@ def _puo_sulla_versione(
     if azione is Azione.VEDERE:
         return True
 
-    if azione is Azione.AMMINISTRARE:
+    if azione in (Azione.AMMINISTRARE, Azione.RICHIEDERE):
         return False
 
     progetto = versione.project
@@ -495,11 +570,25 @@ MESSAGGI_NEGATO: dict[Azione, str] = {
         "Il tuo ruolo in questo progetto non permette di modificare questo "
         "oggetto."
     ),
+    Azione.RICHIEDERE: (
+        "Il tuo ruolo in questo progetto non permette di chiedere il "
+        "passaggio alla fase successiva."
+    ),
     Azione.AMMINISTRARE: (
         "Questa sezione e' riservata a chi ha il ruolo di creatore."
     ),
     Azione.VEDERE: "Non hai il permesso di vedere questo oggetto.",
 }
+
+# Il messaggio del progetto chiuso e' a parte perche' non dipende dal ruolo di
+# chi chiede: e' vero per tutti allo stesso modo, responsabile compreso, e
+# dirgli "il tuo ruolo non permette" gli farebbe cercare un permesso che non
+# esiste.
+MESSAGGIO_PROGETTO_CHIUSO = (
+    "Questo progetto e' chiuso: si puo' leggere ma non si puo' piu' "
+    "cambiare. Chi ha il ruolo di creatore puo' riaprirlo riportandolo a "
+    "una fase precedente."
+)
 
 
 def _messaggio_inesistente(oggetto: object) -> str:
@@ -509,6 +598,14 @@ def _messaggio_inesistente(oggetto: object) -> str:
 
 def _messaggio_negato(azione: Azione, oggetto: object) -> str:
     """La frase del 403, che dice quale permesso manca."""
+    if isinstance(oggetto, Project) and oggetto.closed_at is not None:
+        return MESSAGGIO_PROGETTO_CHIUSO
+    if isinstance(oggetto, BersaglioCaricamento) and (
+        oggetto.progetto.closed_at is not None
+    ):
+        return MESSAGGIO_PROGETTO_CHIUSO
+    if isinstance(oggetto, Document) and oggetto.project.closed_at is not None:
+        return MESSAGGIO_PROGETTO_CHIUSO
     if isinstance(oggetto, ProductVersion) and azione is Azione.MODIFICARE:
         return (
             "Il ciclo di vita di una versione lo cambiano il project manager "
@@ -555,6 +652,11 @@ def filtro_documenti(
     Sono due EXISTS correlati su Document, quindi la condizione si porta
     dentro tutto quello che le serve: chi la usa non deve aggiungere nessuna
     join, e non puo' sbagliarla.
+
+    **Il progetto chiuso e' in sola lettura anche qui.** Per "vedere" non
+    cambia niente - un archivio si consulta - ma per caricare e modificare la
+    condizione si chiude, esattamente come fa puo() (D-058). Le due strade
+    devono dire la stessa cosa: e' il patto di questo file.
     """
     if utente.is_creatore:
         return None
@@ -599,7 +701,19 @@ def filtro_documenti(
         .correlate(Document)
     )
 
-    return or_(responsabile, dalla_matrice)
+    consentito = or_(responsabile, dalla_matrice)
+
+    if azione is Azione.VEDERE:
+        return consentito
+
+    progetto_aperto = exists(
+        select(Project.id).where(
+            Project.id == Document.project_id,
+            Project.closed_at.is_(None),
+        )
+    ).correlate(Document)
+
+    return and_(progetto_aperto, consentito)
 
 
 def filtro_progetti(utente: User) -> ColumnElement[bool] | None:
