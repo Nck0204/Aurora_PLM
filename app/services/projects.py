@@ -53,7 +53,7 @@ from app.models import (
     ProjectRole,
     User,
 )
-from app.services import audit, lifecycle, permissions, phases
+from app.services import audit, etichette, lifecycle, permissions, phases
 
 logger = logging.getLogger("aurora.progetti")
 
@@ -301,6 +301,7 @@ def apri_progetto(
         entity_id=progetto.id,
         user_id=autore.id,
         request=request,
+        etichetta=etichette.nome_progetto(progetto),
         new_value={
             "product_version_id": str(versione.id),
             "project_manager": project_manager.username,
@@ -417,6 +418,7 @@ def assegna(
         entity_id=assegnazione.id,
         user_id=autore.id,
         request=request,
+        etichetta=f"{utente.username} su {etichette.nome_progetto(progetto)}",
         new_value={
             "project_id": str(progetto.id),
             "user": utente.username,
@@ -445,6 +447,10 @@ def revoca(
         entity_id=assegnazione.id,
         user_id=autore.id,
         request=request,
+        etichetta=(
+            f"{assegnazione.user.username} su "
+            f"{etichette.nome_progetto(assegnazione.project)}"
+        ),
         old_value={"project_role": assegnazione.project_role.value},
         new_value={"revoked": True},
     )

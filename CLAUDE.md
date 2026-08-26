@@ -90,7 +90,16 @@ difficile una soluzione, si cambia la soluzione, non la regola.
 6. **Ogni operazione significativa finisce nell'audit trail.** Creazione,
    modifica, disattivazione, approvazione, caricamento e scaricamento di
    documenti, entrata e uscita degli utenti. La registrazione dice sempre:
-   chi, che cosa, su quale oggetto, quando, da quale indirizzo IP.
+   chi, che cosa, su quale oggetto, quando, da quale indirizzo IP, e - dalla
+   sessione 9 - **una frase in italiano** che si capisce senza conoscere il
+   programma, piu' il valore di prima e quello di dopo per le modifiche.
+
+   **Il registro si scrive e non si tocca piu'.** Non e' una buona intenzione:
+   l'utente PostgreSQL con cui Aurora si collega ha su `audit_logs` i permessi
+   `SELECT` e `INSERT` e nient'altro (`scripts/hardening_db.sql`), e ogni voce
+   porta l'impronta di quella precedente, cosi' una manomissione fatta
+   scavalcando il programma si vede (`scripts/verifica_audit.py`). Vedi D-063
+   e D-064.
 
 7. **Codice leggibile prima che elegante.** Chi manterra' questo programma
    conosce Python e C, non conosce i framework moderni. Preferire sempre la
@@ -148,7 +157,11 @@ aurora/
 │                       l'elenco dei tipi di documento
 ├── docs/                  STATO.md, DECISIONI.md, MODELLO_DATI.md,
 │                       GUIDA_STILE.md
-├── scripts/               procedure operative (installazione, manutenzione)
+├── scripts/               procedure operative (installazione, manutenzione).
+│                       Fra queste: hardening_db.sql, che rende audit_logs
+│                       a sola aggiunta; verifica_audit.py, che ricalcola
+│                       la catena delle impronte; archivia_audit.py, che
+│                       ne copia le voci vecchie su file compresso
 ├── tests/                 test pytest
 ├── storage/               archivio dei file caricati (NON in git)
 │   ├── objects/           i file, depositati per impronta SHA-256:
@@ -195,6 +208,14 @@ Dove mettere una cosa nuova:
   dentro una rotta: il nome originale sul filesystem, il limite dei 260
   caratteri di Windows e la scrittura interrotta sono tre problemi gia'
   risolti li' (D-004, D-047);
+- **un'operazione da registrare** → si aggiunge una riga a
+  `audit.CATALOGO` (il nome in inglese, la frase italiana, il gruppo) e si
+  chiama `audit.record(..., etichetta=...)` passando il nome con cui una
+  persona chiama l'oggetto. Il nome lo compone `app/services/etichette.py`.
+  **Non si costruisce mai una riga di `audit_logs` a mano**: senza `record()`
+  la voce resta senza numero di sequenza e l'INSERT fallisce - e' il database
+  che fa rispettare D-018. C'e' un test che legge i sorgenti e diventa rosso
+  se un'azione non e' catalogata (`tests/test_registro.py`);
 - **un permesso, di qualunque genere** → si chiede a
   `permissions.puo(db, utente, azione, oggetto)`, che e' **l'unico punto del
   programma in cui un permesso viene deciso** (D-051). Non si scrive un
@@ -311,6 +332,13 @@ Tutti dalla radice del progetto (`aurora/`), con l'ambiente virtuale attivo:
   **colonna di `phases`** - come `blocks_return` e `closes_project` - e la
   spunta la mette chi crea il modello. Ci sono due test che leggono i sorgenti
   e diventano rossi se un nome di fase ricompare dentro `app/` (D-055).
+- **Scrivere, modificare o cancellare una riga di `audit_logs` fuori da
+  `audit.record()`.** Non c'e' nessuna funzione che corregge il registro e non
+  va aggiunta: il database non lo permetterebbe comunque. Se una voce e'
+  sbagliata, se ne scrive una nuova che lo dice.
+- Cancellare voci vecchie del registro "per fare spazio". La politica di
+  conservazione e' l'archiviazione, che **copia** e non sposta
+  (`scripts/archivia_audit.py`, D-065).
 - Mettere una password o un indirizzo di server dentro un file `.py`.
 - Modificare a mano una migrazione gia' applicata in produzione: se ne scrive
   una nuova.

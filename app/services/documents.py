@@ -49,7 +49,7 @@ from app.models import (
     Project,
     User,
 )
-from app.services import audit, lifecycle, permissions, storage
+from app.services import audit, etichette, lifecycle, permissions, storage
 
 logger = logging.getLogger("aurora.documenti")
 
@@ -509,6 +509,7 @@ def crea_documento(
         entity_id=documento.id,
         user_id=autore.id,
         request=request,
+        etichetta=etichette.nome_documento(documento),
         new_value={
             "project_id": str(progetto.id),
             "title": documento.title,
@@ -596,6 +597,7 @@ def aggiungi_versione(
             entity_id=documento.id,
             user_id=autore.id,
             request=request,
+            etichetta=etichette.nome_documento(documento),
             old_value={"state": stato_precedente.value},
             new_value={
                 "state": documento.state.value,
@@ -643,6 +645,7 @@ def _scrivi_versione(
         entity_id=documento.id,
         user_id=autore.id,
         request=request,
+        etichetta=etichette.nome_documento(documento),
         new_value={
             "version_number": versione.version_number,
             "storage_hash": versione.storage_hash,
@@ -701,6 +704,7 @@ def cambia_stato(
         entity_id=documento.id,
         user_id=autore.id,
         request=request,
+        etichetta=etichette.nome_documento(documento),
         old_value={"state": stato_precedente.value},
         new_value={"state": nuovo_stato.value},
     )
@@ -743,6 +747,7 @@ def elimina(
         entity_id=documento.id,
         user_id=autore.id,
         request=request,
+        etichetta=etichette.nome_documento(documento),
         old_value={"deleted_at": None},
         new_value={"deleted_at": documento.deleted_at.isoformat()},
     )
@@ -778,6 +783,7 @@ def ripristina(
         entity_id=documento.id,
         user_id=autore.id,
         request=request,
+        etichetta=etichette.nome_documento(documento),
         old_value={"deleted_at": quando.isoformat() if quando else None},
         new_value={"deleted_at": None},
     )
@@ -817,6 +823,7 @@ def registra_scarico(
         entity_id=documento.id,
         user_id=utente.id,
         request=request,
+        etichetta=etichette.nome_documento(documento),
         new_value={
             "version_number": versione.version_number,
             "version_id": str(versione.id),

@@ -27,3 +27,8 @@ logs/
 .idea/
 Thumbs.db
 desktop.ini
+
+# Configurazione locale degli strumenti di sviluppo (avvio del server nella
+# finestra di anteprima). Non serve a chi usa Aurora e cambia da computer a
+# computer.
+.claude/

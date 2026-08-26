@@ -50,7 +50,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models import DocumentState, LifecycleState, ProductVersion, User
-from app.services import audit
+from app.services import audit, etichette
 
 logger = logging.getLogger("aurora.ciclo_vita")
 
@@ -309,6 +309,7 @@ def cambia_stato(
         entity_id=versione.id,
         user_id=autore.id,
         request=request,
+        etichetta=etichette.nome_versione(versione),
         old_value={"lifecycle_state": stato_precedente.value},
         new_value=nuovo_valore,
     )
@@ -357,6 +358,7 @@ def _supera_la_precedente(
         entity_id=precedente.id,
         user_id=None,  # azione di sistema: vedi la spiegazione qui sopra
         request=request,
+        etichetta=etichette.nome_versione(precedente),
         old_value={"lifecycle_state": stato_precedente.value},
         new_value={
             "lifecycle_state": LifecycleState.SUPERATO.value,

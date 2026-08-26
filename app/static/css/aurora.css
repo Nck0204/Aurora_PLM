@@ -1297,6 +1297,86 @@ fieldset.gruppo-campi legend {
     min-width: 150px;
 }
 
+/* L'intervallo di date. L'etichetta si vede - due caselle di data vuote e
+   affiancate non si distinguono - e sta sopra la casella, in piccolo, cosi'
+   la riga di ricerca resta alta come le altre. */
+.ricerca-date {
+    display: flex;
+    align-items: flex-end;
+    gap: var(--spazio-2);
+    flex-wrap: wrap;
+}
+
+.ricerca-data {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spazio-1);
+    font-size: var(--testo-piccolo);
+    color: var(--colore-testo-tenue);
+}
+
+.ricerca-data input {
+    width: auto;
+    min-width: 150px;
+}
+
+/* --------------------------------------------------------------------------
+   Le voci del registro delle operazioni (components/storico.html).
+   La riga dice quando, chi e che cosa; il resto - i valori di prima e di
+   dopo, l'indirizzo, l'impronta - sta dentro un <details> che si apre una
+   riga per volta.
+   -------------------------------------------------------------------------- */
+
+.registro-quando {
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+
+.registro-dettaglio {
+    margin-top: var(--spazio-1);
+    font-size: var(--testo-piccolo);
+}
+
+.registro-dettaglio > summary {
+    cursor: pointer;
+    color: var(--colore-testo-tenue);
+}
+
+.registro-dettaglio > summary:hover {
+    color: var(--colore-accento);
+}
+
+.registro-dettaglio dl {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: var(--spazio-1) var(--spazio-3);
+    margin: var(--spazio-2) 0 0;
+    padding: var(--spazio-2) var(--spazio-3);
+    background: var(--colore-superficie-sollevata);
+    border-radius: var(--raggio-piccolo);
+}
+
+.registro-dettaglio dt {
+    color: var(--colore-testo-tenue);
+    white-space: nowrap;
+}
+
+.registro-dettaglio dd {
+    margin: 0;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+/* I campi cambiati vanno a capo uno per riga: incolonnati si leggono, in fila
+   diventano una frase unica in cui non si distingue dove finisce un campo. */
+.registro-campo {
+    display: block;
+}
+
+.registro-impronta {
+    color: var(--colore-testo-tenue);
+}
+
 
 /* ==========================================================================
    14. IMPAGINAZIONE

@@ -33,7 +33,9 @@
 {% from "components/avvisi.html" import avviso, notifica %}
 {% from "components/ricerca.html" import ricerca %}
 {% from "components/impaginazione.html" import impaginazione %}
-{% from "components/schede.html" import schede, scheda, schede_collegamento %}
+{% from "components/schede.html" import schede, scheda, schede_collegamento,
+                                        schede_oggetto %}
+{% from "components/storico.html" import storico %}
 {% from "components/avanzamento.html" import avanzamento %}
 {% from "components/griglia_fasi.html" import griglia_fasi %}
 {% from "components/descrizione.html" import descrizione, voce %}
@@ -462,6 +464,24 @@
         {% include "stile_risultati.html" %}
     </div>
 
+    <h3>Con l'intervallo di date</h3>
+    <p class="testo-tenue">
+        Gli elenchi che raccontano fatti avvenuti si filtrano soprattutto per
+        periodo: sono due campi <code>type="date"</code> che viaggiano insieme
+        alla ricerca. Qui l'etichetta si vede - due caselle di data vuote e
+        affiancate non si distinguono - mentre quella della casella di ricerca
+        no. La usa la pagina del registro delle operazioni.
+    </p>
+
+    {{ ricerca("/stile",
+               segnaposto="Cerca nella descrizione",
+               date=[{"nome": "dal", "etichetta": "Dal giorno", "valore": ""},
+                     {"nome": "al", "etichetta": "Al giorno", "valore": ""}],
+               filtri=[{"nome": "gruppo", "etichetta": "Gruppo",
+                        "opzioni": [("Accessi", "Accessi"),
+                                    ("Documenti", "Documenti")],
+                        "scelto": "", "vuoto": "Qualunque gruppo"}]) }}
+
     <h2>Tabella con ordinamento</h2>
     <p class="testo-tenue">
         L'intestazione resta ferma mentre si scorre, le righe si alternano,
@@ -820,6 +840,33 @@
         </p>
     {% endcall %}
     </div>
+
+    <div class="margine-sopra">
+    {% call riquadro("Le linguette della scheda di un oggetto") %}
+        {{ schede_oggetto("/stile", corrente="/stile",
+                          altre=[{"etichetta": "Accessi",
+                                  "indirizzo": "/stile-accessi"}]) }}
+        <p class="testo-tenue">
+            Dalla sessione 9 ogni oggetto - prodotto, versione, progetto,
+            documento, persona - ha la sua scheda e il suo <b>storico</b>.
+            L'ordine e' sempre lo stesso: la scheda per prima, lo storico per
+            ultimo, in mezzo le pagine che quel tipo di oggetto ha in piu'.
+            Chi impara dove sta lo storico su una pagina lo ritrova nello
+            stesso posto su tutte le altre.
+        </p>
+    {% endcall %}
+    </div>
+
+    <h2>Le voci del registro delle operazioni</h2>
+    <p class="testo-tenue">
+        Una riga di registro ha una parte che si legge sempre - quando, chi,
+        che cosa - e una che si guarda solo quando serve: i valori di prima e
+        di dopo, l'indirizzo IP, l'impronta. La seconda sta dentro un
+        <code>&lt;details&gt;</code> che si apre riga per riga e funziona
+        senza JavaScript. Le voci qui sotto sono inventate.
+    </p>
+
+    {{ storico(VOCI_DI_ESEMPIO, con_oggetto=true) }}
 
     <h2>Barra laterale</h2>
     <p class="testo-tenue">

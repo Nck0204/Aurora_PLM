@@ -1,0 +1,53 @@
+{# ===========================================================================
+   La scheda "Storico" di un oggetto: prodotto, versione, progetto, documento,
+   persona.
+
+   UNA PAGINA SOLA PER TUTTI E CINQUE. Quello che cambia e' il titolo, la
+   frase di spiegazione e le linguette in cima; il resto - l'elenco delle voci
+   e l'impaginazione - e' identico, e cinque copie di questa pagina
+   diventerebbero cinque pagine diverse alla prima modifica. Chi la riempie e'
+   app/routers/storico.py.
+
+   LE LINGUETTE SONO COLLEGAMENTI, non schede che si aprono e si chiudono
+   nella stessa pagina. E' il secondo dei due modi descritti in
+   components/schede.html, ed e' quello giusto qui per due ragioni: lo storico
+   di un oggetto con anni di vita e' pesante da preparare e va impaginato, e
+   un indirizzo suo si manda a un collega ("guarda chi ha scaricato questo
+   documento").
+   =========================================================================== #}
+{% extends "base.html" %}
+
+{% from "components/schede.html" import schede_oggetto %}
+{% from "components/storico.html" import storico %}
+{% from "components/impaginazione.html" import impaginazione %}
+{% from "components/pulsanti.html" import pulsante_collegamento %}
+
+{% block titolo %}Storico di {{ titolo_oggetto }}{% endblock %}
+{% block sezione %}{{ sezione_menu }}{% endblock %}
+
+{% block contenuto %}
+
+<div class="testata">
+    <div>
+        <h1>{{ titolo_oggetto }}</h1>
+        <p class="sottotitolo">Storico delle operazioni</p>
+    </div>
+    <div class="testata-azioni">
+        {{ pulsante_collegamento(etichetta_ritorno, indirizzo_oggetto,
+                                 icona_nome="freccia-sinistra") }}
+    </div>
+</div>
+
+{{ schede_oggetto(indirizzo_oggetto, corrente=indirizzo_storico,
+                  altre=altre_schede) }}
+
+<p class="campo-aiuto margine-sopra">{{ spiegazione }}</p>
+
+{{ storico(voci, con_oggetto=false,
+           messaggio_vuoto="Non c'e' ancora nessuna operazione registrata "
+                           "per questo oggetto.") }}
+
+{{ impaginazione(pagina=pagina_corrente, totale_pagine=totale_pagine,
+                 indirizzo=indirizzo_storico, totale_righe=totale) }}
+
+{% endblock %}

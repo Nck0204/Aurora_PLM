@@ -21,6 +21,8 @@ giorno in cui il database non risponde, che e' proprio uno dei giorni in cui
 si guarda una pagina di diagnostica.
 """
 
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import Response
 
@@ -98,6 +100,62 @@ def cerca_esempio(testo: str) -> list[dict[str, str]]:
     ]
 
 
+# Voci di registro finte per l'esempio del componente "storico". Hanno la
+# forma esatta dei dizionari che compongono app/routers/audit.py e
+# app/routers/storico.py, perche' il componente disegna quelli; il contenuto e'
+# inventato qui, come tutto il resto della vetrina.
+VOCI_DI_ESEMPIO: tuple[dict, ...] = (
+    {
+        "seq": 4127,
+        "quando": datetime(2026, 8, 26, 9, 14, 3, tzinfo=timezone.utc),
+        "autore": "anna.verdi",
+        "azione": "Documento scaricato",
+        "codice_azione": "document.download",
+        "entita": "Documento",
+        "entity_id": "9d3f1a2c-0000-0000-0000-000000000001",
+        "indirizzo": None,
+        "descrizione": "Documento scaricato: Schema del convertitore",
+        "prima": {},
+        "dopo": {"version_number": 3, "filigrana": True},
+        "ip": "192.168.1.42",
+        "impronta": "7c1f" + "0" * 60,
+    },
+    {
+        "seq": 4126,
+        "quando": datetime(2026, 8, 26, 9, 11, 51, tzinfo=timezone.utc),
+        "autore": "marco.gialli",
+        "azione": "Stato del documento cambiato",
+        "codice_azione": "document.state_changed",
+        "entita": "Documento",
+        "entity_id": "9d3f1a2c-0000-0000-0000-000000000001",
+        "indirizzo": None,
+        "descrizione": (
+            "Stato del documento cambiato: Schema del convertitore "
+            "(state: in_verifica -> rilasciato)"
+        ),
+        "prima": {"state": "in_verifica"},
+        "dopo": {"state": "rilasciato"},
+        "ip": "192.168.1.17",
+        "impronta": "b30a" + "0" * 60,
+    },
+    {
+        "seq": 4125,
+        "quando": datetime(2026, 8, 26, 8, 2, 9, tzinfo=timezone.utc),
+        "autore": "sistema",
+        "azione": "Versione superata automaticamente",
+        "codice_azione": "product_version.superseded",
+        "entita": "Versione",
+        "entity_id": "9d3f1a2c-0000-0000-0000-000000000002",
+        "indirizzo": None,
+        "descrizione": "Versione superata automaticamente: TRM-E520-R04 v2",
+        "prima": {"lifecycle_state": "in_produzione"},
+        "dopo": {"lifecycle_state": "superato", "superata_da_versione": 3},
+        "ip": None,
+        "impronta": "1e88" + "0" * 60,
+    },
+)
+
+
 @router.get("")
 def vetrina(
     request: Request,
@@ -126,6 +184,7 @@ def vetrina(
         verso=verso,
         pagina_numero=pagina_numero,
         righe=righe,
+        VOCI_DI_ESEMPIO=VOCI_DI_ESEMPIO,
     )
 
 

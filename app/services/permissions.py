@@ -141,7 +141,7 @@ from app.models import (
     ProjectRole,
     User,
 )
-from app.services import audit
+from app.services import audit, etichette
 
 logger = logging.getLogger("aurora.permessi")
 
@@ -259,7 +259,20 @@ def puo(db: Session, utente: User, azione: Azione, oggetto: object) -> bool:
                             coppia (progetto, classificazione);
       Project               un progetto;
       ProductVersion        una versione di prodotto;
+      Product               un prodotto;
       AMMINISTRAZIONE       le sezioni riservate al creatore.
+
+    Il prodotto e' arrivato con la sessione 9, insieme alla scheda "Storico"
+    che ogni oggetto adesso ha: la storia di un oggetto la vede chi vede
+    l'oggetto, e per rispondere a quella domanda questa funzione doveva saper
+    trattare anche i prodotti.
+
+    **Le persone non sono in questo elenco.** Le pagine che parlano di una
+    persona - la sua scheda, i suoi accessi, il suo storico - sono tutte nella
+    sezione riservata al creatore, e il permesso lo chiede la dipendenza
+    richiedi_creatore, che a sua volta lo chiede qui con AMMINISTRAZIONE. E'
+    la stessa domanda fatta nel modo previsto per le pagine di
+    amministrazione, e la risposta negativa e' un 403 invece di un 404.
 
     Su un oggetto che non sa trattare risponde **no** e lo scrive nel
     registro. E' l'unico modo prudente di sbagliare: chi aggiungesse un
@@ -297,6 +310,9 @@ def puo(db: Session, utente: User, azione: Azione, oggetto: object) -> bool:
 
     if isinstance(oggetto, ProductVersion):
         return _puo_sulla_versione(db, utente, azione, oggetto)
+
+    if isinstance(oggetto, Product):
+        return _puo_sul_prodotto(azione)
 
     if isinstance(oggetto, _Amministrazione):
         # Il creatore ha gia' avuto la sua risposta in cima: qui arriva solo
@@ -520,6 +536,26 @@ def _puo_sulla_versione(
     return progetto is not None and progetto.project_manager_id == utente.id
 
 
+def _puo_sul_prodotto(azione: Azione) -> bool:
+    """Che cosa questa persona puo' fare su un prodotto.
+
+    **Vedere: tutti quelli che sono entrati**, per la stessa ragione delle
+    versioni - il catalogo dei prodotti e' il vocabolario comune dell'azienda.
+    E' anche la regola che le rotte di app/routers/products.py applicavano
+    gia' dichiarando Depends(richiedi_login) sulla lettura.
+
+    **Tutto il resto: il creatore**, che a questa funzione non arriva mai
+    perche' gli ha gia' risposto puo(). Creare e modificare un prodotto sono
+    rotte con Depends(richiedi_creatore).
+
+    Non riceve ne' la sessione ne' il prodotto perche' non le servono: la
+    regola non guarda nessun dato. Prenderli per simmetria con le altre
+    funzioni vorrebbe dire scrivere due argomenti che nessuno usa, e chi legge
+    si chiederebbe dove finiscono.
+    """
+    return azione is Azione.VEDERE
+
+
 def _classificazione_attiva(db: Session, classification_id: uuid.UUID) -> bool:
     """Dice se quella classificazione e' ancora fra quelle in uso."""
     classe = db.get(Classification, classification_id)
@@ -557,6 +593,7 @@ MESSAGGI_INESISTENTE: dict[type, str] = {
     Document: "Il documento richiesto non esiste.",
     Project: "Il progetto richiesto non esiste.",
     ProductVersion: "La versione richiesta non esiste.",
+    Product: "Il prodotto richiesto non esiste.",
 }
 
 MESSAGGIO_INESISTENTE_GENERICO = "L'oggetto richiesto non esiste."
@@ -1015,6 +1052,10 @@ def salva_matrice(
             entity_id=regola.id,
             user_id=autore.id,
             request=request,
+            etichetta=(
+                f"{cambiamento.project_role.value} su "
+                f"{cambiamento.classificazione.name}"
+            ),
             old_value={
                 "ruolo": cambiamento.project_role.value,
                 "classificazione": cambiamento.classificazione.name,
@@ -1110,6 +1151,7 @@ def crea_classificazione(
         entity_id=classificazione.id,
         user_id=autore.id,
         request=request,
+        etichetta=etichette.nome_classificazione(classificazione),
         new_value={
             "nome": classificazione.name,
             "ordine": classificazione.sort_order,
@@ -1156,6 +1198,7 @@ def rinomina_classificazione(
         entity_id=classificazione.id,
         user_id=autore.id,
         request=request,
+        etichetta=etichette.nome_classificazione(classificazione),
         old_value=prima,
         new_value={
             "nome": classificazione.name,
@@ -1208,6 +1251,7 @@ def sposta_classificazione(
         entity_id=classificazione.id,
         user_id=autore.id,
         request=request,
+        etichetta=etichette.nome_classificazione(classificazione),
         old_value={"ordine": indice + 1},
         new_value={"ordine": vicina_indice + 1},
     )
@@ -1241,6 +1285,7 @@ def disattiva_classificazione(
         entity_id=classificazione.id,
         user_id=autore.id,
         request=request,
+        etichetta=etichette.nome_classificazione(classificazione),
         old_value={"attiva": True},
         new_value={"attiva": False},
     )
@@ -1264,6 +1309,7 @@ def riattiva_classificazione(
         entity_id=classificazione.id,
         user_id=autore.id,
         request=request,
+        etichetta=etichette.nome_classificazione(classificazione),
         old_value={"attiva": False},
         new_value={"attiva": True},
     )

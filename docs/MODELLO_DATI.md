@@ -128,7 +128,7 @@ giorno della chiusura.
 | 16 | `phase_transitions` | La storia dei passaggi di fase di un progetto: da dove, a dove, chi ha chiesto, chi ha approvato, perche'. |
 | 17 | `email_messages` | La posta archiviata e collegata a una versione di prodotto, oppure in quarantena in attesa di essere smistata. |
 | 18 | `email_attachments` | Gli allegati staccati dai messaggi e depositati nell'archivio per impronta, come tutti gli altri file. |
-| 19 | `audit_logs` | Il registro di chi ha fatto che cosa, su quale oggetto, quando e da quale indirizzo. Si scrive e non si tocca piu'. |
+| 19 | `audit_logs` | Il registro di chi ha fatto che cosa, su quale oggetto, quando e da quale indirizzo. Si scrive e non si tocca piu': dalla sessione 9 il divieto lo fanno rispettare i permessi di PostgreSQL, e una catena di impronte rende visibile chi lo aggirasse. |
 
 ---
 
@@ -482,16 +482,52 @@ un documento e' quello di cui l'azienda risponde.
 | `entity_id` | UUID | UUID **senza chiave esterna**: deve poter puntare a qualunque tabella, e una chiave esterna punta a una tabella sola. In piu' impedirebbe di registrare operazioni su righe che al momento della registrazione non esistono ancora o non esistono piu'. |
 | `old_value`, `new_value` | jsonb | Solo i campi cambiati, non la riga intera. |
 | `ip` | varchar(45) | |
+| `seq` | bigint | `NN` `UQ`. **Sessione 9.** Il posto della voce nella catena, contato da 1. Non lo genera il database: lo assegna `app/services/audit.py` tenendo un lucchetto, perche' e' anche il primo ingrediente dell'impronta e le due cose si decidono insieme. Serve un ordine **totale**: due voci scritte nello stesso centesimo di secondo hanno lo stesso `occurred_at`. |
+| `description` | text | `NN`. **Sessione 9.** Che cosa e' successo, in italiano e per esteso: "Documento caricato: Schema elettrico (state: bozza -> in_verifica)". La compone `audit.record()` quando il fatto avviene e non si ricalcola mai piu' (D-062). |
+| `previous_hash` | char(64) | `NN`. **Sessione 9.** L'impronta della voce precedente. La prima voce si aggancia a sessantaquattro zeri. |
+| `entry_hash` | char(64) | `NN` `UQ`. **Sessione 9.** L'impronta SHA-256 di questa voce, calcolata su tutte le colonne che raccontano il fatto piu' `seq` e `previous_hash` (D-063). |
 
-Due indici composti: `(entity_type, entity_id, occurred_at)` e
-`(user_id, occurred_at)`, cioe' "tutto quello che e' successo a questo oggetto"
-e "tutto quello che ha fatto questa persona", in ordine di tempo.
+Tre indici composti: `(entity_type, entity_id, occurred_at)`,
+`(user_id, occurred_at)` e `(action, occurred_at)`, cioe' "tutto quello che e'
+successo a questo oggetto", "tutto quello che ha fatto questa persona" e "tutto
+quello che e' successo di questo tipo", in ordine di tempo. Il terzo e'
+arrivato con la sessione 9 insieme al filtro per tipo di azione della pagina
+`/registro`.
 
 `occurred_at` e `created_at` quasi sempre coincidono e restano comunque due
 colonne diverse, perche' dicono due cose diverse: la prima quando il fatto e'
 successo, la seconda quando la riga e' stata scritta. Se un giorno le
 registrazioni verranno scritte in differita, la differenza fra le due sara'
 l'unico modo di rimettere i fatti nell'ordine giusto.
+
+**Questa tabella e' l'unica del database che si scrive e non si tocca piu', e
+dalla sessione 9 non e' piu' soltanto una buona intenzione.** Il divieto e'
+scritto in quattro punti sovrapposti:
+
+1. nel programma: `audit.record()` e' l'unica funzione che aggiunge righe, e
+   non ce n'e' nessuna che ne modifichi o ne tolga (D-018);
+2. nel database: l'utente con cui Aurora si collega ha su questa tabella
+   `SELECT` e `INSERT` e **non** `UPDATE`, `DELETE` o `TRUNCATE`. La procedura
+   e' `scripts/hardening_db.sql`, spiegata in `scripts/hardening_db.md`
+   (D-064). Ne discende che **le migrazioni che toccano questa tabella vanno
+   eseguite come `postgres`**: dopo l'irrobustimento la tabella appartiene ad
+   `aurora_owner`;
+3. in due trigger, che rifiutano `UPDATE`, `DELETE` e `TRUNCATE` chiunque li
+   faccia, superutente compreso. Non fermano chi vuole davvero manomettere il
+   registro; fermano lo sbaglio;
+4. nel dato stesso: la catena delle impronte, che rende **visibile** la
+   manomissione fatta scavalcando i primi tre. La ricalcola
+   `scripts/verifica_audit.py` (D-063).
+
+**Le voci non si cancellano, mai.** La politica di conservazione e'
+l'archiviazione su file compresso (`scripts/archivia_audit.py`), che **copia**
+e non sposta: un registro con dentro un buco, in sede di verifica, non vale
+come un registro con dentro tutto - vale come un registro assente (D-065).
+
+**Chi la legge:** `app/services/registro.py`, che e' l'unico file che la
+interroga. Ricerca filtrata per la pagina `/registro` riservata al creatore,
+storico di un singolo oggetto per le schede "Storico" (D-067), righe per
+l'esportazione in CSV e ricalcolo della catena.
 
 ---
 

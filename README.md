@@ -16,8 +16,12 @@ Gestione progetti e documentazione tecnica. Gira in rete locale, senza cloud.
 9. Controllare che sia vivo: <http://localhost:8000/salute> (attesa: `"stato": "ok"`)
 10. Entrare: <http://localhost:8000/entra>, utente `admin` con la password del
     punto 7. Al primo accesso il programma obbliga a cambiarla.
-11. Eseguire i test: `pytest`
-12. In caso di problemi, leggere il registro: `Get-Content logs\aurora.log -Tail 50`
+11. Rendere il registro delle operazioni a sola aggiunta, seguendo
+    `scripts/hardening_db.md`. **Va fatto dopo il punto 6 e non prima**: la
+    migrazione riempie le colonne delle righe gia' scritte, ed e' l'ultimo
+    `UPDATE` che verra' mai eseguito su quella tabella.
+12. Eseguire i test: `pytest`
+13. In caso di problemi, leggere il registro: `Get-Content logs\aurora.log -Tail 50`
 
 ## Dove finiscono i file caricati
 
@@ -59,6 +63,47 @@ Nel codice la regola sta in un punto solo, `app/services/permissions.py`, e ci
 si arriva sempre con `permissions.puo(db, utente, azione, oggetto)`. Non ci sono
 controlli di permesso da nessun'altra parte, nemmeno nei template: c'e' un test
 che lo verifica leggendo i sorgenti.
+
+## Il registro delle operazioni
+
+Ogni operazione che cambia qualcosa in Aurora lascia una riga in `audit_logs`:
+chi, che cosa, su quale oggetto, quando, da quale indirizzo, con il valore di
+prima e quello di dopo e una frase in italiano che si capisce senza conoscere
+il programma.
+
+Si consulta da <http://localhost:8000/registro> (serve il ruolo di creatore),
+con i filtri per intervallo di date, utente, tipo di azione e tipo di oggetto,
+e la ricerca sulla descrizione. Da li' si esporta in CSV quello che si sta
+guardando - e l'esportazione stessa finisce nel registro.
+
+La storia di un oggetto singolo si guarda invece dalla sua scheda, linguetta
+**Storico**: prodotti, versioni, progetti, documenti e persone ce l'hanno
+tutti, e la vede chi vede l'oggetto.
+
+**Le righe si aggiungono e non si tolgono.** Non e' una promessa del programma:
+l'utente PostgreSQL con cui Aurora si collega ha su quella tabella `SELECT` e
+`INSERT` e nient'altro. Si verifica cosi':
+
+```powershell
+psql -U aurora_app -h localhost -d aurora -c "UPDATE audit_logs SET description = 'x' WHERE seq = 1;"
+```
+
+La risposta attesa e' `permesso negato per la tabella audit_logs`. Se invece
+risponde `UPDATE 1`, l'irrobustimento non e' stato applicato: vedi
+`scripts/hardening_db.md`.
+
+In piu', ogni voce porta l'impronta della precedente, cosi' una manomissione
+fatta scavalcando il programma - da chi amministra il database - resta
+comunque visibile:
+
+```powershell
+python scripts/verifica_audit.py
+```
+
+Le voci **non si cancellano mai**, nemmeno le piu' vecchie. Per consegnarne una
+copia a chi verifica, o per tenerne una fuori dal database, c'e'
+`python scripts/archivia_audit.py --anni 5`, che scrive un file compresso e non
+tocca il database.
 
 ## Se nessuno riesce piu' a entrare
 

@@ -72,7 +72,7 @@ from app.models import (
     Project,
     User,
 )
-from app.services import audit
+from app.services import audit, etichette
 
 logger = logging.getLogger("aurora.fasi")
 
@@ -690,6 +690,7 @@ def richiedi(
         entity_id=progetto.id,
         user_id=autore.id,
         request=request,
+        etichetta=etichette.nome_progetto(progetto),
         new_value={
             "to_phase": prossima.name,
             "transition_id": str(passaggio.id),
@@ -753,6 +754,7 @@ def decidi(
             entity_id=passaggio.id,
             user_id=autore.id,
             request=request,
+            etichetta=etichette.nome_progetto(progetto),
             old_value={"state": PhaseTransitionState.RICHIESTA.value},
             new_value={
                 "state": PhaseTransitionState.RESPINTA.value,
@@ -779,6 +781,7 @@ def decidi(
         entity_id=passaggio.id,
         user_id=autore.id,
         request=request,
+        etichetta=etichette.nome_progetto(progetto),
         old_value={"state": PhaseTransitionState.RICHIESTA.value},
         new_value={
             "state": PhaseTransitionState.APPROVATA.value,
@@ -852,6 +855,7 @@ def _esegui(
         entity_id=progetto.id,
         user_id=decisore.id,
         request=request,
+        etichetta=etichette.nome_progetto(progetto),
         old_value={"phase": partenza} if partenza else None,
         new_value={
             "phase": destinazione.name,
@@ -921,6 +925,7 @@ def _entra_nella_fase(
                 entity_id=progetto.id,
                 user_id=autore.id,
                 request=request,
+                etichetta=etichette.nome_progetto(progetto),
                 new_value={"closed_at": quando.isoformat(), "phase": destinazione.name},
             )
             logger.info(
@@ -939,6 +944,7 @@ def _entra_nella_fase(
             entity_id=progetto.id,
             user_id=autore.id,
             request=request,
+            etichetta=etichette.nome_progetto(progetto),
             old_value={"closed_at": "valorizzato"},
             new_value={"closed_at": None, "phase": destinazione.name},
         )
@@ -1228,6 +1234,7 @@ def crea_modello(
         entity_id=modello.id,
         user_id=autore.id,
         request=request,
+        etichetta=etichette.nome_modello_fasi(modello),
         new_value={
             "name": modello.name,
             "version": modello.version,
@@ -1298,6 +1305,7 @@ def nuova_versione(
         entity_id=modello.id,
         user_id=autore.id,
         request=request,
+        etichetta=etichette.nome_modello_fasi(modello),
         old_value={
             "name": partenza.name,
             "version": partenza.version,
@@ -1382,6 +1390,7 @@ def cambia_proponibilita(
         entity_id=modello.id,
         user_id=autore.id,
         request=request,
+        etichetta=etichette.nome_modello_fasi(modello),
         old_value={"is_active": not proponibile},
         new_value={"is_active": proponibile},
     )

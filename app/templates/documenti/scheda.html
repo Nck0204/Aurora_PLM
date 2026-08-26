@@ -27,6 +27,7 @@
 {% from "components/stato.html" import etichetta, etichetta_documento, etichetta_ciclo_vita %}
 {% from "components/avvisi.html" import avviso, notifica %}
 {% from "components/tabella.html" import tabella %}
+{% from "components/schede.html" import schede_oggetto %}
 
 {% block titolo %}{{ documento.title }}{% endblock %}
 {% block sezione %}Documenti{% endblock %}
@@ -103,6 +104,8 @@
         {% endif %}
     </div>
 </div>
+
+{{ schede_oggetto("/documenti/" ~ documento.id, corrente="/documenti/" ~ documento.id) }}
 
 <div class="griglia-riquadri">
 

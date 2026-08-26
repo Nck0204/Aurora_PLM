@@ -22,7 +22,7 @@ from sqlalchemy import Select, func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.models import Customer, LifecycleState, Product, ProductVersion, User
-from app.services import audit, product_codes
+from app.services import audit, etichette, product_codes
 
 logger = logging.getLogger("aurora.prodotti")
 
@@ -31,6 +31,7 @@ ACTION_PRODUCT_UPDATED = "product.updated"
 ACTION_PRODUCT_DEACTIVATED = "product.deactivated"
 ACTION_PRODUCT_REACTIVATED = "product.reactivated"
 ACTION_VERSION_CREATED = "product_version.created"
+ACTION_VERSION_UPDATED = "product_version.updated"
 
 ENTITY_PRODUCTS = "products"
 ENTITY_VERSIONS = "product_versions"
@@ -298,6 +299,7 @@ def crea_prodotto(
         entity_id=prodotto.id,
         user_id=autore.id,
         request=request,
+        etichetta=etichette.nome_prodotto(prodotto),
         new_value={
             "code": prodotto.code,
             "customer": cliente.code,
@@ -375,11 +377,66 @@ def modifica_prodotto(
             entity_id=prodotto.id,
             user_id=autore.id,
             request=request,
+            etichetta=etichette.nome_prodotto(prodotto),
             old_value={chiave: prima[chiave] for chiave in cambiati},
             new_value={chiave: dopo[chiave] for chiave in cambiati},
         )
 
     return prodotto
+
+
+def modifica_versione(
+    db: Session,
+    versione: ProductVersion,
+    *,
+    motivo: str | None,
+    autore: User,
+    request: Request | None = None,
+) -> list[str]:
+    """Corregge il motivo della derivazione di una versione.
+
+    Restituisce l'elenco dei campi cambiati: vuoto se non e' cambiato niente,
+    e in quel caso nel registro non finisce niente.
+
+    **E' l'unico campo modificabile di una versione, e non e' una dimenticanza.**
+    Il numero di versione, il prodotto e la versione da cui deriva sono fatti
+    avvenuti: cambiarli vorrebbe dire riscrivere la storia del prodotto, e i
+    documenti e i progetti che ci sono appesi direbbero improvvisamente
+    un'altra cosa. Lo stato del ciclo di vita ha la sua strada, che passa dal
+    grafo delle transizioni (D-042) e non da un modulo di modifica.
+
+    Il motivo della derivazione, invece, e' una nota scritta da una persona:
+    si scrive di fretta il giorno in cui si apre la versione, e va corretta il
+    giorno in cui ci si accorge che non si capisce. Correggerla lascia
+    comunque traccia nel registro, con il testo di prima e quello di dopo.
+    """
+    prima = versione.derivation_reason
+    dopo = (motivo or "").strip() or None
+
+    if prima == dopo:
+        return []
+
+    versione.derivation_reason = dopo
+
+    audit.record(
+        db,
+        action=ACTION_VERSION_UPDATED,
+        entity_type=ENTITY_VERSIONS,
+        entity_id=versione.id,
+        user_id=autore.id,
+        request=request,
+        etichetta=etichette.nome_versione(versione),
+        old_value={"derivation_reason": prima},
+        new_value={"derivation_reason": dopo},
+    )
+    logger.info(
+        "Motivo della derivazione della versione %s di '%s' corretto da '%s'",
+        versione.version_number,
+        versione.product.code,
+        autore.username,
+    )
+
+    return ["derivation_reason"]
 
 
 def riscomponi(db: Session, prodotto: Product) -> Product:
@@ -412,6 +469,7 @@ def disattiva_prodotto(
         entity_id=prodotto.id,
         user_id=autore.id,
         request=request,
+        etichetta=etichette.nome_prodotto(prodotto),
         old_value={"is_active": True},
         new_value={"is_active": False},
     )
@@ -435,6 +493,7 @@ def riattiva_prodotto(
         entity_id=prodotto.id,
         user_id=autore.id,
         request=request,
+        etichetta=etichette.nome_prodotto(prodotto),
         old_value={"is_active": False},
         new_value={"is_active": True},
     )
@@ -506,6 +565,7 @@ def _aggiungi_versione(
         entity_id=versione.id,
         user_id=autore.id,
         request=request,
+        etichetta=etichette.nome_versione(versione),
         new_value={
             "product": prodotto.code,
             "version_number": numero,

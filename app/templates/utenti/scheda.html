@@ -1,0 +1,159 @@
+{# ===========================================================================
+   SCHEDA DI UNA PERSONA. Riservata al creatore.
+
+   I suoi dati, il modulo per correggerli, e le azioni che la riguardano:
+   password nuova, disattivazione, riattivazione.
+
+   TRE COSE NON SI CORREGGONO DA QUI, E SONO TRE DECISIONI.
+
+   Il **nome utente** resta quello scelto alla creazione: compare nelle righe
+   del registro di anni e nelle assegnazioni ai progetti, e cambiarlo
+   renderebbe illeggibile la storia. Chi si sposa non diventa un altro
+   dipendente.
+
+   La **password** ha il suo pulsante, che oltre a cambiarla chiude tutte le
+   sessioni aperte. Metterla nel modulo vorrebbe dire poterla cambiare per
+   sbaglio salvando la scheda.
+
+   Il **ruolo globale** e' in sospeso dalla sessione 3 e vuole una pagina sua:
+   e' la decisione piu' pesante del programma, e la prima cosa da impedire e'
+   che l'ultimo creatore si tolga il ruolo da solo. Vedi docs/STATO.md.
+   =========================================================================== #}
+{% extends "base.html" %}
+
+{% from "components/campi.html" import campo, csrf %}
+{% from "components/pulsanti.html" import pulsante, pulsante_collegamento, modulo_pulsante %}
+{% from "components/riquadro.html" import riquadro %}
+{% from "components/descrizione.html" import descrizione, voce %}
+{% from "components/schede.html" import schede_oggetto %}
+{% from "components/stato.html" import etichetta, etichetta_utente %}
+{% from "components/avvisi.html" import avviso, notifica %}
+
+{% block titolo %}{{ persona.full_name }}{% endblock %}
+{% block sezione %}Utenti{% endblock %}
+
+{% block notifiche %}
+    {% if request.query_params.get("salvato") %}
+        {{ notifica("I dati della persona sono stati aggiornati.",
+                    variante="successo", titolo="Salvato") }}
+    {% elif request.query_params.get("invariato") %}
+        {{ notifica("Non e' stato cambiato niente, quindi non e' stato "
+                    "registrato niente.",
+                    variante="informazione", titolo="Nessuna modifica") }}
+    {% endif %}
+{% endblock %}
+
+{% block contenuto %}
+
+<div class="testata">
+    <div>
+        <h1>{{ persona.full_name }}</h1>
+        <p class="sottotitolo">
+            <span class="mono">{{ persona.username }}</span> &middot;
+            {{ etichetta(ruolo.testo, variante=ruolo.variante) }}
+            {{ etichetta_utente(persona) }}
+        </p>
+    </div>
+    <div class="testata-azioni">
+        {{ pulsante_collegamento("Torna agli utenti", "/utenti",
+                                 icona_nome="freccia-sinistra") }}
+    </div>
+</div>
+
+{{ schede_oggetto("/utenti/" ~ persona.id, corrente=indirizzo_corrente,
+                  altre=[{"etichetta": "Accessi",
+                          "indirizzo": "/utenti/" ~ persona.id ~ "/accessi"}]) }}
+
+{% if not persona.is_active %}
+    {{ avviso("Questa persona e' disattivata: non entra piu' in Aurora e non "
+              "ha nessuna sessione aperta. Le sue righe nel registro e le sue "
+              "firme sui documenti restano tutte.",
+              variante="attenzione", titolo="Utente disattivato") }}
+{% endif %}
+
+<div class="griglia-riquadri margine-sopra">
+
+    {% call riquadro("I dati") %}
+        <form method="post" action="/utenti/{{ persona.id }}">
+            {{ csrf(request) }}
+
+            {% if errore %}
+                {{ avviso(errore, variante="errore") }}
+            {% endif %}
+
+            {{ campo("Nome", "first_name",
+                     valore=(first_name if first_name is defined
+                             else persona.first_name),
+                     obbligatorio=true, autocomplete="off") }}
+
+            {{ campo("Cognome", "last_name",
+                     valore=(last_name if last_name is defined
+                             else persona.last_name),
+                     obbligatorio=true, autocomplete="off") }}
+
+            {{ campo("Posta elettronica", "email",
+                     valore=(email if email is defined else persona.email),
+                     tipo="email", obbligatorio=true, autocomplete="off",
+                     aiuto="E' l'indirizzo a cui Aurora manda le notifiche. "
+                           "Deve essere diverso da quello di ogni altra "
+                           "persona.") }}
+
+            <div class="fila-pulsanti margine-sopra">
+                {{ pulsante("Salva", variante="primario", icona_nome="spunta") }}
+            </div>
+        </form>
+    {% endcall %}
+
+    {% call riquadro("Quello che non si cambia") %}
+        {% call descrizione(stretta=true) %}
+            {{ voce("Nome utente", persona.username, monospazio=true) }}
+            {{ voce("Ruolo", ruolo.testo) }}
+            {{ voce("Creato il", persona.created_at.strftime("%d/%m/%Y")) }}
+            {{ voce("Ultima modifica",
+                    persona.updated_at.strftime("%d/%m/%Y %H:%M")) }}
+        {% endcall %}
+
+        <p class="campo-aiuto margine-sopra">
+            Il nome utente non si cambia: compare nelle righe del registro di
+            anni e nelle assegnazioni ai progetti. Il ruolo globale si cambia
+            direttamente sul database, in attesa della pagina che lo fara' con
+            le sue conferme.
+        </p>
+    {% endcall %}
+
+</div>
+
+{% call riquadro("Azioni") %}
+    <div class="fila-pulsanti">
+        {{ modulo_pulsante(request,
+                           "/utenti/" ~ persona.id ~ "/reimposta",
+                           "Assegna una password nuova",
+                           icona_nome="chiave",
+                           conferma="Assegnare una password nuova a "
+                                    ~ persona.full_name ~ "? Tutte le sue "
+                                    "sessioni verranno chiuse.") }}
+
+        {% if persona.is_active %}
+            {{ modulo_pulsante(request,
+                               "/utenti/" ~ persona.id ~ "/disattiva",
+                               "Disattiva",
+                               variante="pericolo",
+                               conferma="Disattivare " ~ persona.full_name
+                                        ~ "? Perdera' subito tutte le sessioni "
+                                        "aperte.") }}
+        {% else %}
+            {{ modulo_pulsante(request,
+                               "/utenti/" ~ persona.id ~ "/riattiva",
+                               "Riattiva",
+                               icona_nome="spunta") }}
+        {% endif %}
+    </div>
+
+    <p class="campo-aiuto margine-sopra">
+        Un utente non si cancella: si disattiva. Le sue firme sui documenti e
+        le sue righe nel registro delle operazioni devono restare leggibili
+        anche a distanza di anni.
+    </p>
+{% endcall %}
+
+{% endblock %}

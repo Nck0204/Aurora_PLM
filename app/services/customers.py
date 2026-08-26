@@ -18,7 +18,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models import Contact, Customer, Product, User
-from app.services import audit
+from app.services import audit, etichette
 
 logger = logging.getLogger("aurora.clienti")
 
@@ -138,6 +138,7 @@ def crea_cliente(
         entity_id=cliente.id,
         user_id=autore.id,
         request=request,
+        etichetta=etichette.nome_cliente(cliente),
         new_value={"name": cliente.name, "code": cliente.code},
     )
 
@@ -184,6 +185,7 @@ def modifica_cliente(
             entity_id=cliente.id,
             user_id=autore.id,
             request=request,
+            etichetta=etichette.nome_cliente(cliente),
             old_value={chiave: prima[chiave] for chiave in cambiati},
             new_value={chiave: dopo[chiave] for chiave in cambiati},
         )
@@ -212,6 +214,7 @@ def disattiva_cliente(
         entity_id=cliente.id,
         user_id=autore.id,
         request=request,
+        etichetta=etichette.nome_cliente(cliente),
         old_value={"is_active": True},
         new_value={"is_active": False},
     )
@@ -236,6 +239,7 @@ def riattiva_cliente(
         entity_id=cliente.id,
         user_id=autore.id,
         request=request,
+        etichetta=etichette.nome_cliente(cliente),
         old_value={"is_active": False},
         new_value={"is_active": True},
     )
@@ -276,6 +280,7 @@ def aggiungi_contatto(
         entity_id=contatto.id,
         user_id=autore.id,
         request=request,
+        etichetta=etichette.nome_contatto(contatto),
         new_value={"name": contatto.name, "email": contatto.email},
     )
 
@@ -302,6 +307,7 @@ def disattiva_contatto(
         entity_id=contatto.id,
         user_id=autore.id,
         request=request,
+        etichetta=etichette.nome_contatto(contatto),
         old_value={"is_active": True},
         new_value={"is_active": False},
     )
@@ -325,6 +331,7 @@ def riattiva_contatto(
         entity_id=contatto.id,
         user_id=autore.id,
         request=request,
+        etichetta=etichette.nome_contatto(contatto),
         old_value={"is_active": False},
         new_value={"is_active": True},
     )

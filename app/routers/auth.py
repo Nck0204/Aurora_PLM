@@ -35,7 +35,7 @@ from app.dependencies import (
     utente_corrente,
 )
 from app.models import SessionKind, User
-from app.services import audit, auth, passwords
+from app.services import audit, auth, etichette, passwords
 from app.services.cookies import (
     COOKIE_RICORDAMI,
     COOKIE_SESSIONE,
@@ -201,6 +201,7 @@ def esci(
         entity_id=utente.id,
         user_id=utente.id,
         request=request,
+        etichetta=etichette.nome_utente(utente),
     )
     db.commit()
 
@@ -232,6 +233,7 @@ def esci_ovunque(
         entity_id=utente.id,
         user_id=utente.id,
         request=request,
+        etichetta=etichette.nome_utente(utente),
         new_value={"sessioni_revocate": revocate},
     )
     db.commit()

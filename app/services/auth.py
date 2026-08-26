@@ -47,7 +47,7 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.models import LoginAttempt, SessionKind, User, UserSession
-from app.services import audit, passwords
+from app.services import audit, etichette, passwords
 
 logger = logging.getLogger("aurora.auth")
 
@@ -374,6 +374,7 @@ def esegui_accesso(
             action=audit.ACTION_LOGIN_BLOCKED,
             entity_type=audit.ENTITY_USERS,
             request=request,
+            etichetta=nome,
             new_value={"username": nome},
         )
         logger.warning("Accesso rifiutato per blocco: nome utente '%s'", nome)
@@ -403,6 +404,7 @@ def esegui_accesso(
             entity_type=audit.ENTITY_USERS,
             entity_id=utente.id if utente is not None else None,
             request=request,
+            etichetta=nome,
             new_value={"username": nome},
         )
         logger.info("Accesso fallito per il nome utente '%s'", nome)
@@ -422,6 +424,7 @@ def esegui_accesso(
         entity_id=utente.id,
         user_id=utente.id,
         request=request,
+        etichetta=etichette.nome_utente(utente),
     )
     logger.info("Accesso riuscito per '%s'", utente.username)
 
@@ -460,6 +463,7 @@ def cambia_password(
         entity_id=utente.id,
         user_id=utente.id,
         request=request,
+        etichetta=etichette.nome_utente(utente),
         new_value={"sessioni_revocate": revocate},
     )
     logger.info(

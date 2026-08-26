@@ -19,6 +19,7 @@
 {% from "components/descrizione.html" import descrizione, voce %}
 {% from "components/stato.html" import etichetta, etichetta_ciclo_vita %}
 {% from "components/avvisi.html" import avviso, notifica %}
+{% from "components/schede.html" import schede_oggetto %}
 
 {% block titolo %}{{ prodotto.code }}{% endblock %}
 {% block sezione %}Prodotti{% endblock %}
@@ -48,6 +49,8 @@
                                  icona_nome="freccia-sinistra") }}
     </div>
 </div>
+
+{{ schede_oggetto("/prodotti/" ~ prodotto.id, corrente="/prodotti/" ~ prodotto.id) }}
 
 {% if not prodotto.code_parts %}
     {{ avviso(avviso_non_riconosciuto, variante="attenzione",

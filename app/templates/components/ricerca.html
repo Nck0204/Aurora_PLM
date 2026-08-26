@@ -36,6 +36,25 @@
    perche' senza JavaScript non funzionerebbe e con JavaScript sarebbe una
    sorpresa (si sceglie il primo filtro e la pagina si ricarica prima che si
    sia scelto il secondo).
+
+   L'INTERVALLO DI DATE. Gli elenchi che raccontano dei fatti avvenuti - il
+   registro delle operazioni - si filtrano soprattutto per periodo. Si passano
+   con "date", che e' un elenco di dizionari con "nome", "etichetta" e
+   "valore":
+
+       {% raw %}{{ ricerca("/registro", valore=q,
+                  date=[{"nome": "dal", "etichetta": "Dal giorno", "valore": dal},
+                        {"nome": "al", "etichetta": "Al giorno", "valore": al}],
+                  filtri=[...]) }}{% endraw %}
+
+   Sono campi <input type="date">: il browser ci mette il suo calendario, e
+   quelli che non ce l'hanno mostrano una casella di testo in cui si scrive
+   la data nella forma aaaa-mm-gg. Funzionano senza JavaScript in tutti e due
+   i casi.
+
+   Qui l'etichetta si vede, mentre quella della casella di ricerca no: due
+   caselle di data affiancate e vuote non si distinguono, e indovinare quale
+   sia l'inizio e quale la fine non e' un gioco che si deve fare.
    =========================================================================== #}
 
 
@@ -44,7 +63,8 @@
 
 
 {% macro ricerca(indirizzo, valore="", nome="q", segnaposto="Cerca",
-                 etichetta="Cerca", filtri=none, nascosti=none, htmx="") -%}
+                 etichetta="Cerca", filtri=none, date=none, nascosti=none,
+                 htmx="") -%}
 <form class="ricerca" method="get" action="{{ indirizzo }}" role="search">
 
     {#- I parametri da tenere insieme alla ricerca: l'ordinamento della
@@ -70,6 +90,20 @@
                autocomplete="off"
                {{ htmx|safe }}>
     </div>
+
+    {%- if date %}
+    <div class="ricerca-date">
+        {%- for intervallo in date %}
+        <label class="ricerca-data">
+            <span>{{ intervallo.etichetta }}</span>
+            <input type="date"
+                   name="{{ intervallo.nome }}"
+                   class="campo-controllo"
+                   value="{{ intervallo.valore|default('', true) }}">
+        </label>
+        {%- endfor %}
+    </div>
+    {%- endif %}
 
     {%- if filtri %}
     <div class="ricerca-filtri">

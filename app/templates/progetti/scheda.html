@@ -22,6 +22,7 @@
 {% from "components/tabella.html" import tabella %}
 {% from "components/avanzamento.html" import avanzamento as barra_fasi %}
 {% from "components/avvisi.html" import avviso, notifica %}
+{% from "components/schede.html" import schede_oggetto %}
 
 {% block titolo %}{{ prodotto.code }} v{{ versione.version_number }}{% endblock %}
 {% block sezione %}Progetti{% endblock %}
@@ -82,6 +83,8 @@
         {% endif %}
     </div>
 </div>
+
+{{ schede_oggetto("/progetti/" ~ progetto.id, corrente="/progetti/" ~ progetto.id) }}
 
 {% if progetto.closed_at %}
     {{ avviso("Questo progetto e' stato chiuso il "

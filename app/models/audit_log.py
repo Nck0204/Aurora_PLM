@@ -4,13 +4,18 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import DateTime, ForeignKey, Index, String, func
+from sqlalchemy import BigInteger, DateTime, ForeignKey, Index, String, Text, func
 from sqlalchemy.dialects.postgresql import UUID as PgUuid
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
-from app.models.base import IP_ADDRESS_LENGTH, TimestampMixin, UuidPrimaryKeyMixin
+from app.models.base import (
+    IP_ADDRESS_LENGTH,
+    SHA256_HEX_LENGTH,
+    TimestampMixin,
+    UuidPrimaryKeyMixin,
+)
 from app.models.user import User
 
 
@@ -23,6 +28,20 @@ class AuditLog(Base, UuidPrimaryKeyMixin, TimestampMixin):
 
     Si scrive e non si tocca piu': niente UPDATE, niente DELETE. Un registro
     che si puo' correggere non e' un registro.
+
+    **E non e' piu' soltanto una buona intenzione.** Dalla sessione 9 il
+    divieto e' scritto in tre punti sovrapposti:
+
+      1. nel programma: audit.record() e' l'unica funzione che aggiunge righe,
+         e non ce n'e' nessuna che ne modifichi o ne tolga;
+      2. nel database: l'utente con cui Aurora si collega ha su questa tabella
+         il permesso di SELECT e di INSERT e **non** quello di UPDATE o DELETE
+         (scripts/hardening_db.sql). Un programma che sbagliasse non
+         riuscirebbe comunque a correggere una riga;
+      3. nel dato stesso: ogni voce porta l'impronta di quella precedente,
+         quindi una manomissione fatta scavalcando il programma - da chi
+         amministra il database, con le sue credenziali - spezza la catena e
+         si vede (scripts/verifica_audit.py).
 
     Quattro scelte che vale la pena di spiegare.
 
@@ -53,6 +72,9 @@ class AuditLog(Base, UuidPrimaryKeyMixin, TimestampMixin):
         # persona", in ordine di tempo.
         Index("ix_audit_logs_entity", "entity_type", "entity_id", "occurred_at"),
         Index("ix_audit_logs_user_occurred", "user_id", "occurred_at"),
+        # La terza, aggiunta dalla sessione 9 insieme alla pagina di
+        # consultazione: "tutto quello che e' successo di questo tipo".
+        Index("ix_audit_logs_action_occurred", "action", "occurred_at"),
     )
 
     occurred_at: Mapped[datetime] = mapped_column(
@@ -79,6 +101,38 @@ class AuditLog(Base, UuidPrimaryKeyMixin, TimestampMixin):
     new_value: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
 
     ip: Mapped[str | None] = mapped_column(String(IP_ADDRESS_LENGTH), nullable=True)
+
+    # --- Le quattro colonne della sessione 9 --------------------------------
+
+    # Il posto di questa voce nella catena, contato da 1. Non e' un numero
+    # generato dal database: lo assegna app/services/audit.py tenendo un
+    # lucchetto, perche' il numero e' anche il primo ingrediente
+    # dell'impronta e le due cose devono essere decise insieme.
+    #
+    # Serve un ordine **totale e certo**: "occurred_at" non basta, perche' due
+    # voci scritte nello stesso centesimo di secondo avrebbero la stessa ora e
+    # la catena non saprebbe quale viene prima.
+    seq: Mapped[int] = mapped_column(BigInteger, nullable=False, unique=True)
+
+    # Che cosa e' successo, scritto in italiano e per esteso, per chi legge il
+    # registro senza conoscere il programma: "Documento caricato: Schema
+    # elettrico". La compone audit.record() al momento della scrittura e non
+    # si ricalcola mai piu': se domani si cambia il nome di un documento, la
+    # riga del registro continua a dire come si chiamava quel giorno.
+    description: Mapped[str] = mapped_column(Text, nullable=False)
+
+    # L'impronta della voce precedente e quella di questa voce. Insieme fanno
+    # la catena: cambiare una riga qualunque con un UPDATE fatto da un
+    # amministratore del database rende diversa la sua impronta, e da li' in
+    # poi tutte le altre non tornano piu'. Non impedisce la manomissione - una
+    # cosa cosi' non esiste - ma la rende **visibile**, ed e' scripts/verifica_audit.py
+    # a guardare (D-063).
+    previous_hash: Mapped[str] = mapped_column(
+        String(SHA256_HEX_LENGTH), nullable=False
+    )
+    entry_hash: Mapped[str] = mapped_column(
+        String(SHA256_HEX_LENGTH), nullable=False, unique=True
+    )
 
     user: Mapped[User | None] = relationship(User)
 

@@ -1,6 +1,7 @@
 """Le pagine delle versioni di prodotto.
 
     GET  /versioni/{id}                 scheda della versione
+    POST /versioni/{id}                 corregge il motivo della derivazione
     GET  /versioni/{id}/deriva          modulo per derivarne una nuova
     POST /versioni/{id}/deriva          crea la versione derivata
     GET  /versioni/{id}/stato           **conferma** del cambio di stato
@@ -122,6 +123,13 @@ def _contesto_scheda(db: Session, versione: ProductVersion, utente: User) -> dic
         "puo_cambiare_stato": permissions.puo(
             db, utente, permissions.Azione.MODIFICARE, versione
         ),
+        # Correggere il motivo della derivazione e' la stessa decisione del
+        # cambio di stato, quindi la stessa risposta: si chiede una volta
+        # sola e la si passa due volte, perche' le due cose potrebbero
+        # separarsi domani e il template non deve saperlo.
+        "puo_correggere": permissions.puo(
+            db, utente, permissions.Azione.MODIFICARE, versione
+        ),
         "nome_stato": lifecycle.nome_stato,
     }
 
@@ -162,6 +170,41 @@ def scheda(
         cambiato=cambiato_leggibile,
         superata=superata,
     )
+
+
+@router.post("/{version_id}")
+def salva(
+    request: Request,
+    version_id: uuid.UUID,
+    motivo: Annotated[str, Form()] = "",
+    utente: User = Depends(richiedi_login),
+    db: Session = Depends(get_db),
+) -> Response:
+    """Corregge il motivo della derivazione di una versione.
+
+    **E' l'unico campo modificabile, e non e' una dimenticanza.** Numero,
+    prodotto e versione di provenienza sono fatti avvenuti; lo stato del ciclo
+    di vita ha la sua strada, che passa dal grafo delle transizioni e da una
+    pagina di conferma. Il motivo della derivazione e' invece una nota scritta
+    da una persona di fretta, e va corretta il giorno in cui ci si accorge che
+    non si capisce. La spiegazione per esteso e' in products.modifica_versione().
+
+    Chi puo' correggerla e' chi puo' muovere il ciclo di vita della versione:
+    il project manager del suo progetto e il creatore. E' la stessa domanda,
+    fatta alla stessa funzione.
+    """
+    versione = _versione_o_404(db, version_id)
+    permissions.pretendi(db, utente, permissions.Azione.MODIFICARE, versione)
+
+    cambiati = products.modifica_versione(
+        db, versione, motivo=motivo, autore=utente, request=request
+    )
+    db.commit()
+
+    # Si risponde con un rimando e non con la pagina: cosi' un aggiornamento
+    # del browser non rispedisce il modulo.
+    coda = "?salvato=si" if cambiati else "?invariato=si"
+    return RedirectResponse(f"/versioni/{versione.id}{coda}", status_code=303)
 
 
 # --- Derivazione ------------------------------------------------------------

@@ -26,7 +26,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models import GlobalRole, User
-from app.services import audit, auth, passwords
+from app.services import audit, auth, etichette, passwords
 
 logger = logging.getLogger("aurora.users")
 
@@ -105,20 +105,25 @@ def _username_occupato(db: Session, username: str) -> bool:
     ) > 0
 
 
-def email_gia_usata(db: Session, email: str) -> bool:
+def email_gia_usata(
+    db: Session, email: str, tranne_id: uuid.UUID | None = None
+) -> bool:
     """Dice se quell'indirizzo di posta e' gia' di un altro utente.
 
     La colonna e' unica nel database, quindi il vincolo c'e' comunque; questa
     funzione serve a dirlo in italiano nel modulo invece di lasciare che sia
     il database a fermare l'inserimento con un errore tecnico.
+
+    "tranne_id" serve alla modifica: salvando la scheda di una persona senza
+    averle cambiato l'indirizzo, l'indirizzo risulterebbe altrimenti "gia'
+    usato" - da lei stessa.
     """
+    condizioni = [func.lower(User.email) == email.strip().lower()]
+    if tranne_id is not None:
+        condizioni.append(User.id != tranne_id)
+
     return (
-        db.scalar(
-            select(func.count())
-            .select_from(User)
-            .where(func.lower(User.email) == email.strip().lower())
-        )
-        or 0
+        db.scalar(select(func.count()).select_from(User).where(*condizioni)) or 0
     ) > 0
 
 
@@ -167,6 +172,7 @@ def crea_utente(
         entity_id=utente.id,
         user_id=creato_da.id,
         request=request,
+        etichetta=etichette.nome_utente(utente),
         # Nel registro finisce chi e' stato creato, mai la sua password:
         # nemmeno l'impronta.
         new_value={
@@ -178,6 +184,80 @@ def crea_utente(
     logger.info("Utente '%s' creato da '%s'", utente.username, creato_da.username)
 
     return utente, password
+
+
+def modifica(
+    db: Session,
+    utente: User,
+    *,
+    first_name: str,
+    last_name: str,
+    email: str,
+    modificato_da: User,
+    request: Request | None = None,
+) -> list[str]:
+    """Corregge nome, cognome e indirizzo di posta di una persona.
+
+    Restituisce l'elenco dei campi che sono cambiati davvero: vuoto se non e'
+    cambiato niente, e in quel caso **non** viene scritta nessuna riga nel
+    registro. Un registro che segna "modificato" ogni volta che qualcuno apre
+    una scheda e preme Salva senza toccare niente e' un registro che nessuno
+    legge piu'.
+
+    **Tre cose che questa funzione non tocca, e sono tre decisioni.**
+
+    Il **nome utente** resta quello scelto alla creazione. Compare nelle righe
+    del registro di anni, nelle assegnazioni ai progetti e in cima a ogni
+    pagina che quella persona ha aperto: cambiarlo vorrebbe dire rendere
+    illeggibile la storia. Chi si sposa non diventa un altro dipendente.
+
+    La **password** ha la sua funzione, reimposta_password(), che oltre a
+    cambiarla revoca tutte le sessioni. Metterla qui vorrebbe dire poter
+    cambiare una password per sbaglio salvando una scheda.
+
+    Il **ruolo globale** e' rimasto in sospeso dalla sessione 3 e in sospeso
+    resta: chi puo' amministrare Aurora e' la decisione piu' pesante del
+    programma, e va fatta con la sua pagina, la sua conferma e le sue
+    precauzioni - a cominciare dall'ultimo creatore, che non deve poter
+    togliere il ruolo a se' stesso. Vedi docs/STATO.md.
+    """
+    prima = {
+        "first_name": utente.first_name,
+        "last_name": utente.last_name,
+        "email": utente.email,
+    }
+    dopo = {
+        "first_name": first_name.strip(),
+        "last_name": last_name.strip(),
+        "email": email.strip(),
+    }
+
+    cambiati = [campo for campo in prima if prima[campo] != dopo[campo]]
+    if not cambiati:
+        return []
+
+    for campo in cambiati:
+        setattr(utente, campo, dopo[campo])
+
+    audit.record(
+        db,
+        action=audit.ACTION_USER_UPDATED,
+        entity_type=audit.ENTITY_USERS,
+        entity_id=utente.id,
+        user_id=modificato_da.id,
+        request=request,
+        etichetta=etichette.nome_utente(utente),
+        old_value={campo: prima[campo] for campo in cambiati},
+        new_value={campo: dopo[campo] for campo in cambiati},
+    )
+    logger.info(
+        "Utente '%s' modificato da '%s': %s",
+        utente.username,
+        modificato_da.username,
+        ", ".join(cambiati),
+    )
+
+    return cambiati
 
 
 def reimposta_password(
@@ -216,6 +296,7 @@ def reimposta_password(
         entity_id=utente.id,
         user_id=reimpostata_da.id,
         request=request,
+        etichetta=etichette.nome_utente(utente),
         new_value={"sessioni_revocate": revocate},
     )
     logger.info(
@@ -259,6 +340,7 @@ def disattiva(
         entity_id=utente.id,
         user_id=disattivato_da.id,
         request=request,
+        etichetta=etichette.nome_utente(utente),
         old_value={"is_active": True},
         new_value={"is_active": False, "sessioni_revocate": revocate},
     )
@@ -289,6 +371,7 @@ def riattiva(
         entity_id=utente.id,
         user_id=riattivato_da.id,
         request=request,
+        etichetta=etichette.nome_utente(utente),
         old_value={"is_active": False},
         new_value={"is_active": True},
     )

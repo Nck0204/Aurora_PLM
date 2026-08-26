@@ -26,11 +26,12 @@ from fastapi import Depends, FastAPI, Request
 from fastapi.responses import JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app import VERSION
 from app.config import PROJECT_ROOT, settings
-from app.db import engine
+from app.db import SessionLocal, engine
 from app.dependencies import (
     PARAMETRO_RITORNO,
     PERCORSO_ACCESSO,
@@ -38,6 +39,7 @@ from app.dependencies import (
     CambioPasswordObbligatorio,
     RichiedeAutenticazione,
 )
+from app.routers import audit as router_audit
 from app.routers import auth as router_auth
 from app.routers import customers as router_customers
 from app.routers import documents as router_documents
@@ -46,9 +48,11 @@ from app.routers import permissions as router_permissions
 from app.routers import phases as router_phases
 from app.routers import products as router_products
 from app.routers import projects as router_projects
+from app.routers import storico as router_storico
 from app.routers import style as router_style
 from app.routers import users as router_users
 from app.routers import versions as router_versions
+from app.services.configuration import registra_configurazione
 from app.services.cookies import applica_cookie
 from app.services.csrf import verifica_csrf
 from app.templating import templates
@@ -119,6 +123,44 @@ logger = logging.getLogger("aurora")
 # ---------------------------------------------------------------------------
 
 
+def _registra_la_configurazione() -> None:
+    """Scrive nel registro se la configurazione e' cambiata dall'avvio scorso.
+
+    E' l'unico modo che ha Aurora di registrare "le modifiche alla
+    configurazione": i parametri stanno nel file .env e nei file di config/, e
+    si cambiano sul server con un editore di testo, senza passare da nessuna
+    pagina. La spiegazione per esteso e' in cima ad
+    app/services/configuration.py.
+
+    **Una sessione creata a mano, e questa e' l'eccezione che conferma la
+    regola.** Le sessioni si prendono con Depends(get_db), ma qui non c'e'
+    nessuna richiesta HTTP: il server sta partendo. Si apre, si scrive, si
+    chiude.
+
+    **Un guasto qui non impedisce al server di partire.** Se il database non
+    risponde ancora - capita quando i due servizi si avviano insieme al
+    riavvio del server aziendale - l'errore finisce nel registro su file e
+    Aurora parte lo stesso: senza database non funzionerebbe comunque niente,
+    e la rotta /salute lo dice gia' meglio di quanto lo direbbe un errore di
+    avvio.
+    """
+    db = SessionLocal()
+    try:
+        azione = registra_configurazione(db)
+        if azione is not None:
+            db.commit()
+    except SQLAlchemyError as errore:
+        db.rollback()
+        logger.error(
+            "Non e' stato possibile registrare la configurazione all'avvio: "
+            "%s. Il server parte lo stesso; vedere /salute per lo stato del "
+            "database",
+            errore,
+        )
+    finally:
+        db.close()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Cosa fare all'accensione e allo spegnimento del server.
@@ -135,6 +177,8 @@ async def lifespan(app: FastAPI):
     logger.info("Avvio di %s versione %s", settings.APP_NAME, VERSION)
     logger.info("Archivio file: %s", settings.storage_dir)
     logger.info("Invio posta: modalita' %s", settings.MAIL_PROVIDER)
+
+    _registra_la_configurazione()
 
     yield
 
@@ -399,6 +443,8 @@ app.include_router(router_projects.router)
 app.include_router(router_permissions.router)
 app.include_router(router_phases.router)
 app.include_router(router_users.router)
+app.include_router(router_audit.router)
+app.include_router(router_storico.router)
 app.include_router(router_style.router)
 
 

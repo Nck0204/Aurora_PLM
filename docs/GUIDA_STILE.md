@@ -176,7 +176,7 @@ la prova.
 
 | File | Macro | A che serve |
 |---|---|---|
-| `icone.html` | `icona` | i ventisette simboli, disegnati a mano in SVG |
+| `icone.html` | `icona` | i ventotto simboli, disegnati a mano in SVG |
 | `pulsanti.html` | `pulsante`, `pulsante_collegamento`, `modulo_pulsante` | ogni azione |
 | `campi.html` | `campo`, `area_testo`, `tendina`, `spunta`, `scelta`, `csrf` | ogni campo di un modulo |
 | `tabella.html` | `tabella` | gli elenchi, con intestazione ferma e ordinamento |
@@ -185,15 +185,16 @@ la prova.
 | `riquadro.html` | `riquadro` | il contenitore di tutto |
 | `dialogo.html` | `dialogo`, `pulsante_apri`, `pulsante_chiudi` | le conferme modali |
 | `avvisi.html` | `avviso`, `notifica` | i messaggi, fermi o temporanei |
-| `ricerca.html` | `ricerca` | la barra di ricerca con i filtri |
+| `ricerca.html` | `ricerca` | la barra di ricerca, con i filtri a tendina e l'intervallo di date |
 | `impaginazione.html` | `impaginazione` | le pagine di un elenco lungo |
-| `schede.html` | `schede`, `scheda`, `schede_collegamento` | le linguette |
+| `schede.html` | `schede`, `scheda`, `schede_collegamento`, `schede_oggetto` | le linguette |
 | `avanzamento.html` | `avanzamento` | le fasi di un progetto in fila |
 | `griglia_fasi.html` | `griglia_fasi` | il modulo con cui si scrivono le fasi di un modello |
 | `descrizione.html` | `descrizione`, `voce` | la scheda di dettaglio etichetta/valore |
 | `area_file.html` | `area_file` | il caricamento dei documenti |
 | `barra_caricamento.html` | `barra_caricamento` | quanti byte sono partiti, mentre partono |
 | `vuoto.html` | `vuoto` | quando non c'e' niente da mostrare |
+| `storico.html` | `storico` | le voci del registro delle operazioni |
 
 ### Nei template non si decide chi puo' fare che cosa
 
@@ -254,6 +255,48 @@ renderebbe illeggibile proprio quello che si sta cercando di leggere. Nascoste
 alla vista, non alla pagina - restano collegate al campo, e i lettori di
 schermo le leggono tutte. E' l'unico altro posto in cui si usa quel parametro
 oltre alla casella di ricerca.
+
+### Le linguette della scheda di un oggetto
+
+Dalla sessione 9 ogni oggetto di Aurora - prodotto, versione, progetto,
+documento, persona - ha la sua scheda e il suo **storico**, cioe' le voci del
+registro delle operazioni che lo riguardano. Le due pagine si tengono insieme
+con `schede_oggetto`, che disegna la striscia:
+
+```jinja
+{% from "components/schede.html" import schede_oggetto %}
+
+{{ schede_oggetto("/prodotti/" ~ prodotto.id,
+                  corrente="/prodotti/" ~ prodotto.id) }}
+```
+
+**L'ordine e' sempre lo stesso e non si cambia**: la scheda per prima, lo
+storico per ultimo, e in mezzo le pagine che quel tipo di oggetto ha in piu' -
+una persona ha anche "Accessi", e si passano in `altre`. Chi impara dove sta lo
+storico su una pagina lo ritrova nello stesso posto su tutte le altre.
+
+Sono linguette-collegamento e non schede nella stessa pagina, ed e' il caso da
+manuale per la distinzione descritta in `components/schede.html`: lo storico e'
+un elenco impaginato che va interrogato, e mandarlo insieme alla scheda
+vorrebbe dire far aspettare chi voleva solo leggere un titolo. Vedi D-067.
+
+### Le voci del registro delle operazioni
+
+Il componente `storico.html` disegna un elenco di righe di registro, e lo usano
+tutte e due le pagine che ne mostrano: `/registro` e le schede "Storico".
+
+Una voce ha due parti. Quella che si legge sempre - quando, chi, che cosa - sta
+nelle colonne della tabella. Quella che si guarda solo quando serve davvero -
+i valori di prima e di dopo, l'indirizzo IP, l'impronta - sta dentro un
+`<details>` che si apre riga per riga. Mettere tutto in colonne renderebbe la
+tabella illeggibile; nasconderlo del tutto vorrebbe dire un registro che non
+risponde alle domande per cui esiste.
+
+**Le voci arrivano al template gia' tradotte.** Il codice azione e' gia'
+diventato una frase italiana, il tipo di entita' e' gia' diventato "Documento",
+l'indirizzo della scheda dell'oggetto e' gia' composto o e' `None`. Le compone
+`_voce_per_la_pagina()` in `app/routers/audit.py`, ed e' la regola della
+sezione qui sotto applicata a un caso in cui sarebbe stato comodo sbagliare.
 
 ### Gli elenchi di scelte si compongono in Python, non nei template
 

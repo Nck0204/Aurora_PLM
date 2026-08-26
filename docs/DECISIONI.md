@@ -1879,3 +1879,310 @@ progetti gia' avviati non le vedono comparire a meta' strada. Se i modelli si
 potessero correggere, aggiungere una milestone obbligatoria bloccherebbe di
 colpo dei progetti in corso, ed e' esattamente il genere di sorpresa che questo
 progetto evita.
+
+---
+
+## D-062 — Ogni voce del registro porta con se' la sua frase in italiano
+
+**Data:** 26 agosto 2026 · **Stato:** attiva
+
+**Decisione.** `audit_logs` ha una colonna `description`, di testo, obbligatoria.
+La frase la compone `audit.record()` **al momento in cui il fatto avviene** e
+non si ricalcola mai piu'.
+
+**L'alternativa scartata** era comporre la frase quando si disegna la pagina,
+a partire da `action`, `entity_type` e i due valori JSON. Costa una colonna in
+meno e ha due difetti che non si possono aggirare.
+
+Il primo: se domani un documento cambia titolo, la riga del registro di sei
+mesi fa comincerebbe a raccontare il fatto con il nome nuovo. Un registro deve
+dire com'erano le cose **quel giorno**, e "Documento caricato: Schema
+elettrico" resta vero anche dopo che quel documento e' stato ribattezzato
+"Schema del convertitore".
+
+Il secondo: la frase entra nell'impronta della voce (D-063). Una frase
+ricalcolata a ogni lettura non si puo' firmare.
+
+**Come si compone.** Tre pezzi, e gli ultimi due sono facoltativi:
+l'etichetta italiana dell'azione, presa dal catalogo; il nome con cui una
+persona chiama l'oggetto, passato da chi chiama `record()`; i campi cambiati
+con il valore di prima e quello di dopo, ricavati da `old_value` e `new_value`.
+
+    Stato del documento cambiato: Schema elettrico (state: bozza -> rilasciato)
+
+**Il catalogo delle azioni** (`audit.CATALOGO`) e' la seconda meta' della
+decisione: ogni azione registrabile ha li' la sua frase e il suo gruppo.
+Prima le costanti `ACTION_*` erano sparse nei servizi che le usavano, e alla
+domanda "quali operazioni vengono registrate?" si poteva rispondere solo
+leggendo tutto il programma. C'e' un test che legge i sorgenti e diventa rosso
+se qualcuno aggiunge un'azione senza catalogarla.
+
+**Il nome dell'oggetto lo passa chi chiama.** `record()` non interroga il
+database per andarsi a cercare il titolo di un documento: una funzione che
+scrive nel registro non deve rallentare ogni operazione del programma. Le
+funzioni che compongono i nomi stanno in `app/services/etichette.py`, che
+importa solo i modelli e quindi lo puo' importare chiunque senza creare
+importazioni circolari.
+
+---
+
+## D-063 — Il registro e' incatenato: ogni voce porta l'impronta della precedente
+
+**Data:** 26 agosto 2026 · **Stato:** attiva
+
+**Decisione.** Ogni riga di `audit_logs` contiene l'impronta SHA-256 della riga
+precedente (`previous_hash`) e la propria (`entry_hash`), calcolata su tutti i
+campi che raccontano il fatto piu' il numero di sequenza e l'impronta
+precedente. `scripts/verifica_audit.py` ricalcola la catena e segnala che cosa
+non torna.
+
+**Che problema risolve.** I permessi del database (D-064) impediscono ad Aurora
+di modificare il registro. Non impediscono niente a chi amministra il database:
+con le credenziali di `postgres` si corregge qualunque riga. Contro quello non
+esiste difesa **dentro** il database, e fingere il contrario sarebbe peggio che
+non fare niente.
+
+Quello che si puo' fare e' rendere la manomissione **visibile**. Cambiando una
+riga cambia la sua impronta, e da li' in avanti nessuna delle successive torna
+piu'. Per non farsi scoprire bisognerebbe rifare le impronte di tutte le voci
+seguenti - cosa possibile, ma non piu' un `UPDATE` distratto - e comunque non
+tornerebbero i confronti con le esportazioni CSV gia' uscite da Aurora, che le
+impronte se le portano dietro.
+
+**Perche' serve un numero di sequenza e non basta `occurred_at`.** La catena ha
+bisogno di un ordine **totale e certo**. Due operazioni scritte nello stesso
+centesimo di secondo hanno la stessa ora, e la catena non saprebbe quale delle
+due viene prima. `seq` e' un intero con vincolo di unicita': l'ordine c'e'
+sempre, e un buco nella numerazione e' esso stesso un'anomalia da segnalare.
+
+**Perche' un lucchetto e non una sequenza del database.** Il numero e
+l'impronta si decidono insieme, e la seconda dipende dall'impronta della voce
+prima: due transazioni che leggessero contemporaneamente l'ultima voce
+scriverebbero due righe con lo stesso "precedente" e la catena si
+biforcherebbe. Al momento del flush si prende `pg_advisory_xact_lock`, che si
+rilascia da solo alla fine della transazione. Costa la serializzazione delle
+sole scritture del registro: per qualche decina di utenti in rete locale non si
+vede. Il vincolo di unicita' su `seq` e' li' a dimostrare che non stiamo
+indovinando.
+
+**Perche' al flush e non dentro `record()`.** Fra la chiamata a `record()` e il
+momento in cui la riga arriva davvero al database possono passare altre
+operazioni, e la catena deve rispecchiare l'ordine in cui le righe vengono
+**scritte**. Il flush e' l'unico momento in cui quell'ordine e' deciso.
+Effetto collaterale voluto: una riga di `audit_logs` aggiunta senza passare da
+`record()` non arriva al listener, resta senza `seq` e l'INSERT fallisce sul
+vincolo `NOT NULL`. E' il database che fa rispettare D-018.
+
+**Il JSON va normalizzato.** `jsonb` non conserva l'ordine delle chiavi:
+rileggendo la riga, PostgreSQL puo' restituirle in un ordine diverso da quello
+in cui sono state scritte. Senza `json.dumps(..., sort_keys=True)` la verifica
+direbbe "manomesso" su un registro intatto. Stessa cosa per le date, riportate
+sempre a UTC prima di entrare nell'impronta. C'e' un test che rilegge una voce
+dal database e ne ricalcola l'impronta.
+
+---
+
+## D-064 — La non modificabilita' del registro la fa rispettare il database
+
+**Data:** 26 agosto 2026 · **Stato:** attiva
+
+**Decisione.** L'utente PostgreSQL con cui Aurora si collega ha su `audit_logs`
+i permessi `SELECT` e `INSERT`, e **non** ha `UPDATE`, `DELETE` ne' `TRUNCATE`.
+La procedura sta in `scripts/hardening_db.sql`, spiegata in
+`scripts/hardening_db.md`.
+
+**Perche' non basta il programma.** In `app/services/audit.py` c'e' una sola
+funzione che scrive nel registro e non ce n'e' nessuna che lo corregge. E' vero
+oggi. Potrebbe non esserlo fra due anni: basta che qualcuno aggiunga una
+funzione "per sistemare una riga sbagliata". Un permesso che fa rispettare il
+database non si dimentica, e chi verifica Aurora non deve fidarsi della parola
+di chi l'ha scritta: apre `psql` e guarda.
+
+**Tre cose che ne discendono, e sono tutte e tre prezzi da pagare
+consapevolmente.**
+
+1. **La tabella non appartiene piu' all'utente applicativo.** Un proprietario
+   puo' sempre ridarsi i permessi che si e' tolto: finche' `audit_logs`
+   appartiene ad `aurora_app`, il divieto e' una porta chiusa con la chiave
+   nella toppa. La proprieta' passa ad `aurora_owner`, un ruolo senza
+   `LOGIN` che non serve a lavorare.
+
+2. **Le migrazioni che toccano `audit_logs` vanno eseguite come `postgres`.**
+   Un `ALTER TABLE` e' un'operazione da proprietario. E' scritto in
+   `scripts/hardening_db.md`, ed e' il motivo per cui l'irrobustimento si
+   applica **dopo** `alembic upgrade head` e non prima: la migrazione
+   `e2f5a91c73d8` e' l'ultimo `UPDATE` che verra' mai eseguito su quella
+   tabella.
+
+3. **Il test che lo verifica non si salta.** `tests/test_registro.py` prova a
+   fare un `UPDATE` e pretende che fallisca. Gli altri test che dipendono
+   dall'ambiente si saltano (conftest.py lo fa per le migrazioni mancanti);
+   questo no, e la differenza e' che senza migrazioni Aurora non funziona
+   affatto - la mancanza si vede subito - mentre senza questi permessi
+   funziona benissimo, e la mancanza si vede il giorno della verifica
+   aziendale.
+
+**In piu', e non al posto:** due trigger rifiutano `UPDATE`, `DELETE` e
+`TRUNCATE` chiunque li faccia, superutente compreso. Non fermano chi vuole
+davvero manomettere il registro - un superutente li disattiva - ma fermano lo
+sbaglio, che e' il rischio vero: l'`UPDATE` senza `WHERE` scritto in `psql`
+alle otto di sera.
+
+---
+
+## D-065 — Le voci del registro non si cancellano: si archiviano, e la copia resta
+
+**Data:** 26 agosto 2026 · **Stato:** attiva
+
+**Decisione.** La politica di conservazione del registro e' "per sempre".
+`scripts/archivia_audit.py` scrive un file `.csv.gz` con le voci piu' vecchie
+di N anni e **non cancella niente dal database**. Non e' agganciato a nessun
+lavoro pianificato e non va agganciato senza pensarci.
+
+**Perche' non si cancella.** E' la regola 5 di CLAUDE.md applicata alla tabella
+a cui si applica peggio. Un registro con dentro un buco, in sede di verifica,
+non vale come un registro con dentro tutto: vale come un registro assente,
+perche' nessuno puo' dimostrare che il buco fosse innocente. E con la catena di
+impronte (D-063) un buco e' anche letteralmente un'anomalia, che
+`verifica_audit.py` segnalerebbe per sempre.
+
+**A che serve allora l'archivio.** A due cose che con il database non si fanno:
+consegnare il registro a chi verifica senza dargli accesso al programma, e
+tenerne una copia fuori dal database, dove un ripristino sbagliato non la puo'
+toccare. Il file contiene le impronte di ogni voce, quindi si verifica anche a
+distanza di anni.
+
+**Perche' non si esegue da solo.** Un lavoro notturno che scrive file da
+qualche parte e nessuno guarda dove finiscono e' il modo in cui una copia del
+registro esce dall'azienda senza che nessuno l'abbia decisa. Questo script lo
+lancia una persona che sa perche' lo sta facendo. E lo lascia scritto nel
+registro: l'archiviazione e' registrata come tutto il resto (`audit.archived`),
+esattamente come l'esportazione dalla pagina.
+
+**Se un giorno il database diventasse davvero ingestibile** - non e' il caso di
+un'azienda con qualche decina di persone e qualche migliaio di righe l'anno -
+la risposta sara' una tabella storica, non un `DELETE`. E la decisione andra'
+presa da chi risponde dei dati, non da uno script.
+
+---
+
+## D-066 — Il CSV del registro esce con il punto e virgola e il BOM
+
+**Data:** 26 agosto 2026 · **Stato:** attiva
+
+**Decisione.** I file CSV che Aurora produce - l'esportazione dalla pagina
+`/registro` e l'archivio compresso - usano il **punto e virgola** come
+separatore e cominciano con il **BOM** UTF-8.
+
+**Perche'.** Quei file li apre una persona, con Excel, su un Windows in
+italiano. Con la virgola, Excel in italiano mette tutta la riga in una cella
+sola; senza BOM, legge un file UTF-8 come se fosse a codifica di sistema e le
+lettere accentate diventano geroglifici. Sono due difetti che si vedono subito
+e fanno perdere mezz'ora a chi non sa perche' succede.
+
+Il prezzo e' che il file non e' un CSV "puro" secondo l'RFC 4180. E' un prezzo
+accettabile: nessuno legge questi file con un programma, e chi lo facesse
+saprebbe indicare il separatore. Il senso di questa esportazione e' che qualcuno
+possa aprirla e leggerla, non che un altro programma la digerisca.
+
+**Le impronte sono nel file**, due colonne in fondo. Un'esportazione che le
+omettesse sarebbe una copia del registro che non si puo' piu' verificare, e chi
+la riceve dovrebbe fidarsi sulla parola.
+
+---
+
+## D-067 — La storia di un oggetto e' una pagina a se', e la vede chi vede l'oggetto
+
+**Data:** 26 agosto 2026 · **Stato:** attiva
+
+**Decisione.** Ogni oggetto di Aurora - prodotto, versione, progetto,
+documento, persona - ha una linguetta **Storico** che porta a
+`/<sezione>/{id}/storico`. E' una **pagina diversa**, non una scheda che si
+apre dentro quella dell'oggetto.
+
+**Perche' una pagina e non una scheda nella stessa pagina.** Il componente
+`components/schede.html` offre tutti e due i modi e dice quando si usa
+ciascuno: le schede nella stessa pagina mandano al browser tutto il contenuto
+insieme, e vanno bene per tre riquadri di dettaglio. Lo storico di un oggetto
+con anni di vita e' un elenco impaginato che va interrogato: mandarlo insieme
+alla scheda vorrebbe dire far aspettare chi voleva soltanto leggere il titolo
+di un documento. In piu' cosi' ha un indirizzo suo, che si manda a un collega:
+"guarda chi ha scaricato questo documento" e' esattamente il messaggio per cui
+serve.
+
+**L'indirizzo sta sotto l'oggetto**, `/progetti/{id}/storico` e non
+`/storico/progetti/{id}`, per due motivi: la barra laterale continua a segnare
+la sezione giusta (`sezione_corrente()` in `app/navigation.py` guarda il primo
+pezzo del percorso), e l'indirizzo dice da solo di che cosa si sta guardando la
+storia.
+
+**Chi la vede e' chi vede l'oggetto**, e la domanda la fa sempre
+`permissions.puo()` (D-051). Per rispondere, quella funzione ha dovuto imparare
+un oggetto in piu', il `Product`. Le persone sono l'eccezione: le loro pagine
+stanno tutte nella sezione riservata al creatore, e la rotta dello storico
+dichiara `Depends(richiedi_creatore)` come le altre di quella sezione. E' la
+stessa domanda fatta nel modo previsto per le pagine di amministrazione, e la
+risposta negativa e' un **403** invece del 404 di `pretendi()`: due pagine
+vicine che rispondono in due modi diversi alla stessa domanda mandano chi
+indaga a cercare un guasto che non c'e'.
+
+**Non e' la stessa cosa di `/registro`.** Li' c'e' tutto il registro e lo vede
+il solo creatore, perche' messo insieme dice anche a che ora entra ed esce
+ciascuno. Qui c'e' la storia di un oggetto solo: un ingegnere deve poter
+rispondere alla domanda "chi ha cambiato lo stato di questo documento venerdi'"
+senza chiedere il permesso a nessuno.
+
+**Le voci si cercano per identificatore e non per coppia (tipo,
+identificatore).** Gli identificatori sono UUID generati a caso, quindi due
+righe di tabelle diverse non possono avere lo stesso: la storia di un progetto
+puo' cosi' comprendere le sue assegnazioni e i suoi passaggi di fase, che nel
+registro sono voci con un `entity_type` diverso. Senza, la meta' piu'
+interessante della storia di un progetto - chi e' entrato nella squadra, chi ha
+chiesto un avanzamento e chi l'ha respinto - non comparirebbe.
+
+---
+
+## D-068 — Le modifiche alla configurazione si registrano confrontando gli avvii
+
+**Data:** 26 agosto 2026 · **Stato:** attiva
+
+**Decisione.** Aurora registra il **fatto** che la configurazione con cui sta
+girando sia diversa da quella dell'avvio precedente (`config.changed`), con il
+valore di prima e quello di adesso dei soli parametri cambiati. Non registra
+chi ha modificato il file, perche' non lo sa.
+
+**Il problema.** La regola 8 di CLAUDE.md dice che la configurazione sta nel
+file `.env` e nei file di `config/`, e si cambia sul server con un editore di
+testo. Non c'e' nessuna pagina che la modifichi, quindi non c'e' nessuna
+operazione dell'utente da registrare - e "le modifiche alla configurazione"
+resterebbero l'unica cosa importante che succede ad Aurora e di cui il registro
+non sa niente.
+
+**Perche' e' comunque utile.** Chi verifica il programma fra un anno, davanti a
+un documento scaricato da un indirizzo che non si aspettava, deve poter sapere
+se quel giorno Aurora era collegata al database di produzione o a quello di
+collaudo, quale regola di scomposizione dei codici era in uso, quanto durava
+una sessione. Il registro adesso lo dice.
+
+**Chi ha cambiato il file lo dicono i permessi del filesystem e il registro di
+Windows**, non Aurora. Scriverci il nome di chi ha riavviato il server sarebbe
+la peggiore delle bugie da mettere in un audit trail: l'utente della voce e'
+nullo, cioe' "sistema".
+
+**I segreti non entrano.** Della stringa di connessione si registra tutto
+tranne la password - indirizzo, porta, database e utente restano leggibili, e
+devono - e della chiave di firma dei cookie si registra l'impronta accorciata,
+che dice se e' cambiata senza dire qual e'. Dei file di `config/` si registra
+l'impronta e non il contenuto: sono tabelle intere, e quello che serve sapere
+e' se sono cambiate.
+
+**Una sola eccezione alla regola di `record()`.** In `new_value` finisce la
+configurazione **intera** e non i soli campi cambiati, perche' quella voce fa
+anche da fotografia per il confronto dell'avvio successivo. In `old_value`
+finiscono invece i soli valori di prima dei parametri cambiati, che e' quello
+che serve leggere. La descrizione la compone la funzione a mano, altrimenti
+elencherebbe tutti e diciassette i parametri invece dei due che contano.
+
+**Un riavvio che non cambia niente non scrive niente.** Un registro con dentro
+una riga a ogni riavvio del server e' un registro in cui non si trova piu'
+nulla.

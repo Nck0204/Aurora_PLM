@@ -239,6 +239,9 @@ def test_la_vetrina_chiede_di_entrare_a_chi_non_e_entrato(client, db_session):
         "barra-caricamento",
         "vuoto",
         "avviso--errore",
+        # Aggiunti dalla sessione 9, insieme al registro delle operazioni.
+        "ricerca-date",
+        "registro-dettaglio",
     ],
 )
 def test_la_vetrina_mostra_tutti_i_componenti(client, db_session, componente):

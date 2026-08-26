@@ -108,6 +108,13 @@ MENU_PRINCIPALE: tuple[VoceMenu, ...] = (
         solo_creatore=True,
     ),
     VoceMenu(
+        etichetta="Registro",
+        percorso="/registro",
+        icona="registro",
+        attiva=True,
+        solo_creatore=True,
+    ),
+    VoceMenu(
         etichetta="Diagnostica",
         percorso="/diagnostica",
         icona="diagnostica",

@@ -19,12 +19,14 @@
    =========================================================================== #}
 {% extends "base.html" %}
 
-{% from "components/pulsanti.html" import pulsante_collegamento %}
+{% from "components/pulsanti.html" import pulsante, pulsante_collegamento %}
+{% from "components/campi.html" import area_testo, csrf %}
 {% from "components/riquadro.html" import riquadro %}
 {% from "components/descrizione.html" import descrizione, voce %}
 {% from "components/stato.html" import etichetta, etichetta_ciclo_vita %}
 {% from "components/avvisi.html" import avviso, notifica %}
 {% from "components/tabella.html" import tabella %}
+{% from "components/schede.html" import schede_oggetto %}
 
 {% block titolo %}{{ prodotto.code }} v{{ versione.version_number }}{% endblock %}
 {% block sezione %}Prodotti{% endblock %}
@@ -42,6 +44,15 @@
             {{ notifica("La versione e' passata a «" ~ cambiato ~ "».",
                         variante="successo", titolo="Stato aggiornato") }}
         {% endif %}
+    {% elif request.query_params.get("salvato") %}
+        {{ notifica("Il motivo della derivazione e' stato corretto. La "
+                    "correzione, con il testo di prima e quello di adesso, e' "
+                    "nello storico della versione.",
+                    variante="successo", titolo="Salvato") }}
+    {% elif request.query_params.get("invariato") %}
+        {{ notifica("Non e' stato cambiato niente, quindi non e' stato "
+                    "registrato niente.",
+                    variante="informazione", titolo="Nessuna modifica") }}
     {% endif %}
 {% endblock %}
 
@@ -83,6 +94,8 @@
     </div>
 </div>
 
+{{ schede_oggetto("/versioni/" ~ versione.id, corrente="/versioni/" ~ versione.id) }}
+
 <div class="griglia-riquadri">
 
     {% call riquadro("La versione") %}
@@ -99,6 +112,30 @@
                     versione.released_at.strftime("%d/%m/%Y")
                     if versione.released_at else none) }}
         {% endcall %}
+
+        {#- Il motivo della derivazione e' l'unico campo modificabile di una
+            versione: numero, prodotto e provenienza sono fatti avvenuti, e lo
+            stato ha la sua strada con la sua conferma. La spiegazione sta in
+            products.modifica_versione(). #}
+        {% if puo_correggere %}
+        <details class="margine-sopra">
+            <summary class="campo-aiuto">Correggi il motivo della derivazione</summary>
+            <form method="post" action="/versioni/{{ versione.id }}"
+                  class="margine-sopra">
+                {{ csrf(request) }}
+                {{ area_testo("Motivo della derivazione", "motivo",
+                              valore=versione.derivation_reason or "",
+                              righe=3,
+                              aiuto="La correzione finisce nello storico della "
+                                    "versione, con il testo di prima e quello "
+                                    "di adesso.") }}
+                <div class="fila-pulsanti">
+                    {{ pulsante("Salva il motivo", misura="piccolo",
+                                icona_nome="spunta") }}
+                </div>
+            </form>
+        </details>
+        {% endif %}
     {% endcall %}
 
     {% call riquadro("Il codice, letto") %}

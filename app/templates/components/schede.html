@@ -81,3 +81,38 @@
     {%- endfor %}
 </nav>
 {%- endmacro %}
+
+
+{# --- Le linguette della scheda di un oggetto -----------------------------
+
+   Dalla sessione 9 ogni oggetto di Aurora - prodotto, versione, progetto,
+   documento, persona - ha la sua scheda e il suo **storico**, cioe' le voci
+   del registro delle operazioni che lo riguardano. Le due pagine si tengono
+   insieme con questa striscia, che sta in un macro solo perche' sono cinque
+   pagine e cinque copie della stessa striscia diventerebbero cinque strisce
+   diverse alla prima modifica.
+
+   L'ordine e' sempre lo stesso e non si cambia: la scheda per prima, lo
+   storico per ultimo, e in mezzo le pagine che quel tipo di oggetto ha in
+   piu' (una persona ha anche "Accessi"). Chi impara dove sta lo storico su
+   una pagina lo ritrova nello stesso posto su tutte le altre.
+
+   COME SI USA:
+
+       {% raw %}{% from "components/schede.html" import schede_oggetto %}
+
+       {{ schede_oggetto("/prodotti/" ~ prodotto.id,
+                         corrente="/prodotti/" ~ prodotto.id) }}{% endraw %}
+
+   "indirizzo" e' quello della scheda dell'oggetto; lo storico e' sempre lo
+   stesso indirizzo con "/storico" in fondo. "altre" sono le linguette in
+   mezzo, come elenco di dizionari con "etichetta" e "indirizzo". #}
+{% macro schede_oggetto(indirizzo, corrente, altre=none) -%}
+{%- set voci = [{"etichetta": "Scheda", "indirizzo": indirizzo}] -%}
+{%- for voce in (altre or []) -%}
+    {%- set _ = voci.append(voce) -%}
+{%- endfor -%}
+{%- set _ = voci.append({"etichetta": "Storico",
+                         "indirizzo": indirizzo ~ "/storico"}) -%}
+{{ schede_collegamento(voci, corrente) }}
+{%- endmacro %}

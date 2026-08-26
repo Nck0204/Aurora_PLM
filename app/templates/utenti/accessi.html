@@ -21,6 +21,7 @@
 {% from "components/stato.html" import etichetta, etichetta_utente %}
 {% from "components/avvisi.html" import avviso %}
 {% from "components/vuoto.html" import vuoto %}
+{% from "components/schede.html" import schede_oggetto %}
 
 {% block titolo %}Accessi di {{ persona.full_name }}{% endblock %}
 {% block sezione %}Utenti{% endblock %}
@@ -40,6 +41,10 @@
                                  icona_nome="freccia-sinistra") }}
     </div>
 </div>
+
+{{ schede_oggetto("/utenti/" ~ persona.id, corrente=indirizzo_corrente,
+                  altre=[{"etichetta": "Accessi",
+                          "indirizzo": "/utenti/" ~ persona.id ~ "/accessi"}]) }}
 
 {% call riquadro("La persona") %}
     {% call descrizione() %}

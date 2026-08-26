@@ -1,0 +1,132 @@
+{# ===========================================================================
+   STORICO (le voci del registro delle operazioni)
+
+   QUANDO SI USA. Ovunque si mostrino delle righe del registro: la pagina
+   /registro, riservata al creatore, e la scheda "Storico" di un prodotto, di
+   una versione, di un progetto, di un documento, di una persona.
+
+   QUANDO NON SI USA. Per un elenco qualunque: quello e' components/tabella.html.
+   Questo componente sa una cosa sola, ma la sa bene: come si mostra una riga
+   di registro.
+
+   PERCHE' NON BASTA LA TABELLA NORMALE. Una voce di registro ha una parte che
+   si legge sempre - quando, chi, che cosa - e una parte che si guarda solo
+   quando serve davvero: i valori di prima e di dopo, l'indirizzo IP,
+   l'impronta. Mettere tutto in colonne renderebbe la tabella illeggibile;
+   nasconderlo del tutto vorrebbe dire un registro che non risponde alle
+   domande per cui esiste. La seconda parte sta quindi dentro un <details>,
+   che si apre riga per riga, funziona senza JavaScript e si stampa aperto se
+   qualcuno lo lascia aperto.
+
+   LE VOCI ARRIVANO GIA' TRADOTTE. Il template non trasforma un codice azione
+   in una frase italiana e non decide se una cosa e' collegabile: riceve
+   dizionari gia' pronti, composti da _voce_per_la_pagina() in
+   app/routers/audit.py e da _voci_per_la_pagina() in app/routers/storico.py.
+   E' la regola della sezione 5 di docs/GUIDA_STILE.md.
+
+   COME SI USA:
+
+       {% raw %}{% from "components/storico.html" import storico %}
+
+       {{ storico(voci, con_oggetto=true,
+                  messaggio_vuoto="Nessuna operazione con questi filtri.") }}{% endraw %}
+
+   Parametri:
+
+     voci             l'elenco dei dizionari da mostrare
+     con_oggetto      se mostrare la colonna "Oggetto". Vale falso nella
+                      scheda "Storico" di un oggetto: li' l'oggetto e' uno
+                      solo ed e' quello della pagina, e ripeterlo a ogni riga
+                      e' rumore
+     messaggio_vuoto  che cosa scrivere quando non c'e' niente da mostrare
+   =========================================================================== #}
+
+
+{% from "components/tabella.html" import tabella %}
+
+
+{% macro storico(voci, con_oggetto=true,
+                 messaggio_vuoto="Nessuna operazione registrata.") -%}
+{%- set colonne = [
+    {"etichetta": "N.", "classe": "colonna-numero",
+     "titolo": "Il posto della voce nella catena delle impronte"},
+    {"etichetta": "Data e ora"},
+    {"etichetta": "Utente"},
+    {"etichetta": "Azione"},
+] -%}
+{%- if con_oggetto -%}
+    {%- set _ = colonne.append({"etichetta": "Oggetto"}) -%}
+{%- endif -%}
+{%- set _ = colonne.append({"etichetta": "Descrizione"}) -%}
+
+{% call tabella(colonne, vuota=(voci|length == 0),
+                messaggio_vuoto=messaggio_vuoto) %}
+    {% for voce in voci %}
+    <tr>
+        <td class="colonna-numero mono">{{ voce.seq }}</td>
+        <td class="registro-quando">{{ voce.quando.strftime("%d/%m/%Y %H:%M:%S") }}</td>
+        <td>{{ voce.autore }}</td>
+        <td>{{ voce.azione }}</td>
+        {% if con_oggetto %}
+        <td>
+            {% if voce.indirizzo %}
+                <a href="{{ voce.indirizzo }}">{{ voce.entita }}</a>
+            {% else %}
+                {{ voce.entita }}
+            {% endif %}
+        </td>
+        {% endif %}
+        <td>
+            {{ voce.descrizione }}
+            {{ _dettaglio(voce) }}
+        </td>
+    </tr>
+    {% endfor %}
+{% endcall %}
+{%- endmacro %}
+
+
+{# Il dettaglio di una voce: i valori di prima e di dopo, l'indirizzo da cui
+   e' arrivata la richiesta, l'impronta.
+
+   L'impronta si mostra per intero apposta. E' quella che si confronta con
+   quella del file esportato o con quella che stampa scripts/verifica_audit.py:
+   una mezza impronta non si confronta con niente. #}
+{% macro _dettaglio(voce) -%}
+<details class="registro-dettaglio">
+    <summary>Dettaglio</summary>
+    <dl>
+        {%- if voce.prima %}
+        <dt>Valore precedente</dt>
+        <dd>
+            {%- for campo, valore in voce.prima.items() %}
+            <span class="registro-campo"><b>{{ campo }}</b>: {{ valore }}</span>
+            {%- endfor %}
+        </dd>
+        {%- endif %}
+
+        {%- if voce.dopo %}
+        <dt>Valore successivo</dt>
+        <dd>
+            {%- for campo, valore in voce.dopo.items() %}
+            <span class="registro-campo"><b>{{ campo }}</b>: {{ valore }}</span>
+            {%- endfor %}
+        </dd>
+        {%- endif %}
+
+        <dt>Codice dell'azione</dt>
+        <dd class="mono">{{ voce.codice_azione }}</dd>
+
+        {%- if voce.entity_id %}
+        <dt>Identificativo dell'oggetto</dt>
+        <dd class="mono">{{ voce.entity_id }}</dd>
+        {%- endif %}
+
+        <dt>Indirizzo IP</dt>
+        <dd class="mono">{{ voce.ip or "non registrato" }}</dd>
+
+        <dt>Impronta della voce</dt>
+        <dd class="mono registro-impronta">{{ voce.impronta }}</dd>
+    </dl>
+</details>
+{%- endmacro %}

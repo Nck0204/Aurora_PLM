@@ -3,6 +3,8 @@
     GET  /utenti                       elenco degli utenti, con stato e ruolo
     GET  /utenti/nuovo                 modulo di creazione
     POST /utenti/nuovo                 crea l'utente e mostra la sua password
+    GET  /utenti/{id}                  scheda della persona, con i suoi dati
+    POST /utenti/{id}                  salva nome, cognome e posta
     GET  /utenti/{id}/accessi          a che cosa questa persona ha accesso
     POST /utenti/{id}/reimposta        assegna una password nuova
     POST /utenti/{id}/disattiva        toglie l'utente dal servizio
@@ -174,6 +176,100 @@ def crea_nuovo(
     )
 
 
+# --- Scheda di una persona --------------------------------------------------
+
+
+# Le linguette in cima alle pagine di una persona sono tre pagine diverse e
+# non tre schede della stessa pagina: la verifica degli accessi interroga la
+# matrice progetto per progetto e lo storico va impaginato, e mandare tutto e
+# tre insieme al browser vorrebbe dire far aspettare chi voleva soltanto
+# correggere un indirizzo di posta. E' il secondo dei due modi descritti in
+# components/schede.html, e la striscia la disegna il macro schede_oggetto;
+# qui si passa soltanto quale delle tre e' quella aperta.
+
+
+@router.get("/{user_id}")
+def scheda(
+    request: Request,
+    user_id: uuid.UUID,
+    db: Session = Depends(get_db),
+) -> Response:
+    """La scheda di una persona: i suoi dati e le azioni che la riguardano."""
+    utente = _utente_o_404(db, user_id)
+
+    return pagina(
+        request,
+        "utenti/scheda.html",
+        persona=utente,
+        ruolo=users.ruolo_mostrato(utente),
+        indirizzo_corrente=f"/utenti/{utente.id}",
+    )
+
+
+@router.post("/{user_id}")
+def salva(
+    request: Request,
+    user_id: uuid.UUID,
+    first_name: Annotated[str, Form()],
+    last_name: Annotated[str, Form()],
+    email: Annotated[str, Form()],
+    creatore: User = Depends(richiedi_creatore),
+    db: Session = Depends(get_db),
+) -> Response:
+    """Salva nome, cognome e indirizzo di posta di una persona.
+
+    **Il nome utente non e' nel modulo, e non e' una dimenticanza.** Compare
+    nelle righe del registro di anni e nelle assegnazioni ai progetti:
+    cambiarlo renderebbe illeggibile la storia. Nemmeno il ruolo globale c'e':
+    e' rimasto in sospeso dalla sessione 3 e vuole una pagina sua, con la
+    precauzione dell'ultimo creatore che non deve poter togliere il ruolo a
+    se' stesso. La spiegazione per esteso e' in users.modifica().
+    """
+    utente = _utente_o_404(db, user_id)
+
+    def rimostra(messaggio: str) -> Response:
+        """Ripropone la scheda con l'errore e i valori gia' scritti."""
+        return pagina(
+            request,
+            "utenti/scheda.html",
+            stato=400,
+            errore=messaggio,
+            persona=utente,
+            ruolo=users.ruolo_mostrato(utente),
+            schede=_schede_utente(utente.id),
+            indirizzo_corrente=f"/utenti/{utente.id}",
+            first_name=first_name,
+            last_name=last_name,
+            email=email,
+        )
+
+    if not first_name.strip() or not last_name.strip():
+        return rimostra("Nome e cognome sono obbligatori.")
+
+    if not email.strip():
+        return rimostra("L'indirizzo di posta e' obbligatorio.")
+
+    if users.email_gia_usata(db, email, tranne_id=utente.id):
+        return rimostra("Questo indirizzo di posta e' gia' di un altro utente.")
+
+    cambiati = users.modifica(
+        db,
+        utente,
+        first_name=first_name,
+        last_name=last_name,
+        email=email,
+        modificato_da=creatore,
+        request=request,
+    )
+    db.commit()
+
+    # Si risponde con un rimando e non con la pagina: cosi' un aggiornamento
+    # del browser non rispedisce il modulo. E' lo stesso giro delle altre
+    # pagine di Aurora che salvano.
+    coda = "?salvato=si" if cambiati else "?invariato=si"
+    return RedirectResponse(f"/utenti/{utente.id}{coda}", status_code=303)
+
+
 # --- Verifica degli accessi -------------------------------------------------
 
 
@@ -202,6 +298,7 @@ def accessi(
         persona=utente,
         ruolo=users.ruolo_mostrato(utente),
         accessi=permissions.verifica_accessi(db, utente),
+        indirizzo_corrente=f"/utenti/{utente.id}/accessi",
         # Il creatore vede tutto per definizione: la pagina lo scrive invece
         # di far dedurre a chi guarda che l'elenco dei progetti sia tutto.
         vede_tutto=permissions.puo(

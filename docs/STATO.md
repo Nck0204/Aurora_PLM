@@ -1,6 +1,6 @@
 # Stato di avanzamento
 
-Ultimo aggiornamento: **26 agosto 2026**, fine della sessione 8.
+Ultimo aggiornamento: **26 agosto 2026**, fine della sessione 9.
 
 Il progetto e' diviso in 13 sessioni di lavoro. Questa tabella dice a che
 punto siamo. Va aggiornata **alla fine di ogni sessione**, prima del commit.
@@ -17,18 +17,28 @@ Stati possibili: `da fare` · `in corso` · `completata`
 | 2 | Modello dati R1 | **completata** | Diciannove tabelle come modelli SQLAlchemy, una migrazione Alembic, dati iniziali idempotenti, test del modello, `docs/MODELLO_DATI.md`. Dettaglio sotto. |
 | 3 | Accesso e gestione utenti | **completata** | Password con argon2id, accesso con sessione e "ricordami" rotante, blocco dopo cinque tentativi, cambio password obbligatorio al primo accesso, protezione CSRF, gestione utenti riservata al creatore, registro di audit. Dettaglio sotto. |
 | 4 | Sistema grafico | **completata** | Foglio di stile unico con tutti i valori in variabili, quindici componenti come macro Jinja2, barra laterale filtrata per ruolo, vetrina `/stile`, pagine di accesso e gestione utenti ristilate, pagine di errore. Dettaglio sotto. |
-| 4b | Anagrafiche | **quasi** | Clienti e contatti: fatti nella sessione 5. La **matrice dei permessi modificabile** e la gestione delle classificazioni: fatte nella sessione 7 (`/permessi`). Resta soltanto il cambio di ruolo **globale** di un utente, in sospeso dalla sessione 3. |
+| 4b | Anagrafiche | **quasi** | Clienti e contatti: fatti nella sessione 5. La **matrice dei permessi modificabile** e la gestione delle classificazioni: fatte nella sessione 7 (`/permessi`). Nella sessione 9 e' arrivata la scheda di una persona con la modifica di nome, cognome e posta. Resta soltanto il cambio di ruolo **globale** di un utente, in sospeso dalla sessione 3. |
 | 5 | Prodotti, versioni e progetti | **completata** | Clienti e contatti, prodotti con la scomposizione del codice configurabile, versioni e derivazioni, grafo del ciclo di vita con superamento automatico, apertura dei progetti, cruscotto iniziale. Dettaglio sotto. |
 | 6 | Archivio documenti | **completata** | Deposito per impronta SHA-256 con deduplicazione e scrittura atomica, caricamento con barra di avanzamento reale, versioni con nota obbligatoria, stato del documento e immutabilita' del rilasciato, ritiro logico con ripristino, scarico registrato, filigrana sui PDF delle versioni superate, permessi calcolati sulla matrice. Dettaglio sotto. |
 | 7 | Regole di accesso | **completata** | Una funzione sola che decide tutti i permessi (`permissions.puo`), filtro a livello di interrogazione e di conteggio, 404 al posto del 403, matrice dei permessi modificabile con conferma e registro, gestione delle classificazioni, verifica degli accessi di una persona. Dettaglio sotto. |
 | 8 | Fasi e flusso di avanzamento | **completata** | Amministrazione dei modelli di fasi immutabili e versionati, barra dell'avanzamento con date e durate, avanzamento diretto e per richiesta con approvazione o rifiuto, divieto di tornare indietro da una fase che lo blocca, chiusura del progetto e sola lettura, storico completo. Dettaglio sotto. |
-| 9 | Interfaccia completa | da fare | Struttura di navigazione, ricerca, elenchi con filtri e paginazione, rifinitura del tema scuro. |
+| 9 | Registro delle operazioni | **completata** | Catalogo di 58 azioni registrate, descrizione in italiano su ogni voce, catena di impronte SHA-256, permessi PostgreSQL che rendono `audit_logs` a sola aggiunta, pagina di consultazione con filtri e ricerca, esportazione CSV registrata, scheda "Storico" su cinque tipi di oggetto, tre script operativi. Dettaglio sotto. |
 | 10 | Notifiche e posta | da fare | Adattatore di posta doppio (locale/Graph), archiviazione dei messaggi, smistamento automatico e quarantena, allegati, modelli dei messaggi, notifiche. |
 | 11 | Lavori pianificati e manutenzione | da fare | APScheduler, controlli notturni, procedura di backup e di ripristino. |
 | 12 | Rapporti ed esportazioni | da fare | Cruscotto, rapporti di avanzamento, esportazione in CSV e PDF. |
 | 13 | Messa in produzione | da fare | Irrobustimento, prestazioni, installazione sul server aziendale, manuale d'uso, consegna. |
 
-> **Nota sul piano.** Il piano si e' riordinato **due volte**, sempre su
+> **Nota sul piano.** La **sessione 9 e' cambiata**: era "Interfaccia
+> completa" e l'azienda ha chiesto invece il **registro delle operazioni**, che
+> nel piano non compariva da nessuna parte ed e' il requisito che rende il
+> sistema difendibile in sede di audit. Il lavoro sull'interfaccia che era
+> previsto qui - struttura di navigazione, ricerca trasversale, rifinitura del
+> tema scuro - non e' stato fatto e non ha piu' una sessione sua: elenchi con
+> filtri e impaginazione ci sono comunque, perche' li ha portati una per volta
+> ciascuna sessione che ne aveva bisogno. **Va deciso dove ricollocarlo**, e la
+> risposta piu' probabile e' la sessione 13.
+>
+> Il piano si era gia' riordinato **due volte**, sempre su
 > richiesta dell'azienda: la 6 e la 7 sono state invertite (prima i documenti,
 > poi le fasi), e poi la 7 e' diventata le **regole di accesso**, con le fasi e
 > le approvazioni riunite nella 8. Le tredici sessioni restano tredici.
@@ -47,6 +57,197 @@ Stati possibili: `da fare` · `in corso` · `completata`
 > comportamento. Resta una **domanda aperta**: le tabelle di distinta base e
 > articoli sono del rilascio R3 e in questo piano non compaiono; va chiarito se
 > le 13 sessioni coprono il solo R1 o arrivano anche a R2 e R3.
+
+---
+
+## Sessione 9 — Registro delle operazioni · completata (26 agosto 2026)
+
+La sessione aveva un obiettivo dichiarato che non e' tecnico: **rendere Aurora
+difendibile in sede di audit aziendale.** Tutto quello che c'e' dentro discende
+da una domanda sola, quella che fa chi verifica: *"come faccio a sapere che
+questo registro dice la verita'?"*
+
+La risposta di prima era "fidati del programma". Adesso sono quattro risposte
+sovrapposte, e nessuna delle quattro chiede di fidarsi di nessuno.
+
+> **Una migrazione, `e2f5a91c73d8`.** Nessuna tabella nuova: `audit_logs` c'e'
+> dalla sessione 2. Aggiunge quattro colonne - `seq`, `description`,
+> `previous_hash`, `entry_hash` - e **riempie le novantasei righe gia'
+> presenti**, componendo le descrizioni con lo stesso catalogo che usa il
+> programma e costruendo la catena nell'ordine in cui i fatti sono avvenuti. Da
+> quel momento anche la storia delle sessioni da 3 a 8 e' verificabile.
+
+### I quattro strati della non modificabilita'
+
+| Strato | Che cosa ferma | Dove sta |
+|---|---|---|
+| Il programma | c'e' una sola funzione che scrive e nessuna che corregge | `app/services/audit.py` (D-018) |
+| I permessi | il programma sbagliato di domani | `scripts/hardening_db.sql`, parte 1 (D-064) |
+| Il proprietario separato e due trigger | il programma che si ridarebbe i permessi da solo; l'`UPDATE` senza `WHERE` scritto in `psql` alle otto di sera | `scripts/hardening_db.sql`, parte 2 |
+| La catena di impronte | niente: **rende visibile** la manomissione riuscita | `app/services/audit.py`, `scripts/verifica_audit.py` (D-063) |
+
+L'ultimo e' l'unico che serva contro chi vuole davvero manomettere il registro
+e ha le credenziali per farlo. Un superutente di PostgreSQL puo' disattivare un
+trigger e riassegnare un permesso; non puo' pero' rifare le impronte di tutte
+le voci successive senza rifarle una per una, e il confronto con le
+esportazioni CSV gia' uscite da Aurora - che le impronte se le portano dietro -
+resterebbe comunque a raccontarlo.
+
+### Realizzato
+
+**Il catalogo delle azioni** (`audit.CATALOGO`) — **cinquantotto operazioni**,
+ciascuna con il suo nome in inglese, la sua frase in italiano e il suo gruppo.
+Prima le costanti `ACTION_*` erano sparse nei dieci servizi che le usavano, e
+alla domanda "quali operazioni vengono registrate?" si poteva rispondere solo
+leggendo tutto il programma. Un test legge i sorgenti e diventa rosso se
+qualcuno aggiunge un'azione senza catalogarla; un secondo test tiene l'elenco
+promesso all'azienda e diventa rosso se qualcuno ne toglie una.
+
+**La descrizione in italiano** (D-062) — ogni voce porta con se' una frase che
+si capisce senza conoscere il programma, composta quando il fatto avviene e mai
+piu' ricalcolata:
+
+    Stato del documento cambiato: Schema elettrico (state: bozza -> rilasciato)
+
+Il nome dell'oggetto lo passa chi chiama `record()`, perche' e' l'unico che ce
+l'ha sotto mano: `record()` non va a interrogare il database, altrimenti il
+registro rallenterebbe ogni operazione del programma. Le funzioni che compongono
+i nomi stanno in `app/services/etichette.py`, un file nuovo che importa solo i
+modelli e che quindi puo' importare chiunque - serviva perche' `projects`
+importa gia' `phases`, e la funzione "come si chiama un progetto" avrebbe
+creato due moduli che si importano a vicenda.
+
+**Le quarantasette chiamate a `record()` gia' esistenti** hanno preso tutte la
+loro etichetta. Non e' stato un ritocco cosmetico: la descrizione e' la colonna
+su cui lavora la ricerca testuale della pagina di consultazione, e una
+descrizione senza il nome dell'oggetto non si cerca.
+
+**La catena delle impronte** (D-063) — ogni voce contiene l'impronta SHA-256
+della precedente. Il numero di sequenza e le impronte si assegnano **al flush**
+e non dentro `record()`, tenendo un `pg_advisory_xact_lock`: e' l'unico momento
+in cui l'ordine di scrittura e' deciso, ed e' l'unico modo perche' due
+richieste simultanee non biforchino la catena. Effetto collaterale voluto: una
+riga aggiunta ad `audit_logs` senza passare da `record()` resta senza `seq` e
+l'INSERT fallisce sul vincolo `NOT NULL`. E' il database che fa rispettare
+D-018.
+
+**Le operazioni che mancavano.** Tre, e ciascuna ha voluto un pezzo di
+programma e non solo una riga di registrazione:
+
+- **modifica di un utente** (`user.updated`) — `users.modifica()` e la scheda
+  `/utenti/{id}`, che prima non esisteva: gli utenti si potevano creare,
+  disattivare e riattivare, non correggere. Nome, cognome e posta elettronica.
+  **Non** il nome utente, che compare nelle righe del registro di anni e nelle
+  assegnazioni ai progetti; **non** il ruolo globale, che resta in sospeso
+  dalla sessione 3 e vuole la sua pagina con le sue conferme;
+- **modifica di una versione** (`product_version.updated`) — il motivo della
+  derivazione, che e' l'unico campo di una versione che non sia un fatto
+  avvenuto: e' una nota scritta di fretta il giorno in cui si apre la versione,
+  e va corretta il giorno in cui ci si accorge che non si capisce;
+- **modifiche alla configurazione** (`config.changed`, D-068) — Aurora non ha
+  una pagina che modifichi la configurazione, quindi non c'e' nessuna
+  operazione dell'utente da registrare. All'avvio si confronta la
+  configurazione effettiva con l'ultima registrata e si scrive la differenza,
+  con il valore di prima e quello di adesso. I segreti non entrano: della
+  stringa di connessione si registra tutto tranne la password, della chiave di
+  firma dei cookie solo l'impronta accorciata, dei file di `config/` solo
+  l'impronta. Un riavvio che non cambia niente non scrive niente.
+
+**La pagina di consultazione** (`/registro`, riservata al creatore) — filtri per
+intervallo di date, utente, gruppo di azioni, tipo di azione e tipo di oggetto;
+ricerca testuale sulla descrizione; impaginazione. Ogni riga mostra quando, chi,
+che cosa e su quale oggetto, con il collegamento alla scheda dell'oggetto
+quando ne ha una; il resto - i valori di prima e di dopo, l'indirizzo IP,
+l'impronta per esteso - sta dentro un `<details>` che si apre riga per riga.
+
+**L'esportazione in CSV** dei risultati filtrati, **registrata essa stessa**
+(`audit.exported`) con i filtri usati e quante righe sono uscite. La voce viene
+scritta e confermata **prima** che il file cominci a partire: un collegamento
+interrotto a meta' scarico non deve poter far uscire mezzo registro senza
+lasciare traccia. Il file esce con il punto e virgola e il BOM, perche' lo apre
+una persona con Excel in italiano (D-066), e porta dentro le impronte, perche'
+un'esportazione che non si puo' verificare vale quanto una parola data.
+
+**La scheda "Storico"** su tutti e cinque i tipi di oggetto - prodotto,
+versione, progetto, documento, persona (D-067). E' una linguetta-collegamento e
+non una scheda nella stessa pagina, perche' lo storico e' un elenco impaginato
+che va interrogato: `components/schede.html` descriveva gia' la distinzione, e
+questo e' il primo caso in cui serviva davvero. Le voci si cercano per
+identificatore e non per coppia (tipo, identificatore), perche' gli UUID sono
+unici fra tutte le tabelle: cosi' la storia di un progetto comprende le sue
+assegnazioni e i suoi passaggi di fase, che nel registro hanno un
+`entity_type` diverso, e la storia di una persona comprende sia quello che le
+hanno fatto sia quello che ha fatto lei.
+
+**Chi vede lo storico e' chi vede l'oggetto**, e la domanda la fa sempre
+`permissions.puo()`. Per rispondere, quella funzione ha imparato un oggetto in
+piu' - il `Product` - e le pagine delle persone sono l'eccezione: stanno tutte
+nella sezione riservata al creatore, e la rotta dichiara
+`Depends(richiedi_creatore)` come le altre, rispondendo **403** invece del 404
+di `pretendi()`. Due pagine vicine che rispondono in due modi diversi alla
+stessa domanda mandano chi indaga a cercare un guasto che non c'e'.
+
+**Tre script operativi**, tutti documentati in italiano:
+
+| Script | Che cosa fa |
+|---|---|
+| `scripts/hardening_db.sql` + `.md` | rende `audit_logs` a sola aggiunta. Idempotente; la parte 1 la puo' eseguire anche `aurora_app` su se' stesso, la parte 2 vuole `postgres` |
+| `scripts/verifica_audit.py` | ricalcola tutta la catena e dice se torna. Tre controlli: l'impronta di ciascuna voce, l'aggancio alla precedente, i buchi nella numerazione. Codice di uscita 0/1/2 per un lavoro pianificato |
+| `scripts/archivia_audit.py` | copia su `.csv.gz` le voci piu' vecchie di N anni. **Non cancella niente** e non si esegue da solo (D-065) |
+
+**Due componenti grafici nuovi**, in vetrina su `/stile` come vuole la guida:
+`components/storico.html` (le voci del registro) e `schede_oggetto` in
+`components/schede.html` (la striscia scheda/storico). La barra di ricerca ha
+imparato l'intervallo di date.
+
+### Verificato
+
+- **Un'operazione di ogni tipo dell'elenco** viene eseguita da un test e
+  ritrovata nel registro con i dati giusti: accesso riuscito e fallito,
+  disconnessione, creazione/modifica/disattivazione utente, reimpostazione
+  password, cliente, prodotto, versione, ciclo di vita, progetto, assegnazione
+  e revoca, i sei tipi di operazione sui documenti, matrice dei permessi,
+  richiesta/approvazione/rifiuto di avanzamento fase, configurazione,
+  esportazione.
+- **`UPDATE`, `DELETE` e `TRUNCATE` su `audit_logs` falliscono** con le
+  credenziali di Aurora: verificato a mano con `psql` e da un test che non si
+  salta.
+- **`scripts/verifica_audit.py` conferma l'integrita'** delle 97 voci del
+  database di sviluppo. Modificando una riga con i permessi di chi amministra
+  il database, lo script la segnala per numero e spiega che cosa vuol dire; la
+  riga e' stata poi rimessa com'era e il permesso ritolto.
+- **L'archiviazione e' stata eseguita davvero**, con la soglia messa a
+  "adesso" per esercitare la scrittura a blocchi: cento voci copiate in
+  `storage/archivio-audit/`, impronte comprese, e **cento voci ancora nel
+  database** piu' la centunesima che racconta l'archiviazione.
+- **386 test passano** (337 prima della sessione, 47 nuovi in
+  `tests/test_registro.py`, 2 casi in piu' nella vetrina).
+- **Le pagine sono state provate nel browser** con l'utente `prova.sessione5`:
+  il registro con i suoi filtri, lo storico di un progetto - che mostra
+  davvero le assegnazioni e i passaggi di fase delle sessioni precedenti - lo
+  storico di un documento con i suoi scarichi, la scheda di una persona con la
+  modifica della posta elettronica fatta e poi disfatta. Le due operazioni
+  sono le voci 99 e 100 del registro.
+
+### Quello che resta da fare, e perche'
+
+- **La parte 2 dell'irrobustimento** (proprietario separato e trigger) chiede
+  la password di `postgres` e va eseguita da chi amministra il computer: la
+  procedura e' `scripts/hardening_db.md`, passo 3. La parte 1 - i permessi - e'
+  gia' applicata sul database di sviluppo, ed e' quella che il criterio di
+  accettazione chiedeva di verificare.
+- **`email.assigned_manual` e `email.quarantined` sono catalogate ma non le
+  scrive ancora nessuno**: la sezione della posta arriva con la sessione 10, e
+  oggi in Aurora non esiste nessuna pagina che assegni un messaggio a un
+  progetto. Sono in catalogo apposta, cosi' quel giorno registrare l'operazione
+  sara' una riga sola invece di una discussione su come chiamarla.
+- **Il cambio di ruolo globale di un utente** resta in sospeso dalla sessione 3.
+  Adesso c'e' la scheda della persona su cui appoggiarlo, e l'azione
+  `user.updated` che lo registrerebbe; manca la decisione su come impedire che
+  l'ultimo creatore si tolga il ruolo da solo.
+- **Il collegamento di `verifica_audit.py` ai lavori notturni** e' materia
+  della sessione 11, quando ci sara' APScheduler. Lo script e' gia' scritto per
+  quello: opzione `--silenzioso` e codice di uscita.
 
 ---
 

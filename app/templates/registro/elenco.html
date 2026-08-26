@@ -1,0 +1,79 @@
+{# ===========================================================================
+   Il registro delle operazioni: elenco filtrato, impaginato, esportabile.
+
+   E' la pagina che rende difendibile Aurora davanti a una verifica: qui c'e'
+   tutto quello che e' successo, chi lo ha fatto, quando e da dove, e non c'e'
+   nessun modo di toglierne una riga - non ce l'ha nemmeno chi guarda questa
+   pagina, perche' l'utente con cui Aurora si collega al database non ha il
+   permesso di modificare la tabella (scripts/hardening_db.sql).
+
+   IL FILTRO E' UN MODULO GET, come tutte le ricerche di Aurora: la ricerca
+   fatta resta nell'indirizzo, e il pulsante di esportazione ci si appoggia -
+   esporta esattamente quello che si sta guardando, non tutto il registro.
+   =========================================================================== #}
+{% extends "base.html" %}
+
+{% from "components/ricerca.html" import ricerca %}
+{% from "components/impaginazione.html" import impaginazione %}
+{% from "components/storico.html" import storico %}
+{% from "components/pulsanti.html" import pulsante_collegamento %}
+{% from "components/avvisi.html" import avviso %}
+{% from "components/vuoto.html" import vuoto %}
+
+{% block titolo %}Registro delle operazioni{% endblock %}
+{% block sezione %}Registro{% endblock %}
+
+{% block contenuto %}
+
+<div class="testata">
+    <div>
+        <h1>Registro delle operazioni</h1>
+        <p class="sottotitolo">
+            Ogni operazione che cambia qualcosa in Aurora lascia qui una riga.
+            Le righe si aggiungono e non si tolgono: nemmeno da questa pagina,
+            nemmeno dal programma.
+        </p>
+    </div>
+    <div class="testata-azioni">
+        {{ pulsante_collegamento("Esporta in CSV",
+                                 "/registro/esporta?" ~ (parametri|urlencode),
+                                 icona_nome="scarica") }}
+    </div>
+</div>
+
+{{ ricerca("/registro", valore=q, nome="q",
+           etichetta="Cerca nella descrizione",
+           segnaposto="Cerca nella descrizione",
+           date=date_scelte,
+           filtri=tendine) }}
+
+{% if totale or not filtro.e_vuoto() %}
+
+    {{ storico(voci, con_oggetto=true,
+               messaggio_vuoto="Nessuna operazione con questi filtri. "
+                               "Prova ad allargare l'intervallo di date o a "
+                               "svuotare la casella di ricerca.") }}
+
+    {{ impaginazione(pagina=pagina_corrente, totale_pagine=totale_pagine,
+                     indirizzo="/registro", parametri=parametri,
+                     totale_righe=totale) }}
+
+    {% if totale > massimo_esportazione %}
+        {{ avviso("L'esportazione si ferma alle prime " ~ massimo_esportazione ~
+                  " voci, che sono le piu' recenti. Per averle tutte si "
+                  "restringe l'intervallo di date, oppure si usa lo script "
+                  "scripts/archivia_audit.py, che scrive su disco senza limiti.",
+                  variante="informazione",
+                  titolo="Ci sono piu' voci di quante ne esporti un file") }}
+    {% endif %}
+
+{% else %}
+
+    {{ vuoto("Il registro e' vuoto",
+             "Non c'e' ancora nessuna operazione registrata. La prima arrivera' "
+             "al primo accesso.",
+             icona_nome="registro") }}
+
+{% endif %}
+
+{% endblock %}

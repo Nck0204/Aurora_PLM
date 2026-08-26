@@ -47,7 +47,7 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.db import get_db
 from app.models import SessionKind, User, UserSession
-from app.services import audit, auth, permissions
+from app.services import audit, auth, etichette, permissions
 from app.services.cookies import (
     COOKIE_RICORDAMI,
     COOKIE_SESSIONE,
@@ -216,6 +216,7 @@ def _rinnova_da_ricordami(
         entity_id=utente.id,
         user_id=utente.id,
         request=request,
+        etichetta=etichette.nome_utente(utente),
     )
 
     db.commit()
