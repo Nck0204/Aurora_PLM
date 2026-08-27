@@ -196,6 +196,8 @@ la prova.
 | `vuoto.html` | `vuoto` | quando non c'e' niente da mostrare |
 | `storico.html` | `storico` | le voci del registro delle operazioni |
 | `messaggio.html` | `corpo_messaggio` | il testo di una mail archiviata |
+| `semaforo.html` | `semaforo`, `controllo` | verde/giallo/rosso, e la riga di controllo che dice che cosa fare |
+| `aiuto.html` | `aiuto` | il punto interrogativo accanto a un campo non ovvio |
 
 ### Nei template non si decide chi puo' fare che cosa
 
@@ -298,6 +300,64 @@ diventato una frase italiana, il tipo di entita' e' gia' diventato "Documento",
 l'indirizzo della scheda dell'oggetto e' gia' composto o e' `None`. Le compone
 `_voce_per_la_pagina()` in `app/routers/audit.py`, ed e' la regola della
 sezione qui sotto applicata a un caso in cui sarebbe stato comodo sbagliare.
+
+### Il semaforo e la riga di controllo
+
+`semaforo.html` disegna le righe della pagina di diagnostica e dei passi della
+configurazione guidata. Sta nella sezione 29 di `aurora.css`.
+
+**Tre colori e non quattro**: verde non c'e' niente da fare, giallo c'e'
+qualcosa da programmare, rosso qualcosa e' gia' rotto. Non esiste il colore per
+i casi incerti - un controllo che non sa rispondere e' **giallo**, perche' non
+saperlo e' un problema da guardare.
+
+**Non va confuso con le etichette di stato** di `stato.html`. Quelle dicono a
+che punto e' un documento o una versione di prodotto, hanno colori fissati una
+volta per tutte e non chiedono niente a nessuno; un semaforo rosso vuol dire
+che **qualcuno deve fare qualcosa**.
+
+**Ogni riga che non e' verde porta il blocco «Che cosa fare»**, staccato dal
+resto, con la sua barretta in tinta d'attenzione. E' l'unica parte della
+diagnostica che dice a qualcuno di fare qualcosa, e si vede. Le righe verdi non
+ce l'hanno, perche' non c'e' niente da fare (D-084).
+
+Il macro `controllo` vuole un oggetto con `colore`, `variante`, `titolo`,
+`valore`, `che_fare`, `dettagli` e `dove`: e' esattamente la forma di
+`diagnostics.Voce` e di `setup.Verifica`, ed e' voluto. Due pagine che mostrano
+la stessa cosa devono riceverla nella stessa forma, altrimenti diventano due
+cose che si somigliano.
+
+Il dettaglio e' un `<details>` gia' aperto quando la riga non e' verde: chi ha
+un guasto vuole vedere i numeri senza dover premere, chi non ce l'ha non vuole
+sei righe in piu' per ogni controllo. Funziona senza JavaScript (D-036).
+
+### Il punto interrogativo
+
+`aiuto.html` disegna l'icona «?» accanto a un campo il cui significato non e'
+ovvio a chi apre Aurora per la prima volta. Sta nella sezione 31 di
+`aurora.css`, insieme alla guida.
+
+**Non si mette su ogni campo.** Un'icona su ogni campo e' un'icona su nessun
+campo: diventa decorazione, e chi ne ha davvero bisogno non la nota piu'.
+
+**E non sostituisce il testo di aiuto sotto il campo.** I macro `campo`,
+`scelta` e `spunta` hanno gia' il parametro `aiuto`, che scrive una riga sotto
+al campo: quella si legge senza fare niente, quindi viene prima. Il punto
+interrogativo serve per la spiegazione **lunga**, quella che non ci sta in una
+riga e che si va a leggere solo quando serve davvero.
+
+**Nel template si scrive solo la chiave**, `{{ aiuto("classificazione") }}`.
+Dove porta sta in `guida.AIUTI`, in Python, e in nessun altro posto: un
+template che scrivesse a mano `/aiuto/versioni-e-stati#gli-stati-di-un-documento`
+sarebbe un collegamento che nessuno si accorgerebbe di aver rotto rinominando
+un titolo. Ci sono due test: uno legge i template e diventa rosso se un
+indirizzo ricompare scritto a mano, l'altro apre ogni pagina nominata e
+verifica che l'ancora esista (D-086).
+
+**E' un collegamento normale, non una finestra che si apre.** Funziona senza
+JavaScript, si apre in una scheda nuova con il tasto centrale, e chi usa la
+tastiera ci arriva con il tabulatore. Il testo per i lettori di schermo dice a
+che cosa serve, non "punto interrogativo".
 
 ### Il corpo di un messaggio di posta
 
@@ -472,6 +532,13 @@ Tre file, tutti serviti da noi (regola 1 di CLAUDE.md):
 | `static/vendor/htmx.min.js` | HTMX 2.0.10, per aggiornare pezzi di pagina |
 | `static/js/aurora.js` | notifiche, finestre di dialogo, trascinamento file, barra di avanzamento del caricamento |
 | `static/js/copia.js` | il pulsante che copia la password assegnata |
+
+**Due pagine intere non usano JavaScript affatto**, ed e' voluto: la
+**configurazione guidata** del primo avvio e la **diagnostica**. Sono le due
+pagine che si aprono quando qualcosa non funziona o non e' ancora stato
+installato niente, cioe' esattamente i momenti in cui non si puo' dare per
+scontato niente. La diagnostica si aggiorna ricaricandola, che e' il gesto che
+fa comunque chi sta aspettando che un servizio riparta.
 
 **Niente di quello che c'e' dentro e' indispensabile.** Con JavaScript spento
 Aurora funziona: si entra, si cambia la password, si crea un utente, si carica

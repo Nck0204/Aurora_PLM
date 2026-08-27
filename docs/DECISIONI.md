@@ -2733,3 +2733,267 @@ di Microsoft - che vorrebbe dire firmare richieste e trattare certificati, cioe'
 esattamente il genere di codice che non si scrive a mano. Nessuna di loro serve
 con `MAIL_PROVIDER=locale`: su un'installazione che legge da una cartella si
 puo' fare a meno di installarle, e il programma lo dice invece di rompersi.
+
+---
+
+## D-084 — La diagnostica dice che cosa fare, non che cosa e' successo
+
+**Data:** 27 agosto 2026 · **Stato:** attiva
+
+**Decisione.** Ogni riga della pagina `/diagnostica` che non e' verde porta con
+se' un campo `che_fare`: un'istruzione, con i nomi veri delle cose. Le righe
+verdi non ce l'hanno. E' verificato da un test, che legge `/salute` e diventa
+rosso se un controllo non verde non dice che cosa fare.
+
+**Motivazione.** Chi apre quella pagina non e' chi ha scritto il programma.
+Molto spesso e' l'informatico chiamato di sabato mattina perche' «Aurora non
+funziona», che di Aurora sa quello che gli hanno raccontato in mezz'ora.
+
+«Il servizio PostgreSQL non risponde» e' una **diagnosi**: dice che cosa
+succede a chi gia' sa che cosa sia PostgreSQL, e non dice niente a nessun
+altro. «Apri Servizi di Windows, cerca il servizio che comincia per postgresql
+e premi Avvia» e' un'**istruzione**: la esegue anche chi non ha mai sentito
+quel nome, e chi lo conosceva gia' la legge in due secondi e non ci perde
+niente.
+
+**Tre colori e non quattro.** Verde: non c'e' niente da fare. Giallo: c'e'
+qualcosa da programmare, ma non oggi. Rosso: qualcosa e' gia' rotto. Non esiste
+il colore per i casi incerti, e un controllo che non riesce a rispondere e'
+**giallo**: non saperlo e' esso stesso un problema da guardare.
+
+**Nessun controllo solleva mai.** Ognuno ha il suo `try`, e chi li mette in
+fila ne ha un altro attorno. Una pagina di diagnostica che si rompe quando c'e'
+un guasto e' una pagina che si rompe esattamente il giorno in cui serve.
+
+**Con il database spento si mostra una riga sola.** Tutti gli altri controlli
+lo interrogherebbero e diventerebbero rossi uno dopo l'altro, dicendo sette
+volte la stessa cosa. Una riga rossa con l'istruzione per riavviarlo e' piu'
+utile di sette righe rosse fra cui cercarla.
+
+---
+
+## D-085 — La guida in linea sono file Markdown, e il Markdown lo trasforma Aurora
+
+**Data:** 27 agosto 2026 · **Stato:** attiva
+
+**Decisione.** Le pagine della guida sono file `.md` in `docs/guida/`, e la
+trasformazione in HTML la fa `app/services/guida.py`, scritta a mano su un
+sottoinsieme deciso da noi. Non si aggiunge nessuna libreria.
+
+**Perche' file Markdown e non template.** Perche' chi scrive la guida non e'
+chi scrive il programma. Un `.md` lo corregge chiunque con il Blocco note,
+entra in git come tutto il resto, e **si legge anche senza aprire Aurora** - il
+che conta il giorno in cui Aurora non si apre. Un template Jinja e' codice: si
+sbaglia una graffa e la pagina non si disegna piu'.
+
+**Perche' non una libreria.** Regola 1 di CLAUDE.md: ogni dipendenza in piu' e'
+una libreria in piu' da installare sul server aziendale e da aggiornare per
+sempre. Il Markdown che serve qui e' piccolo - titoli, paragrafi, elenchi,
+tabelle, citazioni, grassetto, corsivo, codice, collegamenti - e soprattutto
+**e' un perimetro che decidiamo noi**, perche' i file li scriviamo noi e stanno
+in git: non c'e' nessun HTML di cui fidarsi, nessun utente che inserisce testo,
+nessun caso ambiguo da risolvere come lo risolverebbe un'altra implementazione.
+
+Il costo e' un file di quattrocento righe con i suoi test. Il ricambio sarebbe
+`markdown` piu' le sue dipendenze, per sempre.
+
+**Quello che sta fuori dal perimetro non sparisce**: compare come testo
+normale. Una guida che perde una riga perche' era scritta in un modo che il
+programma non conosce e' peggio di una guida con dentro una riga brutta.
+
+**Tutto quello che esce e' scappato prima.** Anche se i file sono nostri, un
+giorno qualcuno ci incollera' dentro un messaggio di errore vero, e quel giorno
+non deve succedere niente.
+
+**I collegamenti a internet restano solo testo.** Aurora deve funzionare con la
+connessione staccata: un collegamento a un sito esterno dentro la guida e' una
+promessa che non si puo' mantenere.
+
+---
+
+## D-086 — Le icone «?» hanno le loro destinazioni in un posto solo
+
+**Data:** 27 agosto 2026 · **Stato:** attiva
+
+**Decisione.** Il punto interrogativo accanto a un campo si scrive nel template
+come `{{ aiuto("classificazione") }}`. Dove porta - quale pagina della guida,
+quale sezione - sta in `guida.AIUTI`, in Python, e in nessun altro posto. C'e'
+un test che legge i template e diventa rosso se un indirizzo della guida
+ricompare scritto a mano.
+
+**Motivazione.** Un template che scrivesse
+`/aiuto/versioni-e-stati#gli-stati-di-un-documento` sarebbe un collegamento che
+nessuno si accorgerebbe di aver rotto rinominando un titolo: si scoprirebbe un
+anno dopo, quando qualcuno preme il punto interrogativo e finisce in cima alla
+pagina sbagliata.
+
+Scritte in un posto solo, un secondo test le prova tutte: apre ogni pagina di
+guida nominata e verifica che l'ancora esista davvero. **Rinominare un titolo
+della guida diventa un'operazione sicura**, perche' chi lo fa scopre subito
+quali collegamenti ha rotto.
+
+**Il punto interrogativo non sostituisce il testo di aiuto sotto il campo.**
+Quella riga si legge senza fare niente, quindi viene prima; l'icona serve per
+la spiegazione lunga, quella che non ci sta in una riga e che si va a leggere
+solo quando serve davvero. E non si mette su ogni campo: un'icona su ogni campo
+e' un'icona su nessun campo.
+
+---
+
+## D-087 — La copia di sicurezza: l'archivio e' uno e cresce, i salvataggi ruotano
+
+**Data:** 27 agosto 2026 · **Stato:** attiva
+
+**Decisione.** `scripts/backup.py` scrive **una** cartella `archivio/` che
+cresce e non ruota mai, piu' una cartella per ogni esecuzione con dentro il
+salvataggio del database. Le cartelle del database ruotano (`BACKUP_KEEP`);
+`archivio/` no, e da li' non si cancella niente.
+
+**Motivazione.** E' la conseguenza diretta di come Aurora deposita i file
+(D-004): un file dell'archivio ha per nome l'impronta SHA-256 del proprio
+contenuto, quindi **non cambia mai** - se il contenuto cambiasse, cambierebbe
+il nome, e sarebbe un altro file - e non viene mai cancellato (regola 5).
+
+Ne discende la proprieta' che rende sensato tutto questo: la cartella
+`archivio/` della copia e' un **soprainsieme** dell'archivio a qualunque data
+passata. Ripristinando il database di martedi' insieme all'archivio di oggi si
+ottiene un sistema coerente: tutte le impronte che il database di martedi'
+nomina sono li' dentro, piu' qualcuna in piu' che nessuno riferisce e che non
+fa male a nessuno.
+
+Copiare l'archivio per intero ogni notte vorrebbe dire riscrivere decine di
+gigabyte per aggiungere i tre file caricati ieri.
+
+**Il confronto e' sul nome e sulla dimensione**, non sul contenuto. Il nome
+**e'** l'impronta del contenuto, quindi lo stesso nome vuol dire lo stesso
+contenuto; la dimensione si guarda per il solo caso che resta, la copia
+interrotta a meta' file.
+
+**Una copia e' completa quando c'e' `informazioni.json`.** Viene scritto per
+ultimo: una cartella senza di lui e' una copia interrotta, e sia la rotazione
+sia il ripristino la riconoscono per tale.
+
+**Il salvataggio del database viene riletto prima di dichiararlo buono.** Un
+file troncato - disco pieno, processo interrotto - esiste e non e' vuoto, e ci
+si accorgerebbe che non vale il giorno in cui serve. `pg_restore --list` legge
+l'indice interno senza ripristinare niente.
+
+**La riga in `backups` si apre prima di cominciare, non dopo aver finito.**
+Cosi' una copia interrotta lascia comunque traccia, con esito `in_corso` e
+senza ora di fine. Scrivendo solo alla fine, una copia interrotta sarebbe
+indistinguibile da una copia che nessuno ha mai programmato: sono due guasti
+diversi con due rimedi diversi.
+
+**Se il database non risponde, la copia si fa lo stesso, senza la riga.** Una
+copia di sicurezza senza il suo verbale vale infinitamente piu' di nessuna
+copia di sicurezza.
+
+---
+
+## D-088 — La configurazione guidata non salva il proprio stato: lo ricava
+
+**Data:** 27 agosto 2026 · **Stato:** attiva
+
+**Decisione.** I sei passi di `/primo-avvio` non hanno nessuna tabella e nessun
+campo che dica a che punto si e'. Ogni volta che la pagina si apre, lo stato si
+ricalcola dal database: il passo del creatore e' fatto se esiste un creatore,
+quello delle classificazioni se esistono le classificazioni, quello delle fasi
+se esiste un modello.
+
+**Motivazione.** La procedura deve potersi interrompere e riprendere, e cosi'
+lo fa senza che sia stata scritta una riga di codice per renderla tale:
+chiudere il browser e tornare domani vuol dire ricalcolare le stesse risposte e
+ritrovarsi dove si era rimasti.
+
+Una tabella «a che punto sono» avrebbe avuto lo stesso comportamento nel caso
+normale e un comportamento **sbagliato** in quello vero: qualcuno che crea le
+classificazioni dalla pagina «Permessi» lascerebbe indietro la tabella, e la
+procedura direbbe di fare una cosa gia' fatta.
+
+**Chi puo' aprirla, in due tempi.** Finche' non esiste nessun amministratore,
+chiunque: non c'e' nessuno a cui chiedere il permesso. Da quando esiste, solo
+lui, e la domanda la fa `permissions.puo()` come dappertutto (D-051).
+
+**«Il sistema e' da configurare» sono due condizioni, non una.** Nessun
+creatore attivo **e** nessun documento. La seconda sembra ridondante e non lo
+e': senza, un sistema in uso da due anni in cui qualcuno ha disattivato per
+sbaglio l'ultimo amministratore riaprirebbe a chiunque arrivi al server una
+pagina che crea amministratori senza chiedere credenziali. Con la seconda, quel
+sistema resta chiuso e il rimedio e' `scripts/reimposta_password.py`, che si
+esegue **dal server** - cioe' da chi ci puo' gia' entrare.
+
+**I dati iniziali stanno in `config/dati_iniziali.toml`**, e li leggono in due:
+questa procedura e `scripts/seed.py`. Prima erano scritti dentro tutti e due, e
+bastava correggerne uno perche' due installazioni dessero due sistemi diversi.
+C'e' anche una seconda ragione, ed e' vincolante: le fasi di Aurora sono dati e
+non codice (D-055), e c'e' un test che diventa rosso se un nome di fase
+ricompare dentro `app/`.
+
+---
+
+## D-089 — `/salute` resta aperta, e si chiude con un parametro
+
+**Data:** 27 agosto 2026 · **Stato:** attiva
+
+**Decisione.** La rotta `/salute` non richiede di essere entrati. Se nel `.env`
+si scrive `HEALTH_TOKEN`, pretende quel valore nell'intestazione
+`X-Aurora-Salute` (o nel parametro `token`) e senza risponde 401. Di partenza
+il parametro e' vuoto, cioe' la rotta e' aperta.
+
+**Motivazione.** La pagina `/diagnostica` e la rotta `/salute` hanno due
+destinatari diversi: la pagina la apre una persona che e' entrata, `/salute` la
+interroga un programma di sorveglianza, che una password non ce l'ha e non la
+puo' avere. Chiuderla dietro l'autenticazione vorrebbe dire renderla inutile
+proprio per la cosa a cui serve.
+
+Dall'altra parte, dalla sessione 12 in `/salute` ci sono i conteggi dei
+documenti, i percorsi del server e lo spazio su disco: su una rete aziendale
+chiusa non e' un problema, se Aurora fosse raggiungibile da fuori lo
+diventerebbe. Il parametro e' la risposta a tutti e due i casi senza scegliere
+per l'azienda.
+
+**`stato` e `semaforo` rispondono a due domande diverse.** `stato` vale «ok» o
+«degradato» e parla solo del database: e' quello che c'era dalla sessione 1 e
+vuol dire *«il programma e' in piedi?»*. `semaforo` e' il verdetto complessivo
+e vuol dire *«c'e' qualcosa da fare?»*. Un'installazione senza copia di
+sicurezza e' rossa di semaforo e «ok» di stato, e sono tutte e due vere. Chi
+programma una sorveglianza guarda `semaforo`; chi voleva solo sapere se il
+server e' vivo continua a guardare `stato` e trova quello che trovava prima.
+
+**Risponde sempre 200, anche quando qualcosa e' rotto.** Chi la interroga vuole
+sapere che cosa non va, e per saperlo deve poter leggere la risposta.
+
+---
+
+## D-090 — Il database irraggiungibile ha una pagina sua, e la stessa frase della diagnostica
+
+**Data:** 27 agosto 2026 · **Stato:** attiva
+
+**Decisione.** Un `SQLAlchemyError` che arriva fino al gestore globale fa
+scattare un secondo controllo: si prende una connessione nuova e si prova un
+`SELECT 1`. Se anche quello fallisce, la risposta e' 503 con la pagina
+`errore_database.html`; se invece riesce, l'errore e' un difetto del programma
+e resta un 500 generico.
+
+**Motivazione.** Senza, un PostgreSQL spento produce l'errore 500 generico -
+«si e' verificato un problema imprevisto» - che e' vero e non serve a nessuno:
+quel problema non e' imprevisto, e' il piu' prevedibile di tutti, e si risolve
+in trenta secondi da chi sa dove guardare.
+
+Il secondo controllo serve a non confondere i due casi. Un'interrogazione
+scritta male e' un difetto del programma, e mostrarla come «il database non
+risponde» manderebbe chi indaga a riavviare un servizio che sta benissimo.
+
+**La pagina porta la stessa identica istruzione della riga rossa della
+diagnostica**, perche' e' la stessa costante: `diagnostics.CHE_FARE_DATABASE`,
+scritta una volta sola. C'e' un test che legge i sorgenti e diventa rosso se
+qualcuno ne scrive una seconda copia. Chi la legge sulla pagina di errore la
+riconosce nella diagnostica quando il database sara' tornato.
+
+**La pagina `/diagnostica` in quel momento non e' raggiungibile**, e non e' una
+dimenticanza: per aprirla bisogna essere entrati, e per entrare serve il
+database. Quindi l'istruzione la porta questa pagina, insieme al collegamento a
+`/salute`, che invece risponde sempre.
+
+**503 e non 500.** Un database spento non e' un errore del programma: e' un
+servizio che non c'e'. Il codice giusto lo dice anche a chi legge solo i codici.

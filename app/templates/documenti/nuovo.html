@@ -19,6 +19,7 @@
 {% from "components/campi.html" import campo, tendina, csrf %}
 {% from "components/pulsanti.html" import pulsante, pulsante_collegamento %}
 {% from "components/riquadro.html" import riquadro %}
+{% from "components/aiuto.html" import aiuto %}
 {% from "components/avvisi.html" import avviso %}
 {% from "components/descrizione.html" import descrizione, voce %}
 {% from "components/area_file.html" import area_file %}
@@ -95,7 +96,8 @@
                        aiuto="L'elenco sta in un file di configurazione: "
                              "l'azienda lo cambia senza toccare il programma.") }}
 
-            {{ tendina("Classificazione", "classificazione",
+            {{ tendina("Classificazione " ~ aiuto("classificazione"),
+                       "classificazione",
                        opzioni=classificazioni, scelto=classificazione_scelta,
                        obbligatorio=true, vuoto="Scegli la classificazione",
                        aiuto="Decide chi puo' vedere il documento: i permessi "

@@ -1,0 +1,52 @@
+{# ===========================================================================
+   IL PUNTO INTERROGATIVO
+
+   QUANDO SI USA. Accanto a un campo o a un'etichetta il cui significato non e'
+   ovvio a chi apre Aurora per la prima volta: la classificazione di un
+   documento, lo stato di una versione, il motivo di un messaggio, l'oggetto
+   con cui si scrive a un cliente.
+
+   QUANDO NON SI USA. Accanto a un campo che si spiega da solo - "Titolo",
+   "Nome", "Cognome". Un'icona su ogni campo e' un'icona su nessun campo:
+   diventa decorazione, e chi ne ha davvero bisogno non la nota piu'.
+
+   E NON SI USA AL POSTO DI UN TESTO DI AIUTO. I macro `campo`, `scelta` e
+   `spunta` hanno gia' il parametro `aiuto`, che scrive una riga sotto al
+   campo. Quella riga si legge senza fare niente, quindi viene prima: il punto
+   interrogativo serve per la spiegazione **lunga**, quella che non ci sta in
+   una riga e che si va a leggere solo quando serve davvero.
+
+   DOVE PORTA. A una sezione precisa di una pagina della guida, non alla guida
+   intera: chi lo preme vuole leggere tre righe, non aprire un capitolo.
+
+   **Le destinazioni stanno tutte in `guida.AIUTI`, in Python.** Nel template si
+   scrive soltanto la chiave. Un template che scrivesse a mano
+   `/aiuto/versioni-e-stati#gli-stati-di-un-documento` sarebbe un collegamento
+   che nessuno si accorgerebbe di aver rotto rinominando un titolo; scritte in
+   un posto solo, c'e' un test che le prova tutte e diventa rosso quel giorno.
+
+   COME SI USA:
+
+       {% raw %}{% from "components/aiuto.html" import aiuto %}
+
+       <label>Classificazione {{ aiuto("classificazione") }}</label>{% endraw %}
+
+   E' UN COLLEGAMENTO NORMALE, non una finestra che si apre. Quindi funziona
+   senza JavaScript, si apre in una scheda nuova con il tasto centrale, e chi
+   usa la tastiera ci arriva con il tabulatore come su qualunque altro
+   collegamento. Il testo per i lettori di schermo dice a che cosa serve, non
+   "punto interrogativo".
+   =========================================================================== #}
+
+{% from "components/icone.html" import icona %}
+
+
+{% macro aiuto(chiave) -%}
+{%- set voce = punti_aiuto.get(chiave) -%}
+{%- if voce and voce.esiste %}
+<a class="punto-aiuto" href="{{ voce.indirizzo }}" title="{{ voce.spiegazione }}">
+    {{- icona("aiuto", 15) -}}
+    <span class="solo-lettura-vocale">Aiuto: {{ voce.spiegazione }}</span>
+</a>
+{%- endif %}
+{%- endmacro %}

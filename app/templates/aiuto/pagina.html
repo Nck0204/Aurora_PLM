@@ -1,0 +1,70 @@
+{# ===========================================================================
+   AIUTO - una pagina della guida.
+
+   Il corpo arriva gia' in HTML da app/services/guida.py, che ha trasformato il
+   file Markdown e ha reso innocuo tutto quello che poteva sembrare un tag.
+   Per questo si usa il filtro "safe": non e' una scorciatoia, e' il punto in
+   cui si dichiara che il testo e' gia' stato scappato una riga piu' in la'.
+
+   LA COLONNA DI DESTRA ha due cose: l'indice di questa pagina, per saltare a
+   una sezione, e l'elenco delle altre pagine, per passare alla successiva
+   senza tornare all'indice. Sotto i 1100 pixel va a finire sotto il testo:
+   e' navigazione, e la navigazione cede il posto al contenuto.
+
+   IL TESTO E' LARGO AL MASSIMO 70 CARATTERI. Una riga piu' lunga si legge
+   peggio: arrivati in fondo si fa fatica a ritrovare l'inizio di quella dopo.
+   E' l'unico posto di Aurora in cui il contenuto e' prosa da leggere e non
+   dati da consultare, ed e' l'unico in cui questa misura conta.
+   =========================================================================== #}
+{% extends "base.html" %}
+
+{% from "components/riquadro.html" import riquadro %}
+{% from "components/pulsanti.html" import pulsante_collegamento %}
+
+{% block titolo %}{{ pagina_guida.titolo }} - Aiuto{% endblock %}
+{% block sezione %}Aiuto{% endblock %}
+
+{% block contenuto %}
+
+<div class="testata">
+    <div>
+        <h1>{{ pagina_guida.titolo }}</h1>
+        {% if pagina_guida.sommario %}
+        <p class="sottotitolo">{{ pagina_guida.sommario }}</p>
+        {% endif %}
+    </div>
+    <div class="testata-azioni">
+        {{ pulsante_collegamento("Tutte le pagine", "/aiuto",
+                                 icona_nome="freccia-sinistra") }}
+    </div>
+</div>
+
+<div class="guida">
+
+    <article class="guida-testo">
+        {{ pagina_guida.html|safe }}
+    </article>
+
+    <aside class="guida-lato">
+        {% if pagina_guida.sezioni %}
+        {% call riquadro("In questa pagina") %}
+            <ul class="guida-sommario">
+                {% for sezione in pagina_guida.sezioni %}
+                <li><a href="#{{ sezione.ancora }}">{{ sezione.titolo }}</a></li>
+                {% endfor %}
+            </ul>
+        {% endcall %}
+        {% endif %}
+
+        {% call riquadro("Le altre pagine") %}
+            <ul class="guida-sommario">
+                {% for voce in pagine if voce.nome != pagina_guida.nome %}
+                <li><a href="/aiuto/{{ voce.nome }}">{{ voce.titolo }}</a></li>
+                {% endfor %}
+            </ul>
+        {% endcall %}
+    </aside>
+
+</div>
+
+{% endblock %}

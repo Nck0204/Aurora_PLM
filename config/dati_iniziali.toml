@@ -1,0 +1,164 @@
+# ===========================================================================
+#  Dati iniziali di Aurora
+#
+#  Quello che Aurora si porta appresso su un'installazione nuova: le
+#  classificazioni dei documenti, la griglia dei permessi di partenza, e il
+#  percorso di fasi che i progetti seguiranno.
+#
+#  LO LEGGONO IN DUE, E DEVONO LEGGERE LA STESSA COSA:
+#
+#    - la configurazione guidata del primo avvio (/primo-avvio), che e' la
+#      strada normale;
+#    - lo script scripts/seed.py, per chi installa dalla riga di comando.
+#
+#  Prima della sessione 12 questi elenchi erano scritti dentro tutti e due, e
+#  bastava correggerne uno perche' due installazioni dessero due sistemi
+#  diversi. Adesso il posto e' uno solo, ed e' questo.
+#
+#  PERCHE' STA QUI E NON DENTRO IL PROGRAMMA. Per la stessa ragione di
+#  config/tipi_documento.toml e di config/codice_prodotto.toml: e' roba che
+#  l'azienda potrebbe voler cambiare - un'altra azienda avrebbe altre fasi e
+#  altre classificazioni - e cambiarla non deve costare una modifica al
+#  programma (CLAUDE.md, regola 8, e D-038).
+#
+#  C'E' UNA SECONDA RAGIONE, ed e' la piu' stringente. Le fasi di Aurora sono
+#  **dati e non codice** (D-055): il programma non sa e non deve sapere come
+#  si chiamano, quello che guarda sono le due proprieta' qui sotto. C'e' un
+#  test che legge i sorgenti e diventa rosso se un nome di fase ricompare
+#  dentro app/. Scrivendoli qui, quella regola resta vera anche per i dati
+#  iniziali.
+#
+#  SE QUESTO FILE MANCA O E' SCRITTO MALE, Aurora parte lo stesso: i due
+#  passi della configurazione guidata che lo usano lo dicono e spiegano come
+#  creare le stesse cose a mano, dalle pagine «Permessi» e «Fasi» (D-039).
+#  Non c'e' nessun elenco di ripiego scritto nel programma, e non va aggiunto:
+#  ci finirebbero i nomi delle fasi.
+#
+#  MODIFICARLO DOPO L'INSTALLAZIONE NON SERVE A NIENTE. Questi sono i valori
+#  di **partenza**: da quel momento in poi le classificazioni si amministrano
+#  da /permessi e le fasi da /fasi, e quello che c'e' nel database non guarda
+#  piu' questo file.
+# ===========================================================================
+
+
+# ---------------------------------------------------------------------------
+#  Le classificazioni
+#
+#  Ogni documento ne ha una, ed e' la classificazione a decidere chi lo vede.
+#  "Corrispondenza" e' diversa dalle altre: non se la sceglie chi carica un
+#  documento, ce l'hanno addosso tutti i messaggi di posta archiviati, ed e'
+#  con lei che si decide chi li puo' vedere (D-069).
+# ---------------------------------------------------------------------------
+
+[[classificazioni]]
+nome = "Tecnico"
+descrizione = "Schemi, disegni, distinte, relazioni di prova, firmware."
+
+[[classificazioni]]
+nome = "Commerciale"
+descrizione = "Offerte, listini, ordini, corrispondenza commerciale."
+
+[[classificazioni]]
+nome = "Qualità"
+descrizione = "Piani della qualità, non conformità, rapporti di audit."
+
+[[classificazioni]]
+nome = "Amministrativo"
+descrizione = "Contratti, accordi di riservatezza, documenti di spesa."
+
+[[classificazioni]]
+nome = "Corrispondenza"
+descrizione = "I messaggi di posta archiviati e i loro allegati."
+
+
+# ---------------------------------------------------------------------------
+#  La griglia dei permessi di partenza
+#
+#  Per ogni ruolo di progetto e per ogni classificazione, tre spunte:
+#  vedere, caricare, modificare.
+#
+#  Le tre regole che l'azienda ha chiesto espressamente sono: l'ingegnere non
+#  vede il Commerciale, il project manager vede tutto del proprio progetto, il
+#  lettore vede solo il Tecnico e in sola lettura. Il resto discende, e si
+#  corregge dalla pagina «Permessi».
+#
+#  Sulla colonna della corrispondenza: i messaggi non si "caricano" - arrivano
+#  dalla casella - quindi la spunta "caricare" non serve a nessuno tranne al
+#  responsabile; "modificare" e' il permesso di **correggere l'attribuzione**
+#  di un messaggio finito sulla versione sbagliata, e l'ingegnere ce l'ha
+#  perche' e' lui che se ne accorge.
+#
+#  Ci sono tutte e quindici le caselle, comprese quelle con tutto a falso: una
+#  casella che dice "no" e' una decisione, una casella che manca e' una
+#  dimenticanza, e a distanza di mesi non si distinguono piu'.
+# ---------------------------------------------------------------------------
+
+[permessi.project_manager]
+"Tecnico"         = { vedere = true, caricare = true,  modificare = true }
+"Commerciale"     = { vedere = true, caricare = true,  modificare = true }
+"Qualità"         = { vedere = true, caricare = true,  modificare = true }
+"Amministrativo"  = { vedere = true, caricare = true,  modificare = true }
+"Corrispondenza"  = { vedere = true, caricare = true,  modificare = true }
+
+[permessi.ingegnere]
+"Tecnico"         = { vedere = true,  caricare = true,  modificare = true }
+"Commerciale"     = { vedere = false, caricare = false, modificare = false }
+"Qualità"         = { vedere = true,  caricare = true,  modificare = true }
+"Amministrativo"  = { vedere = true,  caricare = false, modificare = false }
+"Corrispondenza"  = { vedere = true,  caricare = false, modificare = true }
+
+[permessi.lettore]
+"Tecnico"         = { vedere = true,  caricare = false, modificare = false }
+"Commerciale"     = { vedere = false, caricare = false, modificare = false }
+"Qualità"         = { vedere = false, caricare = false, modificare = false }
+"Amministrativo"  = { vedere = false, caricare = false, modificare = false }
+"Corrispondenza"  = { vedere = true,  caricare = false, modificare = false }
+
+
+# ---------------------------------------------------------------------------
+#  Il percorso delle fasi
+#
+#  L'ordine e' quello di attraversamento. Le due proprieta' sono quelle che
+#  governano il comportamento del percorso, e sono le sole cose che il
+#  programma sappia di una fase:
+#
+#    blocca_ritorno    da questa fase non si torna a una precedente;
+#    chiude_progetto   entrando in questa fase il progetto si chiude.
+#
+#  Il programma non sa che la fase da cui non si torna indietro si chiami
+#  "Development": sa che una fase con blocca_ritorno blocca il ritorno.
+#  Cambiare questi nomi, riordinarli o scrivere un percorso completamente
+#  diverso non costa una riga di programma (D-055).
+# ---------------------------------------------------------------------------
+
+[fasi]
+modello = "Standard"
+descrizione = """\
+Percorso di sviluppo prodotto usato in azienda: dalla selezione dell'idea \
+alla chiusura del progetto."""
+
+[[fasi.elenco]]
+nome = "Idea screening"
+descrizione = "Vaglio iniziale dell'idea: vale la pena di studiarla?"
+
+[[fasi.elenco]]
+nome = "Concept"
+descrizione = "Definizione di che cosa deve fare il prodotto."
+
+[[fasi.elenco]]
+nome = "Feasibility"
+descrizione = "Verifica tecnica ed economica di fattibilità."
+
+[[fasi.elenco]]
+nome = "Quoted"
+descrizione = "Offerta presentata al cliente, in attesa di risposta."
+
+[[fasi.elenco]]
+nome = "Development"
+descrizione = "Progettazione, prototipi, prove, industrializzazione."
+blocca_ritorno = true
+
+[[fasi.elenco]]
+nome = "Chiuso"
+descrizione = "Progetto concluso, per rilascio o per rinuncia."
+chiude_progetto = true

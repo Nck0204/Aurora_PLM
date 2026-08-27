@@ -1,0 +1,115 @@
+{# ===========================================================================
+   CONFIGURAZIONE GUIDATA - l'elenco dei sei passi.
+
+   E' LA PRIMA PAGINA CHE QUALCUNO VEDE DI AURORA. Chi la guarda ha appena
+   installato il programma su un server e non sa ancora niente: non sa che cosa
+   sia una classificazione, non sa che i progetti abbiano delle fasi, e molto
+   probabilmente non ha nessuna intenzione di leggere un manuale prima di
+   cominciare.
+
+   Quindi la pagina fa tre cose e basta:
+
+     1. dice quanti passi sono e a che punto si e';
+     2. spiega ogni passo in una riga, in italiano, senza gergo;
+     3. ha un solo pulsante grande, che porta al primo passo da fare.
+
+   USA base_nudo.html - niente barra laterale - perche' chi la apre la prima
+   volta non e' entrato: non c'e' ancora nessun profilo con cui entrare, ed e'
+   proprio quello che si sta per creare.
+
+   SI PUO' INTERROMPERE E RIPRENDERE. Il segno di spunta su ogni passo non
+   viene da nessuna tabella: si ricava dal database ogni volta che la pagina si
+   apre. Chiudere il browser e tornare domani vuol dire ritrovare questa stessa
+   pagina, con gli stessi segni.
+   =========================================================================== #}
+{% extends "base_nudo.html" %}
+
+{% from "components/avvisi.html" import avviso %}
+{% from "components/icone.html" import icona %}
+{% from "components/pulsanti.html" import pulsante_collegamento %}
+
+{% block titolo %}Configurazione guidata{% endblock %}
+
+{% block contenuto %}
+
+<div class="primo-avvio">
+
+    <h1>Benvenuto in {{ app_name }}</h1>
+
+    {% if completata %}
+        <p class="spiegazione">
+            La configurazione e' completa: {{ app_name }} e' pronta all'uso.
+            Da questa pagina si puo' comunque rivedere ogni passo.
+        </p>
+    {% else %}
+        <p class="spiegazione">
+            Prima di cominciare a lavorare ci sono sei cose da sistemare.
+            Nessuna richiede di aprire un file di testo o di scrivere un
+            comando: si fanno tutte da qui, una per volta, e ognuna spiega
+            a che cosa serve.
+        </p>
+        <p class="spiegazione testo-tenue">
+            La procedura si puo' interrompere e riprendere quando si vuole:
+            {{ app_name }} si ricorda da sola a che punto era.
+        </p>
+    {% endif %}
+
+    {% if not gia_entrato %}
+        {{ avviso("Questa pagina e' aperta a chiunque perche' non esiste "
+                  "ancora nessun profilo con cui entrare. Appena il passo 2 "
+                  "sara' fatto, la procedura chiedera' di riconoscersi come "
+                  "tutte le altre pagine di " ~ app_name ~ ".",
+                  variante="informazione",
+                  titolo="Perche' non ti e' stato chiesto di entrare") }}
+    {% endif %}
+
+    <ol class="passi">
+        {% for passo in passi %}
+        <li class="passo{% if passo.fatto %} passo--fatto{% endif %}">
+            <span class="passo-numero" aria-hidden="true">
+                {%- if passo.fatto %}{{ icona("spunta", 18) }}{% else %}{{ passo.numero }}{% endif -%}
+            </span>
+            <span class="passo-corpo">
+                <a class="passo-titolo" href="/primo-avvio/{{ passo.chiave }}">
+                    {{ passo.titolo }}
+                    {%- if passo.rimandabile %}
+                    <span class="passo-nota">si puo' rimandare</span>
+                    {%- endif %}
+                </a>
+                <span class="passo-stato">
+                    {%- if passo.fatto -%}
+                        <span class="solo-lettura-vocale">Fatto. </span>
+                        {{ passo.dettaglio or "Fatto." }}
+                    {%- else -%}
+                        <span class="solo-lettura-vocale">Da fare. </span>
+                        {{ passo.dettaglio or "Da fare." }}
+                    {%- endif -%}
+                </span>
+            </span>
+        </li>
+        {% endfor %}
+    </ol>
+
+    <div class="fila-pulsanti">
+        {% if da_fare %}
+            {{ pulsante_collegamento("Vai al passo da fare",
+                                     "/primo-avvio/" ~ da_fare,
+                                     variante="primario",
+                                     icona_nome="freccia-destra") }}
+        {% else %}
+            {{ pulsante_collegamento("Entra in " ~ app_name, "/",
+                                     variante="primario",
+                                     icona_nome="freccia-destra") }}
+        {% endif %}
+    </div>
+
+    <p class="spiegazione testo-piccolo testo-tenue">
+        Se qualcosa non torna, la pagina <span class="mono">/salute</span>
+        risponde sempre e dice come sta il sistema. La preparazione di
+        PostgreSQL, per chi amministra il server, e' descritta in
+        <span class="mono">scripts/setup_postgres.md</span>.
+    </p>
+
+</div>
+
+{% endblock %}

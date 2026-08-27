@@ -129,6 +129,14 @@ difficile una soluzione, si cambia la soluzione, non la regola.
    git**: non contengono segreti, contengono regole che l'azienda potrebbe
    cambiare senza che si debba toccare il programma (D-038).
 
+   Dalla sessione 12 ce n'e' un terzo, `config/dati_iniziali.toml`: le
+   classificazioni, la griglia dei permessi e il percorso di fasi che
+   un'installazione nuova si porta appresso. Lo leggono in due -
+   `scripts/seed.py` e la configurazione guidata del primo avvio - e **devono
+   leggere la stessa cosa**. C'e' anche una seconda ragione, ed e' vincolante:
+   le fasi sono dati e non codice (D-055), e i loro nomi non possono comparire
+   dentro `app/`.
+
 ## 4. Struttura delle cartelle
 
 ```
@@ -143,7 +151,7 @@ aurora/
 │
 ├── app/
 │   ├── __init__.py        numero di versione
-│   ├── main.py            avvio, registro, gestione errori, rotta /salute
+│   ├── main.py            avvio, registro, gestione errori
 │   ├── config.py          lettura del file .env
 │   ├── db.py              engine, sessione, Base, get_db
 │   ├── dependencies.py    utente_corrente, richiedi_login, richiedi_creatore
@@ -164,16 +172,23 @@ aurora/
 │
 ├── config/                configurazione che non sta nel .env perche' non e'
 │                       una riga sola: la scomposizione dei codici prodotto,
-│                       l'elenco dei tipi di documento
+│                       l'elenco dei tipi di documento, i dati iniziali di
+│                       un'installazione nuova (dati_iniziali.toml)
 ├── docs/                  STATO.md, DECISIONI.md, MODELLO_DATI.md,
-│                       GUIDA_STILE.md, piu' RICHIESTA_IT.md - il documento
-│                       da mandare all'ufficio informatico per farsi dare
-│                       l'accesso alla casella aziendale
+│                       GUIDA_STILE.md, RICHIESTA_IT.md - il documento da
+│                       mandare all'ufficio informatico per farsi dare
+│                       l'accesso alla casella aziendale - e
+│                       BACKUP_E_RIPRISTINO.md
+│   └── guida/             la guida in linea: file .md mostrati dentro
+│                       Aurora all'indirizzo /aiuto (D-085)
 ├── scripts/               procedure operative (installazione, manutenzione).
 │                       Fra queste: hardening_db.sql, che rende audit_logs
 │                       a sola aggiunta; verifica_audit.py, che ricalcola
 │                       la catena delle impronte; archivia_audit.py, che
-│                       ne copia le voci vecchie su file compresso
+│                       ne copia le voci vecchie su file compresso;
+│                       backup.py e ripristino.py, la copia di sicurezza
+├── backup/                le copie di sicurezza (NON in git). In produzione
+│                       va su un DISCO DIVERSO: vedi docs/BACKUP_E_RIPRISTINO.md
 ├── tests/                 test pytest
 ├── storage/               archivio dei file caricati (NON in git)
 │   ├── objects/           i file, depositati per impronta SHA-256:
@@ -282,6 +297,23 @@ Dove mettere una cosa nuova:
   fa partire a mano chiamano **la stessa funzione**, protetta da un blocco
   preso senza aspettare, e quella funzione **non solleva mai** - un lavoro
   pianificato che muore non riparte piu' (D-080);
+- **un controllo di salute nuovo** (una cosa che puo' rompersi e di cui
+  qualcuno deve accorgersi) → una funzione `_controllo_*` in
+  `app/services/diagnostics.py`, piu' una riga in `_CONTROLLI_CON_DATABASE`.
+  Restituisce una `Voce` con il suo semaforo, e **se non e' verde dice che
+  cosa fare**: non che cosa e' successo, che cosa fare, con i nomi veri delle
+  cose ("apri Servizi di Windows", "il file .env"). C'e' un test che legge
+  `/salute` e diventa rosso se un controllo non verde non porta
+  un'istruzione (D-084). Nessun controllo solleva mai: un guasto diventa una
+  riga gialla che lo dice;
+- **una pagina della guida in linea** → un file `NN-nome.md` in `docs/guida/`.
+  Il numero mette in ordine e non compare nell'indirizzo. Il Markdown lo
+  trasforma `app/services/guida.py`, su un sottoinsieme deciso da noi: quello
+  che ne sta fuori compare come testo normale invece di sparire (D-085);
+- **un punto interrogativo accanto a un campo** → una riga in `guida.AIUTI` e
+  `{{ aiuto("chiave") }}` nel template. **L'indirizzo non si scrive mai a
+  mano**: ci sono due test, uno che legge i template e uno che verifica che
+  ogni ancora esista davvero nella pagina che dice (D-086);
 - **una regola su come si legge un messaggio** (un prefisso di risposta in
   piu', un modo diverso di scomporre l'oggetto) → `app/services/email_parsing.py`,
   che **non tocca il database**: sono funzioni pure sui byte di un `.eml`, e si

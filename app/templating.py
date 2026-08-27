@@ -25,16 +25,33 @@ from app.navigation import (
     voci_visibili,
 )
 from app.services.csrf import token_csrf
+from app.services.guida import AIUTI, aiuto
 from app.services.users import ruolo_mostrato
 
 templates = Jinja2Templates(directory=PROJECT_ROOT / "app" / "templates")
 
-# Funzioni richiamabili da dentro un template. Ce n'e' una sola: quella che
-# restituisce il gettone da mettere nel campo nascosto di ogni modulo. Si
-# richiama cosi', dentro ogni <form method="post">:
+# Funzioni e valori richiamabili da dentro un template. Sono due.
+#
+# Il gettone da mettere nel campo nascosto di ogni modulo. Si richiama cosi',
+# dentro ogni <form method="post">:
 #
 #     <input type="hidden" name="csrf" value="{{ token_csrf(request) }}">
 templates.env.globals["token_csrf"] = token_csrf
+
+# Le destinazioni delle icone «?» sparse nell'interfaccia, gia' calcolate.
+# Sta qui e non nel contesto di ogni pagina per la ragione piu' pratica: quelle
+# icone compaiono in una decina di template diversi, e passarle da ogni rotta
+# vorrebbe dire ricordarsene ogni volta - cioe' dimenticarsene, prima o poi, in
+# una rotta sola, che e' il modo in cui un'icona sparisce senza che nessuno se
+# ne accorga.
+#
+# Si calcolano una volta all'avvio perche' l'elenco e' scritto nel programma e
+# non cambia mentre il server e' acceso. Il **contenuto** delle pagine di
+# guida, quello si', si rilegge quando il file cambia: e' un'altra cosa e sta
+# in app/services/guida.py.
+templates.env.globals["punti_aiuto"] = {
+    chiave: aiuto(chiave) for chiave in AIUTI
+}
 
 
 def pagina(

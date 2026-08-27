@@ -50,6 +50,9 @@
      26. La griglia della matrice dei permessi
      27. La griglia delle fasi di un modello
      28. Il corpo di un messaggio di posta
+     29. Il semaforo e la riga di controllo
+     30. La configurazione guidata del primo avvio
+     31. La guida in linea
    ========================================================================== */
 
 
@@ -2498,4 +2501,482 @@ fieldset.gruppo-campi legend {
 
 .corpo-messaggio-resto .corpo-messaggio {
     margin-top: var(--spazio-2);
+}
+
+
+/* ==========================================================================
+   29. IL SEMAFORO E LA RIGA DI CONTROLLO
+   Le righe della pagina di diagnostica e dei passi della configurazione
+   guidata. Il componente e' in components/semaforo.html.
+
+   La forma e' quella di un'informazione che si legge a colpo d'occhio quando
+   va tutto bene e si legge per esteso quando non va: il semaforo a sinistra,
+   la misura in grande, e - solo quando serve - il blocco «Che cosa fare»,
+   staccato dal resto perche' non si possa confondere con una descrizione.
+   ========================================================================== */
+
+.controllo {
+    display: flex;
+    gap: var(--spazio-4);
+    align-items: flex-start;
+}
+
+/* La colonna del semaforo non si stringe: con sei righe una sotto l'altra,
+   le etichette devono restare incolonnate anche quando una e' piu' lunga. */
+.controllo-semaforo {
+    flex: 0 0 auto;
+    min-width: 74px;
+}
+
+.controllo-testo {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.controllo-valore {
+    margin: 0;
+    font-size: var(--testo-grande);
+    color: var(--colore-testo);
+}
+
+/* Il blocco dell'istruzione. E' l'unica parte della diagnostica che dice a
+   qualcuno di fare qualcosa, e si vede: barretta a sinistra in tinta
+   d'attenzione, fondo appena staccato. */
+.controllo-cosa-fare {
+    margin-top: var(--spazio-3);
+    padding: var(--spazio-3) var(--spazio-4);
+    background-color: var(--colore-superficie-sollevata);
+    border-left: 3px solid var(--colore-attenzione);
+    border-radius: 0 var(--raggio-piccolo) var(--raggio-piccolo) 0;
+}
+
+.controllo-cosa-fare p {
+    margin: 0;
+    color: var(--colore-testo);
+    line-height: 1.6;
+    /* Le istruzioni contengono comandi da copiare, scritti su piu' righe
+       dentro la stessa stringa: senza questo andrebbero tutti su una riga. */
+    white-space: pre-line;
+}
+
+.controllo-cosa-fare-titolo {
+    display: flex;
+    gap: var(--spazio-2);
+    align-items: center;
+    margin: 0 0 var(--spazio-2) 0;
+    color: var(--colore-attenzione);
+    font-size: var(--testo-piccolo);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.controllo-dettagli {
+    margin-top: var(--spazio-3);
+}
+
+.controllo-dettagli > summary {
+    padding: var(--spazio-2) 0;
+    color: var(--colore-testo-tenue);
+    cursor: pointer;
+    font-size: var(--testo-piccolo);
+}
+
+.controllo-dettagli > summary:hover {
+    color: var(--colore-accento);
+}
+
+/* Sotto i 900 pixel il semaforo va sopra invece che a fianco: con la colonna
+   fissa da 74 pixel il testo si ridurrebbe a una striscia. */
+@media (max-width: 900px) {
+    .controllo {
+        flex-direction: column;
+        gap: var(--spazio-2);
+    }
+}
+
+
+/* ==========================================================================
+   30. LA CONFIGURAZIONE GUIDATA DEL PRIMO AVVIO
+   Le pagine di /primo-avvio. Non hanno barra laterale - chi le guarda non e'
+   ancora dentro il programma - e sono le uniche pagine di Aurora piu' larghe
+   di un modulo e piu' strette di un elenco: si leggono, non si consultano.
+   ========================================================================== */
+
+.primo-avvio {
+    width: 100%;
+    max-width: 720px;
+    padding: var(--spazio-8);
+    background-color: var(--colore-superficie);
+    border: 1px solid var(--colore-bordo);
+    border-radius: var(--raggio);
+    box-shadow: var(--ombra-1);
+}
+
+.primo-avvio h1 {
+    margin: 0 0 var(--spazio-3) 0;
+    font-size: var(--testo-titolo-grande);
+}
+
+.primo-avvio .spiegazione {
+    margin: 0 0 var(--spazio-4) 0;
+    color: var(--colore-testo-tenue);
+    line-height: 1.6;
+}
+
+.passo-soprattitolo {
+    margin: 0 0 var(--spazio-1) 0;
+    color: var(--colore-accento);
+    font-size: var(--testo-piccolo);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+
+/* --- L'elenco dei sei passi -------------------------------------------- */
+
+.passi {
+    margin: var(--spazio-6) 0;
+    padding: 0;
+    list-style: none;
+}
+
+.passo {
+    display: flex;
+    gap: var(--spazio-4);
+    align-items: flex-start;
+    padding: var(--spazio-4) 0;
+    border-bottom: 1px solid var(--colore-bordo-tenue);
+}
+
+.passo:last-child {
+    border-bottom: none;
+}
+
+/* Il pallino con il numero, che diventa una spunta quando il passo e' fatto.
+   La spunta non basta da sola - il verde e' anche nel fondo - ma il colore
+   non e' mai l'unica informazione: sotto il titolo c'e' scritto che cosa
+   c'e' gia'. */
+.passo-numero {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    background-color: var(--colore-superficie-sollevata);
+    border: 1px solid var(--colore-bordo);
+    border-radius: 50%;
+    color: var(--colore-testo-tenue);
+    font-weight: 600;
+}
+
+.passo--fatto .passo-numero {
+    background-color: var(--stato-rilasciato-fondo);
+    border-color: var(--colore-successo);
+    color: var(--colore-successo);
+}
+
+.passo-corpo {
+    display: block;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.passo-titolo {
+    display: block;
+    color: var(--colore-testo);
+    font-size: var(--testo-grande);
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.passo-titolo:hover {
+    color: var(--colore-accento);
+}
+
+.passo-nota {
+    margin-left: var(--spazio-2);
+    color: var(--colore-testo-tenue);
+    font-size: var(--testo-piccolo);
+    font-weight: 400;
+}
+
+.passo-stato {
+    display: block;
+    margin-top: var(--spazio-1);
+    color: var(--colore-testo-tenue);
+    font-size: var(--testo-piccolo);
+}
+
+/* --- I sei pallini in cima a un passo ----------------------------------- */
+
+.passi-segnaposto {
+    display: flex;
+    gap: var(--spazio-2);
+    margin: 0 0 var(--spazio-6) 0;
+    padding: 0;
+    list-style: none;
+}
+
+.segnaposto a {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    background-color: var(--colore-superficie-sollevata);
+    border: 1px solid var(--colore-bordo);
+    border-radius: 50%;
+    color: var(--colore-testo-tenue);
+    font-size: var(--testo-piccolo);
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.segnaposto a:hover {
+    border-color: var(--colore-bordo-marcato);
+}
+
+.segnaposto--fatto a {
+    background-color: var(--stato-rilasciato-fondo);
+    border-color: var(--colore-successo);
+    color: var(--colore-successo);
+}
+
+.segnaposto--corrente a {
+    background-color: var(--colore-accento);
+    border-color: var(--colore-accento);
+    color: var(--colore-testo-su-accento);
+}
+
+.passi-navigazione {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--spazio-3);
+    margin-top: var(--spazio-8);
+    padding-top: var(--spazio-4);
+    border-top: 1px solid var(--colore-bordo);
+}
+
+/* L'istruzione dentro la pagina del database irraggiungibile: e' un avviso
+   normale, gli serve solo il respiro sopra e sotto. */
+.errore-istruzione {
+    margin: var(--spazio-6) 0;
+    text-align: left;
+}
+
+
+/* ==========================================================================
+   31. LA GUIDA IN LINEA
+   Le pagine di /aiuto. Il corpo arriva gia' in HTML da app/services/guida.py,
+   che ha trasformato un file Markdown: qui si vestono i tag che ne escono -
+   h2, h3, p, ul, ol, blockquote, pre, table - piu' l'indice e il punto
+   interrogativo che si vede accanto ai campi.
+
+   E' l'unica parte di Aurora in cui il contenuto e' prosa da leggere invece
+   che dati da consultare, e si vede: righe corte, interlinea larga, titoli
+   staccati. Sono le stesse variabili di tutto il resto, usate con piu'
+   respiro.
+   ========================================================================== */
+
+.guida {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 260px;
+    gap: var(--spazio-8);
+    align-items: start;
+}
+
+/* Settanta caratteri circa. Una riga piu' lunga si legge peggio: arrivati in
+   fondo si fa fatica a ritrovare l'inizio di quella dopo. */
+.guida-testo {
+    max-width: 68ch;
+    color: var(--colore-testo);
+    font-size: var(--testo-grande);
+    line-height: 1.7;
+}
+
+.guida-testo h2 {
+    margin: var(--spazio-10) 0 var(--spazio-3) 0;
+    padding-top: var(--spazio-4);
+    border-top: 1px solid var(--colore-bordo-tenue);
+    font-size: var(--testo-titolo);
+}
+
+.guida-testo h2:first-child {
+    margin-top: 0;
+    padding-top: 0;
+    border-top: none;
+}
+
+.guida-testo h3 {
+    margin: var(--spazio-6) 0 var(--spazio-2) 0;
+    font-size: var(--testo-grande);
+    color: var(--colore-testo);
+}
+
+.guida-testo p {
+    margin: 0 0 var(--spazio-4) 0;
+}
+
+.guida-testo ul,
+.guida-testo ol {
+    margin: 0 0 var(--spazio-4) 0;
+    padding-left: var(--spazio-6);
+}
+
+.guida-testo li {
+    margin-bottom: var(--spazio-2);
+}
+
+/* La citazione: la barretta a sinistra e' la stessa di .citazione, perche' e'
+   la stessa cosa - il testo di qualcun altro riportato dentro il nostro. */
+.guida-testo blockquote {
+    margin: 0 0 var(--spazio-4) 0;
+    padding: var(--spazio-2) var(--spazio-4);
+    border-left: 3px solid var(--colore-accento);
+    color: var(--colore-testo-tenue);
+    font-style: italic;
+}
+
+.guida-testo pre {
+    margin: 0 0 var(--spazio-4) 0;
+    padding: var(--spazio-4);
+    overflow-x: auto;
+    background-color: var(--colore-superficie);
+    border: 1px solid var(--colore-bordo-tenue);
+    border-radius: var(--raggio-piccolo);
+}
+
+.guida-testo pre code {
+    font-family: var(--carattere-mono);
+    font-size: var(--testo-normale);
+    color: var(--colore-testo);
+}
+
+/* Il codice dentro una frase: si stacca dal testo senza gridare. */
+.guida-testo code {
+    padding: 1px 5px;
+    background-color: var(--colore-superficie-sollevata);
+    border-radius: var(--raggio-piccolo);
+    font-family: var(--carattere-mono);
+    font-size: var(--testo-normale);
+}
+
+.guida-testo hr {
+    margin: var(--spazio-8) 0;
+    border: none;
+    border-top: 1px solid var(--colore-bordo);
+}
+
+.guida-testo .tabella-contenitore {
+    margin-bottom: var(--spazio-4);
+}
+
+/* --- L'indice della pagina e l'elenco delle altre --------------------- */
+
+.guida-sommario {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.guida-sommario li {
+    margin-bottom: var(--spazio-2);
+}
+
+.guida-sommario a {
+    color: var(--colore-testo-tenue);
+    font-size: var(--testo-normale);
+    text-decoration: none;
+}
+
+.guida-sommario a:hover {
+    color: var(--colore-accento);
+}
+
+/* --- L'indice generale e i risultati della ricerca -------------------- */
+
+.guida-indice,
+.guida-risultati {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.guida-indice > li,
+.guida-risultati > li {
+    padding: var(--spazio-4) 0;
+    border-bottom: 1px solid var(--colore-bordo-tenue);
+}
+
+.guida-indice > li:last-child,
+.guida-risultati > li:last-child {
+    padding-bottom: 0;
+    border-bottom: none;
+}
+
+.guida-indice-titolo {
+    display: inline-flex;
+    gap: var(--spazio-2);
+    align-items: center;
+    color: var(--colore-accento);
+    font-size: var(--testo-grande);
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.guida-indice-titolo:hover {
+    color: var(--colore-accento-scuro);
+}
+
+.guida-indice-sommario,
+.guida-risultato-contesto {
+    display: block;
+    margin-top: var(--spazio-1);
+    color: var(--colore-testo-tenue);
+    font-size: var(--testo-normale);
+}
+
+/* I titoli delle sezioni sotto ogni voce dell'indice: sono tanti e piccoli,
+   e servono a saltare direttamente al punto invece di aprire la pagina e
+   cercare. */
+.guida-indice-sezioni {
+    display: block;
+    margin-top: var(--spazio-2);
+    font-size: var(--testo-piccolo);
+}
+
+.guida-indice-sezioni a {
+    color: var(--colore-testo-tenue);
+    text-decoration: none;
+}
+
+.guida-indice-sezioni a:hover {
+    color: var(--colore-accento);
+    text-decoration: underline;
+}
+
+/* --- Il punto interrogativo accanto a un campo ------------------------- */
+
+/* Sta dentro il flusso del testo dell'etichetta, non accanto: cosi' segue la
+   riga se l'etichetta va a capo, e non lascia un buco quando non c'e'. */
+.punto-aiuto {
+    display: inline-flex;
+    align-items: center;
+    margin-left: var(--spazio-1);
+    color: var(--colore-testo-tenue);
+    vertical-align: middle;
+}
+
+.punto-aiuto:hover {
+    color: var(--colore-accento);
+}
+
+/* Sotto i 1100 pixel la colonna di navigazione va sotto il testo: e'
+   navigazione, e la navigazione cede il posto al contenuto. */
+@media (max-width: 1100px) {
+    .guida {
+        grid-template-columns: minmax(0, 1fr);
+    }
 }

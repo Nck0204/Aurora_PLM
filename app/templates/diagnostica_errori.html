@@ -1,0 +1,105 @@
+{# ===========================================================================
+   GLI ERRORI DELLE ULTIME 24 ORE. Riservata al creatore.
+
+   E' il dettaglio della riga «Errori» della diagnostica. Non ha filtri e non
+   ha impaginazione, ed e' una scelta: se le righe sono tante, il posto giusto
+   in cui guardarle e' logs/aurora.log sul server, con un editore di testo.
+   Questa pagina serve a rispondere alla domanda «che cosa e' andato storto
+   stanotte?» senza doversi collegare al server.
+
+   IL TESTO DELL'ERRORE E' A SPAZIATURA FISSA. E' una riga di registro scritta
+   per un programma, non una frase scritta per una persona: allinearla come
+   prosa la renderebbe piu' difficile da confrontare con quella sopra.
+   =========================================================================== #}
+{% extends "base.html" %}
+
+{% from "components/riquadro.html" import riquadro %}
+{% from "components/tabella.html" import tabella %}
+{% from "components/avvisi.html" import avviso %}
+{% from "components/vuoto.html" import vuoto %}
+{% from "components/pulsanti.html" import pulsante_collegamento %}
+
+{% block titolo %}Errori delle ultime 24 ore{% endblock %}
+{% block sezione %}Diagnostica{% endblock %}
+
+{% block contenuto %}
+
+<div class="testata">
+    <div>
+        <h1>Errori delle ultime 24 ore</h1>
+        <p class="sottotitolo">
+            Le righe che Aurora ha scritto nel proprio registro segnandole come
+            errori. Sono in ordine dal piu' recente.
+        </p>
+    </div>
+    <div class="testata-azioni">
+        {{ pulsante_collegamento("Torna alla diagnostica", "/diagnostica",
+                                 icona_nome="freccia-sinistra") }}
+    </div>
+</div>
+
+{% if not leggibile %}
+
+    {% call avviso("", variante="attenzione",
+                   titolo="Il registro su file non si riesce a leggere") %}
+        <p>
+            Aurora scrive quello che le succede in
+            <span class="mono">{{ file_registro }}</span>, e quel file adesso
+            non si legge: o non e' mai stato scritto - il programma e' appena
+            stato installato - oppure l'utente con cui gira Aurora non ha il
+            permesso di leggere quella cartella.
+        </p>
+        <p>Senza registro, di un guasto non resta niente.</p>
+    {% endcall %}
+
+{% elif not righe %}
+
+    {{ vuoto("Nessun errore",
+             "Nelle ultime 24 ore Aurora non ha registrato nessun errore.",
+             icona_nome="spunta") }}
+
+{% else %}
+
+    {% if totale > mostrate %}
+    {{ avviso("Gli errori sono " ~ totale ~ ": qui sotto ci sono i " ~ mostrate ~
+              " piu' recenti. Per vederli tutti, apri il file " ~ file_registro ~
+              " sul server con un editore di testo.",
+              variante="informazione") }}
+    {% endif %}
+
+    {% set colonne = [
+        {"etichetta": "Quando", "classe": "colonna-codice"},
+        {"etichetta": "Livello", "classe": "colonna-codice"},
+        {"etichetta": "Che cosa e' successo"},
+    ] %}
+
+    {% call riquadro("Errori registrati", nudo=true) %}
+        {% call tabella(colonne) %}
+            {% for riga in righe %}
+            <tr>
+                <td class="colonna-codice mono">{{ riga.quando }}</td>
+                <td class="colonna-codice mono">{{ riga.livello }}</td>
+                <td class="mono testo-piccolo">{{ riga.testo }}</td>
+            </tr>
+            {% endfor %}
+        {% endcall %}
+    {% endcall %}
+
+    {% call riquadro("Se un errore si ripete") %}
+        <p>
+            Ogni errore imprevisto porta con se' un codice breve, che compare
+            anche nella pagina vista da chi lo ha incontrato: cercandolo dentro
+            <span class="mono">{{ file_registro }}</span> si trova la traccia
+            completa, con il punto esatto del programma in cui e' successo.
+        </p>
+        <p class="testo-piccolo testo-tenue">
+            Il registro su file conserva gli ultimi 5 MB piu' dieci ricambi,
+            circa 55 MB in tutto: i piu' vecchi si chiamano
+            <span class="mono">aurora.log.1</span>,
+            <span class="mono">aurora.log.2</span> e cosi' via.
+        </p>
+    {% endcall %}
+
+{% endif %}
+
+{% endblock %}

@@ -24,6 +24,13 @@ __pycache__/
 storage/*
 !storage/.gitkeep
 
+# Copie di sicurezza (sessione 12). Dentro ci sono il salvataggio del
+# database, l'archivio dei file e una copia del .env: sono i dati dell'azienda
+# e i suoi segreti, non codice. In produzione questa cartella sta comunque su
+# un altro disco (BACKUP_PATH); qui si ignora il caso in cui qualcuno la lasci
+# dentro il progetto durante una prova.
+backup/
+
 # Registri applicativi
 logs/
 *.log

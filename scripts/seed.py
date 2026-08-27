@@ -5,11 +5,22 @@ programma sia utilizzabile:
 
   - un utente creatore, "admin", con una password casuale stampata una volta
     sola e da cambiare al primo accesso;
-  - le cinque classificazioni (quattro dei documenti piu' la corrispondenza);
-  - la matrice dei permessi di partenza, tutte e dodici le caselle;
-  - il modello di fasi "Standard", versione 1, con le sue sei fasi e le
-    due proprieta' che le governano (da Development non si torna
-    indietro, "Chiuso" chiude il progetto).
+  - le classificazioni dei documenti;
+  - la griglia dei permessi di partenza, tutte le sue caselle;
+  - il modello di fasi di partenza, versione 1, con le sue fasi e le due
+    proprieta' che le governano.
+
+**Che cosa sono quelle classificazioni e quelle fasi non e' scritto qui.** Si
+legge da `config/dati_iniziali.toml`, che e' lo stesso file che legge la
+configurazione guidata del primo avvio (/primo-avvio): le due strade
+d'installazione devono dare lo stesso sistema, e fino alla sessione 12 erano
+due elenchi scritti in due posti. Le fasi, in piu', non potrebbero stare dentro
+`app/`: sono dati e non codice (D-055).
+
+**Dalla sessione 12 questo script non e' piu' la strada normale.** Chi installa
+Aurora apre il programma e segue la procedura guidata, che fa le stesse cose
+con una spiegazione accanto a ciascuna. Questo resta per chi preferisce la riga
+di comando e per le installazioni non presidiate.
 
 Come si esegue, dalla radice del progetto e con l'ambiente virtuale attivo:
 
@@ -40,6 +51,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 from sqlalchemy import select  # noqa: E402
 from sqlalchemy.orm import Session  # noqa: E402
 
+from app.config import settings  # noqa: E402
 from app.db import SessionLocal  # noqa: E402
 from app.models import (  # noqa: E402
     Classification,
@@ -50,7 +62,7 @@ from app.models import (  # noqa: E402
     ProjectRole,
     User,
 )
-from app.services import passwords  # noqa: E402
+from app.services import initial_data, passwords  # noqa: E402
 
 # --- Costanti dei dati iniziali ---------------------------------------------
 
@@ -62,98 +74,40 @@ ADMIN_LAST_NAME = "Aurora"
 # le notifiche destinate all'amministratore non arriveranno a nessuno.
 ADMIN_EMAIL = "admin@aurora.local"
 
-# Le cinque classificazioni, nell'ordine in cui devono comparire.
+# --- I dati iniziali, che non stanno qui -----------------------------------
 #
-# "Corrispondenza" e' arrivata con la sessione 10 ed e' diversa dalle altre
-# quattro: non se la sceglie chi carica un documento, ce l'hanno addosso tutti
-# i messaggi di posta archiviati, ed e' con lei che si decide chi li puo'
-# vedere (D-069). Sui database gia' in uso la crea la migrazione
-# d4b8607e15a2; qui c'e' per le installazioni nuove.
-CLASSIFICATIONS = [
-    ("Tecnico", "Schemi, disegni, distinte, relazioni di prova, firmware."),
-    ("Commerciale", "Offerte, listini, ordini, corrispondenza commerciale."),
-    ("Qualità", "Piani della qualità, non conformità, rapporti di audit."),
-    ("Amministrativo", "Contratti, accordi di riservatezza, documenti di spesa."),
-    ("Corrispondenza", "I messaggi di posta archiviati e i loro allegati."),
-]
+# Le classificazioni, la griglia dei permessi e il percorso delle fasi si
+# leggono da **config/dati_iniziali.toml**, lo stesso file che legge la
+# configurazione guidata del primo avvio (/primo-avvio). Fino alla sessione 12
+# erano scritti qui dentro e anche li', e bastava correggerne uno perche' due
+# installazioni dessero due sistemi diversi.
+#
+# Le fasi, in particolare, non possono stare dentro app/: sono dati e non
+# codice (D-055), e c'e' un test che diventa rosso se un nome di fase ricompare
+# li' dentro. Averli in un file di configurazione risolve tutte e due le cose.
 
-# La matrice dei permessi di partenza, una riga per ruolo.
-# Le tre lettere sono: V = vedere, C = caricare, M = modificare.
-#
-#                      Tecnico   Commerciale   Qualità   Amministrativo   Corrispondenza
-#   project_manager    V C M     V C M         V C M     V C M            V C M
-#   ingegnere          V C M     - - -         V C M     V - -            V - M
-#   lettore            V - -     - - -         - - -     - - -            V - -
-#
-# La colonna della corrispondenza e' della sessione 10 e va letta cosi': i
-# messaggi non si "caricano" - arrivano dalla casella - quindi la casella C
-# non serve a nessuno tranne al responsabile; la M e' il permesso di
-# **correggere l'attribuzione** di un messaggio finito sulla versione
-# sbagliata, e l'ingegnere ce l'ha perche' e' lui che se ne accorge.
-#
-# Le regole che la sessione chiede espressamente sono tre: l'ingegnere non vede
-# il Commerciale, il project manager vede tutto del proprio progetto, il lettore
-# vede solo il Tecnico e in sola lettura. Il resto della matrice e' la scelta
-# ragionevole che ne discende, e si corregge dall'interfaccia.
-#
-# Ci sono tutte e dodici le caselle, comprese quelle con tutti i permessi a
-# falso: una casella che dice "no" e' una decisione, una casella che manca e'
-# una dimenticanza, e a distanza di mesi non si distinguono piu'.
-PERMISSION_MATRIX = {
-    ProjectRole.PROJECT_MANAGER: {
-        "Tecnico": (True, True, True),
-        "Commerciale": (True, True, True),
-        "Qualità": (True, True, True),
-        "Amministrativo": (True, True, True),
-        "Corrispondenza": (True, True, True),
-    },
-    ProjectRole.INGEGNERE: {
-        "Tecnico": (True, True, True),
-        "Commerciale": (False, False, False),
-        "Qualità": (True, True, True),
-        "Amministrativo": (True, False, False),
-        "Corrispondenza": (True, False, True),
-    },
-    ProjectRole.LETTORE: {
-        "Tecnico": (True, False, False),
-        "Commerciale": (False, False, False),
-        "Qualità": (False, False, False),
-        "Amministrativo": (False, False, False),
-        "Corrispondenza": (True, False, False),
-    },
-}
 
-PHASE_TEMPLATE_NAME = "Standard"
+# La versione con cui nasce il modello di fasi. E' sempre 1: i modelli sono
+# immutabili, e una correzione diventa una versione nuova creata
+# dall'interfaccia, non una modifica di questa.
 PHASE_TEMPLATE_VERSION = 1
-PHASE_TEMPLATE_DESCRIPTION = (
-    "Percorso di sviluppo prodotto usato in azienda: dalla selezione "
-    "dell'idea alla chiusura del progetto."
-)
 
-# Le fasi, nell'ordine di attraversamento. Le due colonne dopo la descrizione
-# sono le proprieta' che governano il comportamento del percorso:
-#
-#   blocks_return    da questa fase non si torna a una precedente;
-#   closes_project   entrando in questa fase il progetto si chiude.
-#
-# Sono dati e non codice, ed e' il punto (D-055). Il programma non sa che la
-# fase da cui non si torna indietro si chiami "Development": sa che una fase
-# con blocks_return blocca il ritorno. Cambiarle nome, riordinarle o scrivere
-# un percorso completamente diverso non costa una riga di programma.
-PHASES = [
-    ("Idea screening", "Vaglio iniziale dell'idea: vale la pena di studiarla?",
-     False, False),
-    ("Concept", "Definizione di che cosa deve fare il prodotto.",
-     False, False),
-    ("Feasibility", "Verifica tecnica ed economica di fattibilità.",
-     False, False),
-    ("Quoted", "Offerta presentata al cliente, in attesa di risposta.",
-     False, False),
-    ("Development", "Progettazione, prototipi, prove, industrializzazione.",
-     True, False),
-    ("Chiuso", "Progetto concluso, per rilascio o per rinuncia.",
-     False, True),
-]
+
+def dati_iniziali():
+    """Legge config/dati_iniziali.toml. Si ferma se non si riesce a leggerlo.
+
+    A differenza del programma - che deve partire comunque e lo dice nella
+    configurazione guidata - **questo script si ferma**: e' stato lanciato
+    apposta per creare quei dati, e riempire il database a meta' sarebbe
+    peggio che non riempirlo affatto.
+    """
+    letti = initial_data.dati()
+    if not letti.leggibili:
+        raise SystemExit(
+            f"\n  Errore: {letti.problema}\n"
+            f"  Il file atteso e': {settings.initial_data_config}\n"
+        )
+    return letti
 
 
 # --- Creazione dei singoli pezzi --------------------------------------------
@@ -188,17 +142,23 @@ def ensure_admin_user(db: Session) -> str | None:
     return password
 
 
-def ensure_classifications(db: Session) -> int:
+def ensure_classifications(db: Session, dati) -> int:
     """Crea le classificazioni mancanti. Restituisce quante ne ha create."""
     created = 0
 
-    for position, (name, description) in enumerate(CLASSIFICATIONS, start=1):
-        existing = db.scalar(select(Classification).where(Classification.name == name))
+    for position, classe in enumerate(dati.classificazioni, start=1):
+        existing = db.scalar(
+            select(Classification).where(Classification.name == classe.nome)
+        )
         if existing is not None:
             continue
 
         db.add(
-            Classification(name=name, description=description, sort_order=position)
+            Classification(
+                name=classe.nome,
+                description=classe.descrizione,
+                sort_order=position,
+            )
         )
         created += 1
 
@@ -206,7 +166,7 @@ def ensure_classifications(db: Session) -> int:
     return created
 
 
-def ensure_permission_rules(db: Session) -> int:
+def ensure_permission_rules(db: Session, dati) -> int:
     """Crea le caselle mancanti della matrice dei permessi.
 
     Restituisce quante ne ha create. Le caselle gia' presenti non vengono
@@ -221,10 +181,17 @@ def ensure_permission_rules(db: Session) -> int:
 
     created = 0
 
-    for role, per_classification in PERMISSION_MATRIX.items():
+    for role in ProjectRole:
+        per_classification = (dati.permessi or {}).get(role.value, {})
         for classification_name, permessi in per_classification.items():
             can_view, can_upload, can_edit = permessi
-            classification = classifications[classification_name]
+            classification = classifications.get(classification_name)
+            if classification is None:
+                # Una casella che nomina una classificazione che non c'e': il
+                # file di configurazione e' incoerente. Si salta invece di
+                # fermarsi, e la casella mancante varra' "no" - che e' la
+                # scelta prudente.
+                continue
 
             existing = db.scalar(
                 select(PermissionRule).where(
@@ -250,8 +217,8 @@ def ensure_permission_rules(db: Session) -> int:
     return created
 
 
-def ensure_phase_template(db: Session) -> int:
-    """Crea il modello di fasi "Standard" versione 1 con le sue fasi.
+def ensure_phase_template(db: Session, dati) -> int:
+    """Crea il modello di fasi di partenza, versione 1, con le sue fasi.
 
     Restituisce quante fasi ha creato, zero se il modello c'era gia'. Il
     modello si cerca per la coppia (nome, versione) perche' e' quella che lo
@@ -260,7 +227,7 @@ def ensure_phase_template(db: Session) -> int:
     """
     existing = db.scalar(
         select(PhaseTemplate).where(
-            PhaseTemplate.name == PHASE_TEMPLATE_NAME,
+            PhaseTemplate.name == dati.modello_fasi,
             PhaseTemplate.version == PHASE_TEMPLATE_VERSION,
         )
     )
@@ -268,8 +235,8 @@ def ensure_phase_template(db: Session) -> int:
         return 0
 
     template = PhaseTemplate(
-        name=PHASE_TEMPLATE_NAME,
-        description=PHASE_TEMPLATE_DESCRIPTION,
+        name=dati.modello_fasi,
+        description=dati.descrizione_modello,
         standards=[],
         is_active=True,
         version=PHASE_TEMPLATE_VERSION,
@@ -277,20 +244,20 @@ def ensure_phase_template(db: Session) -> int:
     db.add(template)
     db.flush()
 
-    for position, (name, description, blocks, closes) in enumerate(PHASES, start=1):
+    for position, fase in enumerate(dati.fasi, start=1):
         db.add(
             Phase(
                 phase_template_id=template.id,
-                name=name,
+                name=fase.nome,
                 sort_order=position,
-                description=description,
-                blocks_return=blocks,
-                closes_project=closes,
+                description=fase.descrizione,
+                blocks_return=fase.blocca_ritorno,
+                closes_project=fase.chiude_progetto,
             )
         )
 
     db.flush()
-    return len(PHASES)
+    return len(dati.fasi)
 
 
 # --- Stampa a video ---------------------------------------------------------
@@ -340,12 +307,18 @@ def main() -> int:
     print("=" * 46)
     print()
 
+    # Prima di aprire il database: se il file dei dati iniziali non si legge,
+    # non c'e' niente da scrivere e ci si ferma qui.
+    letti = dati_iniziali()
+    print(f"  Letti da {settings.initial_data_config}")
+    print()
+
     with SessionLocal() as db:
         try:
             admin_password = ensure_admin_user(db)
-            classifications_created = ensure_classifications(db)
-            rules_created = ensure_permission_rules(db)
-            phases_created = ensure_phase_template(db)
+            classifications_created = ensure_classifications(db, letti)
+            rules_created = ensure_permission_rules(db, letti)
+            phases_created = ensure_phase_template(db, letti)
             db.commit()
         except Exception:
             db.rollback()
@@ -368,7 +341,7 @@ def main() -> int:
         f"{rules_created} regole create" if rules_created else "gia' presente",
     )
     print_outcome(
-        f"Modello di fasi '{PHASE_TEMPLATE_NAME}' v{PHASE_TEMPLATE_VERSION}",
+        f"Modello di fasi '{letti.modello_fasi}' v{PHASE_TEMPLATE_VERSION}",
         f"creato con {phases_created} fasi" if phases_created else "gia' presente",
     )
 

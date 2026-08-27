@@ -22,6 +22,7 @@
 {% from "components/impaginazione.html" import impaginazione %}
 {% from "components/vuoto.html" import vuoto %}
 {% from "components/avvisi.html" import avviso %}
+{% from "components/aiuto.html" import aiuto %}
 
 {% block titolo %}Quarantena{% endblock %}
 {% block sezione %}Posta{% endblock %}
@@ -30,7 +31,7 @@
 
 <div class="testata">
     <div>
-        <h1>Quarantena</h1>
+        <h1>Quarantena {{ aiuto("quarantena") }}</h1>
         <p class="sottotitolo">
             I messaggi archiviati di cui Aurora non ha capito a quale prodotto
             appartengono. Non e' andato perso niente: aspettano solo che

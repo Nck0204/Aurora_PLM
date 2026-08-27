@@ -1,0 +1,76 @@
+{# ===========================================================================
+   DIAGNOSTICA. Riservata al creatore.
+
+   E' LA PAGINA CHE SI APRE QUANDO QUALCOSA NON VA, e questo detta tutto il
+   resto. Chi la apre non conosce Aurora per forza: puo' essere l'informatico
+   chiamato di sabato mattina perche' "il programma non funziona". Quindi:
+
+     - una frase sola in cima dice come sta il sistema. Se e' verde, si e'
+       gia' finito di leggere;
+     - ogni riga ha il suo semaforo e, quando non e' verde, **che cosa fare**.
+       Non che cosa e' successo: che cosa fare, con i nomi veri delle cose
+       ("apri Servizi di Windows", "il file .env");
+     - le righe che non sono verdi vengono prima. Chi ha un guasto non deve
+       scorrere sei righe verdi per trovarlo.
+
+   Le righe le disegna il componente components/semaforo.html, che serve anche
+   ai passi della configurazione guidata: le due pagine mostrano la stessa
+   cosa e la ricevono nella stessa forma.
+
+   NIENTE JAVASCRIPT. La pagina si aggiorna ricaricandola, che e' il gesto che
+   fa comunque chi sta aspettando che un servizio riparta.
+   =========================================================================== #}
+{% extends "base.html" %}
+
+{% from "components/riquadro.html" import riquadro %}
+{% from "components/avvisi.html" import avviso %}
+{% from "components/semaforo.html" import controllo %}
+{% from "components/pulsanti.html" import pulsante_collegamento %}
+{% from "components/descrizione.html" import descrizione, voce %}
+
+{% block titolo %}Diagnostica{% endblock %}
+{% block sezione %}Diagnostica{% endblock %}
+
+{% block contenuto %}
+
+<div class="testata">
+    <div>
+        <h1>Come sta Aurora</h1>
+        <p class="sottotitolo">
+            Un controllo per riga. Quando una riga non e' verde, sotto c'e'
+            scritto che cosa fare. Rilettura del
+            {{ diagnosi.momento.astimezone().strftime("%d/%m/%Y alle %H:%M:%S") }}.
+        </p>
+    </div>
+    <div class="testata-azioni">
+        {{ pulsante_collegamento("Rileggi", "/diagnostica", icona_nome="ripristina") }}
+        {{ pulsante_collegamento("Gli stessi dati in JSON", "/salute") }}
+    </div>
+</div>
+
+{{ avviso(diagnosi.riassunto, variante=variante_riassunto, titolo="Riepilogo") }}
+
+{# --- I controlli: prima quelli da guardare, poi quelli a posto ---------- #}
+
+{% for riga in diagnosi.voci if riga.colore == "rosso" %}{{ controllo(riga) }}{% endfor %}
+{% for riga in diagnosi.voci if riga.colore == "giallo" %}{{ controllo(riga) }}{% endfor %}
+{% for riga in diagnosi.voci if riga.colore == "verde" %}{{ controllo(riga) }}{% endfor %}
+
+{# --- Dove stanno le cose ------------------------------------------------ #}
+
+{% call riquadro("Dove stanno le cose su questo server") %}
+    <p class="testo-piccolo testo-tenue">
+        I percorsi di questa installazione. Servono a chi deve mettere le mani
+        sul server e non lo conosce.
+    </p>
+    {% call descrizione(righe=true) %}
+        {{ voce("File di configurazione", file_env, monospazio=true) }}
+        {{ voce("Archivio dei documenti", archivio, monospazio=true) }}
+        {{ voce("Copie di sicurezza", cartella_copie, monospazio=true) }}
+        {{ voce("Registro su file", "logs/aurora.log", monospazio=true) }}
+        {{ voce("Procedura di copia e ripristino",
+                "docs/BACKUP_E_RIPRISTINO.md", monospazio=true) }}
+    {% endcall %}
+{% endcall %}
+
+{% endblock %}

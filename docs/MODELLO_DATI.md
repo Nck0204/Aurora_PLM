@@ -1,14 +1,16 @@
 # Modello dati — rilascio R1
 
-Ultimo aggiornamento: **26 agosto 2026**, sessione 10 (una tabella nuova,
-`email_reasons`, e due colonne su `email_messages` - vedi la sezione 4.8).
+Ultimo aggiornamento: **27 agosto 2026**, sessione 12 (una tabella nuova,
+`backups` - vedi la sezione 4.10).
 
-Questo file descrive le **venti** tabelle di Aurora: le diciannove create dalla
-migrazione `897359b06e69_modello_dati_r1.py` piu' `email_reasons`, arrivata con
-la posta della sessione 10. Ci sono anche le colonne aggiunte dalle migrazioni
-successive alla prima: `b1c4e2af7d30` (sessione 7), `c7a3f19b52e4` (sessione 8),
-`e2f5a91c73d8` (sessione 9) e `d4b8607e15a2` (sessione 10). Una tabella per file
-in `app/models/`, una classe per tabella.
+Questo file descrive le **ventuno** tabelle di Aurora: le diciannove create
+dalla migrazione `897359b06e69_modello_dati_r1.py`, piu' `email_reasons`,
+arrivata con la posta della sessione 10, piu' `backups`, arrivata con la
+manutenzione della sessione 12. Ci sono anche le colonne aggiunte dalle
+migrazioni successive alla prima: `b1c4e2af7d30` (sessione 7), `c7a3f19b52e4`
+(sessione 8), `e2f5a91c73d8` (sessione 9), `d4b8607e15a2` (sessione 10) e
+`f3a1d6c9084b` (sessione 12). Una tabella per file in `app/models/`, una classe
+per tabella.
 
 Come si legge la parte di dettaglio:
 
@@ -107,7 +109,7 @@ giorno della chiusura.
 
 ---
 
-## 3. Le venti tabelle, una riga per ciascuna
+## 3. Le ventuno tabelle, una riga per ciascuna
 
 | # | Tabella | A che cosa serve |
 |---|---|---|
@@ -131,6 +133,7 @@ giorno della chiusura.
 | 18 | `email_attachments` | Gli allegati staccati dai messaggi e depositati nell'archivio per impronta, come tutti gli altri file. |
 | 18b | `email_reasons` | I motivi ammessi nella terza parentesi dell'oggetto di un messaggio (SPECS, RFQ, QUOTE...). Si amministrano dall'interfaccia, non da un file di configurazione (D-071). |
 | 19 | `audit_logs` | Il registro di chi ha fatto che cosa, su quale oggetto, quando e da quale indirizzo. Si scrive e non si tocca piu': dalla sessione 9 il divieto lo fanno rispettare i permessi di PostgreSQL, e una catena di impronte rende visibile chi lo aggirasse. |
+| 20 | `backups` | L'esito di ogni copia di sicurezza tentata: quando, dove, com'e' andata, quanto ha copiato. Ci scrive uno script che gira di notte; Aurora la legge e basta, per la riga «Copia di sicurezza» della diagnostica. |
 
 ---
 
@@ -589,6 +592,53 @@ come un registro con dentro tutto - vale come un registro assente (D-065).
 interroga. Ricerca filtrata per la pagina `/registro` riservata al creatore,
 storico di un singolo oggetto per le schede "Storico" (D-067), righe per
 l'esportazione in CSV e ricalcolo della catena.
+
+---
+
+### 4.10 Manutenzione
+
+#### `backups` — l'esito delle copie di sicurezza
+
+Una riga per ogni copia **tentata**, riuscita o no. E' la sola tabella di Aurora
+che non contiene dati dell'azienda: contiene il verbale di una manutenzione.
+
+| Colonna | Tipo | Note |
+|---|---|---|
+| `started_at` | timestamptz | `NN` `IX`. Quando il tentativo e' cominciato. |
+| `finished_at` | timestamptz | Quando e' finito. **Vuota finche' la copia e' in corso**: una riga vecchia di ore con questa colonna vuota e' una copia interrotta a meta'. |
+| `outcome` | varchar(20) | `NN` `IX`. `in_corso`, `riuscito`, `fallito`. |
+| `destination` | varchar(500) | `NN`. La cartella della copia, per intero. |
+| `database_bytes` | bigint | `NN`. Quanto occupa il salvataggio di PostgreSQL. |
+| `files_bytes` | bigint | `NN`. Quanto occupa l'archivio copiato. |
+| `files_copied` | integer | `NN`. Quanti file sono stati copiati **questa volta**. |
+| `files_skipped` | integer | `NN`. Quanti c'erano gia' e non sono stati riscritti: e' la misura di quanto lavoro risparmia la copia incrementale. |
+| `message` | text | La frase in italiano che la diagnostica mostra. |
+| `hostname` | varchar(120) | Il nome della macchina. Con due server che scrivono sullo stesso database per sbaglio, e' l'unica riga che lo rivela. |
+
+**Perche' `outcome` e' testo e non un tipo enumerato**, che sarebbe la regola
+(D-014). Perche' questi tre valori non sono uno stato del lavoro dell'azienda:
+sono l'esito di una procedura di manutenzione, e vanno letti anche da fuori
+Aurora con un `SELECT` scritto a mano da chi sta indagando su un guasto. Una
+colonna di testo la legge chiunque; un tipo enumerato costringe chi indaga a
+scoprire prima come si chiama.
+
+**Perche' `finished_at` e' nullabile.** La riga si apre **prima** che la copia
+cominci e si chiude quando finisce. Cosi' una copia interrotta - il server che
+si spegne, il disco che si stacca - lascia comunque traccia. Scrivendo solo alla
+fine, una copia interrotta sarebbe indistinguibile da una copia che nessuno ha
+mai programmato: sono due guasti diversi con due rimedi diversi (D-087).
+
+**Nessuna chiave esterna e nessun autore.** Ci scrive `scripts/backup.py`, che
+gira dall'Utilita' di pianificazione di Windows: non c'e' nessuna persona
+collegata, e scriverne una finta sarebbe una bugia.
+
+**Chi la legge:** `app/services/diagnostics.py`, per la riga «Copia di
+sicurezza» della pagina `/diagnostica` e di `/salute`. Legge sempre e sola
+l'ultima riga per data.
+
+**E' l'unica tabella da cui un test cancella righe**, e la ragione e' la stessa
+per cui non e' un dato dell'azienda: `tests/test_backup.py` esegue copie vere,
+e quelle copie non sono avvenute davvero.
 
 ---
 

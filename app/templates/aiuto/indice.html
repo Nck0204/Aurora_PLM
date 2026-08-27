@@ -1,0 +1,82 @@
+{# ===========================================================================
+   AIUTO - l'indice, con la ricerca.
+
+   E' la stessa pagina per due domande: "che cosa c'e' scritto qui dentro?" e
+   "dove si parla di X?". Sono la stessa domanda vista due volte, e separarle
+   vorrebbe dire che chi cerca e non trova niente si ritrova su una pagina
+   vuota, senza l'indice da cui ripartire.
+
+   Quando si e' cercato qualcosa, i risultati vengono **prima** dell'indice:
+   chi ha appena premuto Invio sta guardando li'.
+
+   LA RICERCA FUNZIONA SENZA JAVASCRIPT. E' un modulo GET con il suo pulsante.
+   Gli attributi HTMX sostituiscono il solo pezzo dei risultati mentre si
+   scrive; senza, si preme Invio e la pagina si ricarica. E' il modello della
+   barra di ricerca di tutti gli altri elenchi di Aurora.
+   =========================================================================== #}
+{% extends "base.html" %}
+
+{% from "components/riquadro.html" import riquadro %}
+{% from "components/ricerca.html" import ricerca %}
+{% from "components/icone.html" import icona %}
+
+{% block titolo %}Aiuto{% endblock %}
+{% block sezione %}Aiuto{% endblock %}
+
+{% block contenuto %}
+
+<div class="testata">
+    <div>
+        <h1>Guida a {{ app_name }}</h1>
+        <p class="sottotitolo">
+            Come si usa il programma, spiegato in italiano. Se cerchi una cosa
+            precisa, scrivila qui sotto.
+        </p>
+    </div>
+</div>
+
+{{ ricerca("/aiuto", valore=q,
+           segnaposto="Cerca nella guida: quarantena, revisione, permessi...",
+           etichetta="Cerca nella guida",
+           htmx='hx-get="/aiuto" hx-trigger="keyup changed delay:300ms, search"'
+                ' hx-target="#risultati-guida" hx-swap="outerHTML"') }}
+
+{% include "aiuto/risultati.html" %}
+
+{% call riquadro("Tutte le pagine") %}
+    <ul class="guida-indice">
+        {% for voce in pagine %}
+        <li>
+            <a class="guida-indice-titolo" href="/aiuto/{{ voce.nome }}">
+                {{ icona("aiuto", 16) }} {{ voce.titolo }}
+            </a>
+            {% if voce.sommario %}
+            <span class="guida-indice-sommario">{{ voce.sommario }}</span>
+            {% endif %}
+            {% if voce.sezioni %}
+            <span class="guida-indice-sezioni">
+                {%- for sezione in voce.sezioni -%}
+                <a href="/aiuto/{{ voce.nome }}#{{ sezione.ancora }}">{{ sezione.titolo }}</a>
+                {%- if not loop.last %} &middot; {% endif -%}
+                {%- endfor -%}
+            </span>
+            {% endif %}
+        </li>
+        {% endfor %}
+    </ul>
+{% endcall %}
+
+{% call riquadro("Se la guida non basta") %}
+    <p>
+        Le pagine di questa guida stanno nella cartella
+        <span class="mono">docs/guida/</span> del programma: sono file di testo
+        normale, li puo' correggere chi amministra il server con un editore
+        qualunque, e la modifica si vede subito ricaricando la pagina.
+    </p>
+    <p class="testo-piccolo testo-tenue">
+        Se manca qualcosa che serve spesso, aggiungerla e' il modo migliore di
+        non doverla spiegare di nuovo a voce.
+    </p>
+{% endcall %}
+
+{% endblock %}

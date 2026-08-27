@@ -26,6 +26,7 @@
 {% from "components/riquadro.html" import riquadro %}
 {% from "components/avanzamento.html" import avanzamento as barra_fasi %}
 {% from "components/avvisi.html" import avviso %}
+{% from "components/aiuto.html" import aiuto %}
 
 {% block titolo %}Passaggio di fase{% endblock %}
 {% block sezione %}Progetti{% endblock %}
@@ -34,7 +35,7 @@
 
 <div class="testata">
     <div>
-        <h1>Passaggio di fase</h1>
+        <h1>Passaggio di fase {{ aiuto("richiesta-fase") }}</h1>
         <p class="sottotitolo">
             <span class="mono">{{ prodotto.code }}</span>
             versione {{ versione.version_number }} &middot;

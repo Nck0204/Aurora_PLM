@@ -1,0 +1,289 @@
+{# ===========================================================================
+   CONFIGURAZIONE GUIDATA - un passo.
+
+   Una pagina sola per tutti e sei i passi. Sono la stessa cosa vista sei
+   volte - una spiegazione, una verifica, un'azione - e sei pagine quasi
+   identiche si allontanerebbero l'una dall'altra alla prima modifica.
+
+   OGNI PASSO HA LA STESSA FORMA, ed e' la forma che rende la procedura
+   tranquilla da usare:
+
+     PERCHE'    a che cosa serve questo passo, in italiano, per chi non ha mai
+                visto Aurora. Sta sopra a tutto: chi non sa perche' sta
+                facendo una cosa la sbaglia;
+     VERIFICA   un pulsante che prova e risponde subito, senza cambiare
+                niente. Si puo' premere quante volte si vuole;
+     AZIONE     il pulsante che fa la cosa, quando c'e' qualcosa da fare.
+
+   L'esito della verifica lo disegna components/semaforo.html, lo stesso
+   componente della pagina di diagnostica: le due pagine mostrano la stessa
+   cosa e la ricevono nella stessa forma.
+
+   SENZA JAVASCRIPT FUNZIONA LO STESSO: sono normali moduli POST, e la
+   risposta e' questa stessa pagina con l'esito in cima. E' la regola D-036
+   applicata dove conta di piu' - un primo avvio che avesse bisogno di uno
+   script non si completerebbe su un server con un browser severo.
+   =========================================================================== #}
+{% extends "base_nudo.html" %}
+
+{% from "components/avvisi.html" import avviso %}
+{% from "components/campi.html" import campo, csrf %}
+{% from "components/icone.html" import icona %}
+{% from "components/pulsanti.html" import pulsante, pulsante_collegamento %}
+{% from "components/semaforo.html" import controllo %}
+
+{% block titolo %}Passo {{ numero }} - {{ titolo_passo }}{% endblock %}
+
+{% block contenuto %}
+
+<div class="primo-avvio">
+
+    {# --- Dove siamo: i sei pallini ------------------------------------- #}
+    <ol class="passi-segnaposto" aria-label="Avanzamento della configurazione">
+        {% for passo in passi %}
+        <li class="segnaposto
+                   {%- if passo.chiave == passo_corrente %} segnaposto--corrente
+                   {%- elif passo.fatto %} segnaposto--fatto{% endif %}">
+            <a href="/primo-avvio/{{ passo.chiave }}" title="{{ passo.titolo }}">
+                <span class="solo-lettura-vocale">
+                    Passo {{ passo.numero }}, {{ passo.titolo }},
+                    {{ "fatto" if passo.fatto else "da fare" }}.
+                </span>
+                <span aria-hidden="true">{{ passo.numero }}</span>
+            </a>
+        </li>
+        {% endfor %}
+    </ol>
+
+    <p class="passo-soprattitolo">Passo {{ numero }} di {{ passi|length }}</p>
+    <h1>{{ titolo_passo }}</h1>
+
+    <p class="spiegazione">{{ perche }}</p>
+
+    {#- L'avviso di un modulo rifiutato lo disegna la pagina, non base.html:
+        queste pagine estendono base_nudo.html, che non ha il blocco che lo
+        mostra automaticamente. E' la stessa ragione per cui lo disegna a mano
+        anche entra.html. -#}
+    {% if errore %}
+        {{ avviso(errore, variante="errore",
+                  titolo="Il modulo non e' stato accettato") }}
+    {% endif %}
+
+    {% if fatto %}
+        {{ avviso(fatto, variante="successo", titolo="Fatto") }}
+    {% endif %}
+
+    {% if request.query_params.get("creato") %}
+        {{ avviso("Il tuo profilo e' stato creato e sei gia' dentro: da adesso "
+                  "le pagine di " ~ app_name ~ " ti riconoscono.",
+                  variante="successo", titolo="Profilo creato") }}
+    {% endif %}
+    {% if request.query_params.get("create") %}
+        {{ avviso("Sono state create " ~ request.query_params.get("create") ~
+                  " classificazioni, con la loro griglia dei permessi.",
+                  variante="successo", titolo="Classificazioni create") }}
+    {% endif %}
+    {% if request.query_params.get("modello") %}
+        {{ avviso("Il percorso «" ~ request.query_params.get("modello") ~
+                  "» e' pronto: i progetti nuovi lo seguiranno.",
+                  variante="successo", titolo="Percorso creato") }}
+    {% endif %}
+    {% if request.query_params.get("archivio") %}
+        {{ avviso("Il percorso dell'archivio e' stato scritto nel file di "
+                  "configurazione e vale da adesso.",
+                  variante="successo", titolo="Archivio impostato") }}
+    {% endif %}
+
+    {# --- L'esito della verifica ---------------------------------------- #}
+
+    {% if esito %}
+        {{ controllo(esito) }}
+    {% endif %}
+
+    {# --- Il modulo di questo passo -------------------------------------- #}
+
+    {% if passo_corrente == "database" %}
+
+        <form method="post" action="/primo-avvio/database/verifica" class="modulo">
+            {{ csrf(request) }}
+            <p>
+                Premi «Verifica» per controllare che PostgreSQL risponda e che
+                le tabelle di {{ app_name }} ci siano. Non cambia niente: e'
+                soltanto una domanda.
+            </p>
+            <div class="fila-pulsanti">
+                {{ pulsante("Verifica", variante="primario", icona_nome="cerca") }}
+            </div>
+        </form>
+
+    {% elif passo_corrente == "creator" %}
+
+        {% if gia_entrato %}
+            <form method="post" action="/primo-avvio/creator/verifica" class="modulo">
+                {{ csrf(request) }}
+                <div class="fila-pulsanti">
+                    {{ pulsante("Verifica", icona_nome="cerca") }}
+                </div>
+            </form>
+        {% else %}
+            <form method="post" action="/primo-avvio/creator" class="modulo">
+                {{ csrf(request) }}
+
+                {{ campo("Nome", "nome", valore=valori.get("nome", ""),
+                         obbligatorio=true, autofocus=true,
+                         autocomplete="given-name") }}
+                {{ campo("Cognome", "cognome", valore=valori.get("cognome", ""),
+                         obbligatorio=true, autocomplete="family-name") }}
+                {{ campo("Indirizzo di posta", "email", tipo="email",
+                         valore=valori.get("email", ""), obbligatorio=true,
+                         autocomplete="email",
+                         aiuto="Serve a ritrovare questa persona e per le "
+                               "comunicazioni del programma.") }}
+                {{ campo("Nome utente", "username",
+                         valore=valori.get("username", "") or username_proposto,
+                         monospazio=true, autocomplete="username",
+                         segnaposto="nome.cognome",
+                         aiuto="E' il nome con cui si entra. Lasciandolo vuoto "
+                               "lo compone " ~ app_name ~ " da nome e cognome.") }}
+                {{ campo("Password", "password", tipo="password",
+                         obbligatorio=true, autocomplete="new-password",
+                         aiuto="Almeno " ~ lunghezza_minima ~ " caratteri. Una "
+                               "frase di quattro parole si ricorda meglio e si "
+                               "indovina peggio di una parola con dei numeri "
+                               "in mezzo.") }}
+                {{ campo("Ripeti la password", "password_ripetuta",
+                         tipo="password", obbligatorio=true,
+                         autocomplete="new-password") }}
+
+                {{ avviso("Questa password non si puo' recuperare: " ~ app_name ~
+                          " ne conserva soltanto l'impronta. Se va persa, si "
+                          "riassegna dal server con "
+                          "«python scripts/reimposta_password.py».",
+                          variante="attenzione",
+                          titolo="Annotala prima di continuare") }}
+
+                <div class="fila-pulsanti">
+                    {{ pulsante("Crea il profilo ed entra", variante="primario",
+                                icona_nome="freccia-destra") }}
+                </div>
+            </form>
+        {% endif %}
+
+    {% elif passo_corrente == "storage" %}
+
+        <form method="post" action="/primo-avvio/storage" class="modulo">
+            {{ csrf(request) }}
+
+            {{ campo("Cartella dell'archivio", "percorso",
+                     valore=valori.get("percorso", "") or percorso_archivio,
+                     monospazio=true, obbligatorio=true,
+                     segnaposto="D:\\AuroraArchivio",
+                     aiuto="Percorso assoluto (D:\\AuroraArchivio) oppure "
+                           "relativo alla cartella del programma (storage). "
+                           "Se non esiste viene creata.") }}
+
+            <div class="fila-pulsanti">
+                {{ pulsante("Verifica", icona_nome="cerca",
+                            attributi='formaction="/primo-avvio/storage/verifica"') }}
+                {{ pulsante("Salva e continua", variante="primario",
+                            icona_nome="freccia-destra") }}
+            </div>
+
+            <p class="testo-piccolo testo-tenue">
+                Il percorso viene scritto nel file di configurazione
+                <span class="mono">{{ file_env }}</span>, alla riga
+                <span class="mono">STORAGE_PATH</span>. Il resto del file non
+                viene toccato e la copia precedente resta accanto come
+                <span class="mono">.env.precedente</span>.
+            </p>
+        </form>
+
+    {% elif passo_corrente == "classifications" %}
+
+        <form method="post" action="/primo-avvio/classifications" class="modulo">
+            {{ csrf(request) }}
+            <p>
+                {{ app_name }} creera' cinque classificazioni - Tecnico,
+                Commerciale, Qualita', Amministrativo, Corrispondenza - e la
+                griglia che dice, per ogni ruolo di progetto, che cosa puo'
+                vedere e che cosa puo' caricare.
+            </p>
+            <p class="testo-tenue">
+                Sono i valori di partenza, non una scelta definitiva: si
+                cambiano quando si vuole dalla pagina «Permessi», e nessun
+                documento gia' caricato ne risente.
+            </p>
+            <div class="fila-pulsanti">
+                {{ pulsante("Verifica", icona_nome="cerca",
+                            attributi='formaction="/primo-avvio/classifications/verifica"') }}
+                {{ pulsante("Crea le classificazioni", variante="primario",
+                            icona_nome="piu") }}
+            </div>
+        </form>
+
+    {% elif passo_corrente == "phases" %}
+
+        <form method="post" action="/primo-avvio/phases" class="modulo">
+            {{ csrf(request) }}
+            <p>
+                {{ app_name }} creera' il percorso «Standard» con sei fasi, da
+                «Idea screening» a «Chiuso». Due di quelle fasi hanno una
+                proprieta' particolare: da «Development» non si torna
+                indietro, e «Chiuso» chiude il progetto.
+            </p>
+            <p class="testo-tenue">
+                Le fasi non sono scritte dentro il programma: sono dati. Si
+                aggiungono, si rinominano e si riordinano dalla pagina «Fasi»,
+                senza toccare nulla.
+            </p>
+            <div class="fila-pulsanti">
+                {{ pulsante("Verifica", icona_nome="cerca",
+                            attributi='formaction="/primo-avvio/phases/verifica"') }}
+                {{ pulsante("Crea il percorso", variante="primario",
+                            icona_nome="piu") }}
+            </div>
+        </form>
+
+    {% elif passo_corrente == "mail" %}
+
+        <form method="post" action="/primo-avvio/mail/verifica" class="modulo">
+            {{ csrf(request) }}
+            <p>
+                Questo passo si puo' rimandare senza conseguenze: {{ app_name }}
+                funziona in tutto il resto, e la corrispondenza si comincera' ad
+                archiviare il giorno in cui la casella sara' pronta.
+            </p>
+            <p class="testo-tenue">
+                I quattro parametri della casella li fornisce l'ufficio
+                informatico. La richiesta gia' scritta da mandargli e' nel file
+                <span class="mono">docs/RICHIESTA_IT.md</span>.
+            </p>
+            <div class="fila-pulsanti">
+                {{ pulsante("Verifica", icona_nome="cerca") }}
+                {{ pulsante_collegamento("Configura la posta adesso",
+                                         "/posta/configurazione",
+                                         icona_nome="posta") }}
+            </div>
+        </form>
+
+    {% endif %}
+
+    {# --- Avanti e indietro ---------------------------------------------- #}
+
+    <nav class="passi-navigazione" aria-label="Navigazione fra i passi">
+        {{ pulsante_collegamento("Tutti i passi", "/primo-avvio",
+                                 icona_nome="freccia-sinistra") }}
+        {% if prossimo %}
+            {{ pulsante_collegamento("Passo successivo",
+                                     "/primo-avvio/" ~ prossimo,
+                                     icona_nome="freccia-destra") }}
+        {% elif completata %}
+            {{ pulsante_collegamento("Entra in " ~ app_name, "/",
+                                     variante="primario",
+                                     icona_nome="freccia-destra") }}
+        {% endif %}
+    </nav>
+
+</div>
+
+{% endblock %}

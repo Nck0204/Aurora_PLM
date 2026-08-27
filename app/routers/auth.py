@@ -35,7 +35,7 @@ from app.dependencies import (
     utente_corrente,
 )
 from app.models import SessionKind, User
-from app.services import audit, auth, etichette, passwords
+from app.services import audit, auth, etichette, passwords, setup
 from app.services.cookies import (
     COOKIE_RICORDAMI,
     COOKIE_SESSIONE,
@@ -63,6 +63,10 @@ MESSAGGIO_CREDENZIALI = "Credenziali non valide."
 # foglietto. Una frase lunga vale di piu'.
 LUNGHEZZA_MINIMA_PASSWORD = 10
 
+# Dove si manda chi arriva alla pagina di accesso di un sistema che non e'
+# ancora stato configurato. Vedi la spiegazione in mostra_accesso().
+PERCORSO_PRIMO_AVVIO = "/primo-avvio"
+
 
 def _redirect(percorso: str) -> RedirectResponse:
     """Rimanda a un'altra pagina.
@@ -83,13 +87,27 @@ def mostra_accesso(
     request: Request,
     dopo: str | None = None,
     utente: User | None = Depends(utente_corrente),
+    db: Session = Depends(get_db),
 ) -> Response:
     """Mostra il modulo di accesso.
 
     Chi e' gia' entrato non ha niente da fare qui: lo si rimanda dentro.
+
+    **E chi arriva su un sistema che non e' ancora stato configurato viene
+    mandato alla procedura guidata.** E' il punto in cui la sessione 12 si
+    innesta sul resto del programma, e sta qui e non in un middleware per una
+    ragione di costo: un middleware farebbe quella domanda al database a ogni
+    singola richiesta, per sempre, per un caso che capita una volta nella vita
+    di un'installazione. Qui la domanda si fa soltanto quando qualcuno apre la
+    pagina di accesso - che e' esattamente dove finisce chiunque provi ad
+    aprire qualunque pagina di un'Aurora vuota, perche' senza sessione tutte
+    le rotte protette rimandano qui.
     """
     if utente is not None:
         return _redirect(PERCORSO_INIZIALE)
+
+    if setup.sistema_da_configurare(db):
+        return _redirect(PERCORSO_PRIMO_AVVIO)
 
     return pagina(
         request,

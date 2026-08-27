@@ -5,9 +5,13 @@ Questo file mette insieme quattro cose:
   1. il registro (logging) su file rotativo, dentro la cartella logs/;
   2. l'applicazione FastAPI vera e propria, con i file statici e i template;
   3. il gestore globale degli errori, che scrive il dettaglio nel registro e
-     mostra all'utente una pagina in italiano senza dettagli tecnici;
-  4. la rotta GET /salute, che serve a verificare che il server sia vivo e che
-     il database risponda.
+     mostra all'utente una pagina in italiano senza dettagli tecnici - fra cui
+     quello del database irraggiungibile, che merita una pagina sua perche' e'
+     il guasto piu' prevedibile di tutti (sessione 12);
+  4. la registrazione dei router, cioe' l'elenco delle pagine di Aurora.
+
+La rotta GET /salute stava qui fino alla sessione 11. Adesso sta in
+app/routers/diagnostics.py, insieme alla pagina che mostra gli stessi dati.
 
 Avvio in sviluppo:
 
@@ -19,7 +23,6 @@ import http
 import logging
 import uuid
 from contextlib import asynccontextmanager
-from datetime import datetime
 from logging.handlers import RotatingFileHandler
 
 from fastapi import Depends, FastAPI, Request
@@ -42,19 +45,22 @@ from app.dependencies import (
 from app.routers import audit as router_audit
 from app.routers import auth as router_auth
 from app.routers import customers as router_customers
+from app.routers import diagnostics as router_diagnostics
 from app.routers import documents as router_documents
 from app.routers import emails as router_emails
+from app.routers import help as router_help
 from app.routers import home as router_home
 from app.routers import mail_config as router_mail_config
 from app.routers import permissions as router_permissions
 from app.routers import phases as router_phases
 from app.routers import products as router_products
 from app.routers import projects as router_projects
+from app.routers import setup as router_setup
 from app.routers import storico as router_storico
 from app.routers import style as router_style
 from app.routers import users as router_users
 from app.routers import versions as router_versions
-from app.services import mail_scheduler
+from app.services import diagnostics, mail_scheduler
 from app.services.configuration import registra_configurazione
 from app.services.cookies import applica_cookie
 from app.services.csrf import verifica_csrf
@@ -382,6 +388,82 @@ async def http_exception_handler(
     )
 
 
+def database_irraggiungibile() -> bool:
+    """Dice se in questo momento PostgreSQL non risponde proprio.
+
+    Serve a distinguere due guasti che arrivano tutti e due come
+    `SQLAlchemyError` e che non si somigliano per niente: il servizio spento -
+    che si risolve avviandolo, e capita - e l'interrogazione scritta male, che
+    e' un difetto del programma. Si prende una connessione nuova apposta: la
+    sessione della richiesta, dopo un errore, e' inutilizzabile.
+    """
+    try:
+        with engine.connect() as connessione:
+            connessione.execute(text("SELECT 1"))
+        return False
+    except Exception:
+        return True
+
+
+@app.exception_handler(SQLAlchemyError)
+async def database_exception_handler(
+    request: Request, exc: SQLAlchemyError
+) -> Response:
+    """Quando cade il database, si dice che e' caduto il database.
+
+    **Perche' questo gestore esiste.** Senza, un PostgreSQL spento produce
+    l'errore 500 generico - «si e' verificato un problema imprevisto, l'errore
+    e' stato registrato» - che e' vero e non serve a nessuno: quel problema
+    non e' imprevisto, e' il piu' prevedibile di tutti, e chi lo incontra deve
+    sapere che si risolve avviando un servizio di Windows.
+
+    **La pagina /diagnostica non e' raggiungibile in quel momento**, perche'
+    per aprirla bisogna essere entrati e per entrare serve il database. Quindi
+    l'istruzione la porta questa pagina, ed e' **la stessa frase** che si
+    leggerebbe li': `diagnostics.CHE_FARE_DATABASE`, scritta una volta sola.
+
+    **Un errore SQL che non e' un database spento resta un 500.** Una
+    interrogazione scritta male e' un difetto del programma, e mostrarla come
+    "il database non risponde" manderebbe chi indaga a riavviare un servizio
+    che sta benissimo.
+    """
+    if not database_irraggiungibile():
+        return await unhandled_exception_handler(request, exc)
+
+    riferimento = uuid.uuid4().hex[:8]
+    logger.error(
+        "Database non raggiungibile [%s] su %s %s: %s",
+        riferimento,
+        request.method,
+        request.url.path,
+        exc,
+    )
+
+    if not wants_html(request):
+        return JSONResponse(
+            {
+                "stato": "degradato",
+                "codice": 503,
+                "titolo": "Il database non risponde",
+                "messaggio": diagnostics.CHE_FARE_DATABASE,
+                "riferimento": riferimento,
+            },
+            status_code=503,
+        )
+
+    return templates.TemplateResponse(
+        request=request,
+        name="errore_database.html",
+        context={
+            "app_name": settings.APP_NAME,
+            "che_fare": diagnostics.CHE_FARE_DATABASE,
+            "percorso": request.url.path,
+            "reference": riferimento,
+        },
+        status_code=503,
+    )
+
+
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request: Request, exc: Exception) -> Response:
     """Rete di sicurezza per tutto quello che non era previsto.
@@ -463,48 +545,16 @@ app.include_router(router_phases.router)
 app.include_router(router_users.router)
 app.include_router(router_audit.router)
 app.include_router(router_storico.router)
+app.include_router(router_diagnostics.router)
+app.include_router(router_help.router)
+app.include_router(router_setup.router)
 app.include_router(router_style.router)
 
 
-@app.get("/salute", tags=["servizio"])
-def health_check() -> JSONResponse:
-    """Verifica che il server sia in piedi e che il database risponda.
-
-    Restituisce sempre il codice HTTP 200, anche quando il database non
-    risponde: chi interroga questa rotta vuole sapere cosa non va, e per
-    saperlo deve poter leggere la risposta. Il verdetto sta nel campo "stato":
-
-        "ok"        tutto funziona
-        "degradato" il server risponde ma il database non e' raggiungibile
-
-    Questa rotta e' pensata per essere richiamata da un programma di
-    sorveglianza o, semplicemente, aperta nel browser quando qualcosa non va.
-    """
-    database_connected = True
-    database_error: str | None = None
-
-    try:
-        # Una connessione presa e restituita subito, con l'interrogazione piu'
-        # semplice che esista: se questa passa, il collegamento e' buono.
-        with engine.connect() as connection:
-            connection.execute(text("SELECT 1"))
-    except Exception as error:
-        database_connected = False
-        # Solo il tipo e il messaggio dell'errore, non l'intera traccia: la
-        # risposta la puo' leggere chiunque, la traccia resta nel registro.
-        database_error = f"{type(error).__name__}: {error}"
-        logger.error("Database non raggiungibile: %s", database_error)
-
-    body: dict[str, object] = {
-        "stato": "ok" if database_connected else "degradato",
-        "applicazione": settings.APP_NAME,
-        "versione": VERSION,
-        # Ora locale del server, completa di fuso orario.
-        "ora": datetime.now().astimezone().isoformat(timespec="seconds"),
-        "database": {
-            "connesso": database_connected,
-            "errore": database_error,
-        },
-    }
-
-    return JSONResponse(body, status_code=200)
+# La rotta /salute non e' piu' qui: sta in app/routers/diagnostics.py insieme
+# alla pagina che mostra gli stessi dati. Fino alla sessione 11 rispondeva a una
+# domanda sola - "il database c'e'?" - e stava bene in questo file; adesso
+# risponde con dieci controlli, e quei controlli li compone un servizio.
+# Tenerne una copia qui avrebbe voluto dire due strade verso lo stesso servizio,
+# e la seconda volta che si aggiunge un controllo una delle due resta indietro.
+# La forma della risposta non e' cambiata per chi la stesse gia' leggendo.

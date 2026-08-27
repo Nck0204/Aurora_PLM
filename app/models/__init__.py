@@ -19,12 +19,14 @@ Le tabelle del rilascio R1, raggruppate per argomento:
   Fasi                  phase_templates, phases, phase_transitions
   Posta                 email_messages, email_attachments, email_reasons
   Tracciabilita'        audit_logs
+  Manutenzione          backups
 
 Le tabelle di distinta base e articoli arriveranno con il rilascio R3.
 """
 
 from app.models.assignment import Assignment
 from app.models.audit_log import AuditLog
+from app.models.backup import Backup
 from app.models.classification import Classification
 from app.models.contact import Contact
 from app.models.customer import Customer
@@ -68,6 +70,7 @@ __all__ = [
     # Tabelle
     "Assignment",
     "AuditLog",
+    "Backup",
     "Classification",
     "Contact",
     "Customer",

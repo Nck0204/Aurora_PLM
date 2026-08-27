@@ -1,0 +1,64 @@
+{# ===========================================================================
+   IL DATABASE NON RISPONDE.
+
+   E' la pagina che compare al posto di qualunque altra quando PostgreSQL e'
+   spento o irraggiungibile. Senza di lei si vedrebbe l'errore 500 generico -
+   «si e' verificato un problema imprevisto» - che e' vero e non serve a
+   nessuno: il problema non e' imprevisto, e' il piu' prevedibile di tutti, e
+   si risolve in trenta secondi da chi sa dove guardare.
+
+   PERCHE' NON SI ARRIVA ALLA PAGINA /diagnostica. Perche' per aprirla bisogna
+   essere entrati, e per entrare serve il database. Quindi l'istruzione la
+   porta questa pagina, ed e' **la stessa frase**: viene da
+   diagnostics.CHE_FARE_DATABASE, scritta una volta sola. Chi la legge qui la
+   riconosce nella diagnostica quando il database sara' tornato.
+
+   USA base_nudo.html - niente barra laterale - per la ragione piu' concreta:
+   la barra laterale mostra il nome di chi e' entrato, e chi sa quel nome e' il
+   database.
+   =========================================================================== #}
+{% extends "base_nudo.html" %}
+
+{% from "components/avvisi.html" import avviso %}
+{% from "components/pulsanti.html" import pulsante_collegamento %}
+
+{% block titolo %}Il database non risponde{% endblock %}
+
+{% block contenuto %}
+
+<div class="pagina-errore pagina-errore--guasto">
+
+    <p class="numero">503</p>
+
+    <h1>{{ app_name }} non riesce a parlare con il database</h1>
+
+    <p class="spiegazione">
+        Tutti i dati di {{ app_name }} - i progetti, i documenti, le persone -
+        stanno in un programma separato che si chiama PostgreSQL, e in questo
+        momento non risponde. Finche' non risponde, {{ app_name }} non puo'
+        mostrare niente. Non si e' perso nulla.
+    </p>
+
+    <div class="errore-istruzione">
+        {% call avviso("", variante="errore", titolo="Che cosa fare") %}
+            <p>{{ che_fare }}</p>
+        {% endcall %}
+    </div>
+
+    <div class="fila-pulsanti">
+        {{ pulsante_collegamento("Riprova", percorso, variante="primario",
+                                 icona_nome="ripristina") }}
+        {{ pulsante_collegamento("Vedi /salute", "/salute") }}
+    </div>
+
+    <span class="riferimento">
+        L'indirizzo <code class="codice">/salute</code> risponde anche adesso e
+        dice come sta il sistema in forma leggibile da un programma di
+        sorveglianza. Il dettaglio tecnico di questo guasto e' nel registro su
+        file del server, <code class="codice">logs/aurora.log</code>{% if reference %},
+        alla riga che contiene il codice
+        <code class="codice">{{ reference }}</code>{% endif %}.
+    </span>
+</div>
+
+{% endblock %}

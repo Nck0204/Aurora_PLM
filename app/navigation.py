@@ -117,15 +117,23 @@ MENU_PRINCIPALE: tuple[VoceMenu, ...] = (
         etichetta="Diagnostica",
         percorso="/diagnostica",
         icona="diagnostica",
-        attiva=False,
+        attiva=True,
         solo_creatore=True,
-        nota="sessione 11",
     ),
 )
 
 # Le voci di servizio, in fondo alla barra e staccate dalle altre: non sono
 # parte del lavoro di tutti i giorni.
 MENU_SERVIZIO: tuple[VoceMenu, ...] = (
+    # L'aiuto e' l'unica voce di servizio che vedono tutti, e sta in fondo con
+    # le altre voci di servizio invece che fra le sezioni del lavoro: non e'
+    # una cosa che si fa, e' una cosa a cui si ricorre.
+    VoceMenu(
+        etichetta="Aiuto",
+        percorso="/aiuto",
+        icona="aiuto",
+        attiva=True,
+    ),
     VoceMenu(
         etichetta="Stile",
         percorso="/stile",

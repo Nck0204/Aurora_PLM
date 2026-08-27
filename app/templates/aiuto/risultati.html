@@ -1,0 +1,40 @@
+{# ===========================================================================
+   AIUTO - il pezzo dei risultati della ricerca.
+
+   E' un frammento e non una pagina: niente <html>, niente <body>. Lo include
+   la pagina intera quando si carica, e lo sostituisce HTMX quando si scrive
+   nella casella di ricerca. E' lo stesso schema di stile_risultati.html.
+
+   Il <div> ha un id perche' e' il bersaglio della sostituzione, e va tenuto
+   anche quando e' vuoto: HTMX deve trovare dove mettere la risposta.
+   =========================================================================== #}
+{% from "components/riquadro.html" import riquadro %}
+{% from "components/vuoto.html" import vuoto %}
+
+<div id="risultati-guida">
+{% if q %}
+
+    {% if risultati %}
+        {% call riquadro("Trovato in " ~ risultati|length ~
+                         (" pagina" if risultati|length == 1 else " pagine")) %}
+            <ul class="guida-risultati">
+                {% for esito in risultati %}
+                <li>
+                    <a class="guida-indice-titolo" href="/aiuto/{{ esito.pagina.nome }}">
+                        {{ esito.pagina.titolo }}
+                    </a>
+                    <span class="guida-risultato-contesto">{{ esito.contesto }}</span>
+                </li>
+                {% endfor %}
+            </ul>
+        {% endcall %}
+    {% else %}
+        {{ vuoto("Nessuna pagina parla di «" ~ q ~ "»",
+                 "Prova con una parola sola, o piu' generica. Se quello che "
+                 "cerchi non c'e' proprio, l'indice qui sotto e' corto: si "
+                 "legge tutto in dieci minuti.",
+                 icona_nome="cerca") }}
+    {% endif %}
+
+{% endif %}
+</div>

@@ -444,3 +444,114 @@ def ruolo_mostrato(utente: User) -> RuoloMostrato:
         testo=utente.global_role.value,
         variante="accento" if utente.global_role is GlobalRole.CREATORE else "neutra",
     )
+
+
+# --- Il primo creatore, quello che non lo ha creato nessuno -----------------
+#
+# Le due funzioni qui sotto servono soltanto alla configurazione guidata del
+# primo avvio (sessione 12) e stanno **in questo file** per una ragione
+# precisa: qui e' lecito guardare `global_role`, e in app/services/setup.py no.
+# C'e' un test che legge i sorgenti e diventa rosso se il ruolo globale ricompare
+# in un file che non e' fra i cinque autorizzati (tests/test_permessi.py).
+
+
+def esiste_un_creatore(db: Session) -> bool:
+    """Dice se nel database c'e' almeno una persona attiva che amministra.
+
+    E' la domanda a cui risponde il primo avvio: finche' la risposta e' no, il
+    sistema non e' configurato e la procedura guidata si apre a chiunque -
+    perche' non c'e' nessuno a cui chiedere il permesso. Appena la risposta
+    diventa si', quella stessa procedura pretende di parlare con quella
+    persona.
+
+    **Non e' una verifica di permesso**, ed e' il motivo per cui non passa da
+    permissions.puo(): quella funzione risponde a "questa persona puo' fare
+    questa cosa?"; questa risponde a "esiste qualcuno?", che e' una domanda
+    sull'installazione, non su una persona.
+
+    Si guardano solo gli utenti **attivi**: un creatore disattivato non puo'
+    entrare, e un sistema in cui l'unico amministratore e' stato disattivato e'
+    un sistema in cui nessuno puo' piu' fare niente. Riaprire li' la procedura
+    guidata sarebbe pero' pericoloso quanto comodo - chiunque arrivi al server
+    potrebbe crearsi un amministratore - e per questo la procedura, oltre a
+    questa risposta, pretende che il database sia vuoto anche di documenti
+    (vedi app/services/setup.py, `sistema_da_configurare`).
+    """
+    quanti = (
+        db.scalar(
+            select(func.count())
+            .select_from(User)
+            .where(User.global_role == GlobalRole.CREATORE, User.is_active.is_(True))
+        )
+        or 0
+    )
+    return quanti > 0
+
+
+def crea_primo_creatore(
+    db: Session,
+    *,
+    first_name: str,
+    last_name: str,
+    email: str,
+    username: str,
+    password: str,
+    request: Request | None = None,
+) -> User:
+    """Crea la prima persona che amministra Aurora, in un sistema vuoto.
+
+    E' diversa da crea_utente() in tre punti, e tutti e tre hanno la stessa
+    causa: **non c'e' nessuno che la stia creando.**
+
+      - non c'e' un `creato_da`: la voce del registro non ha una persona, come
+        quelle scritte all'avvio dal controllo della configurazione. Inventarne
+        una sarebbe la peggiore delle bugie da mettere in un audit trail;
+      - la password **la sceglie l'interessato** invece di essere generata:
+        chi sta facendo il primo avvio e' seduto davanti al server, non c'e'
+        nessuno che gliela debba dettare al telefono;
+      - per la stessa ragione `must_change_password` resta falso: non c'e'
+        nessun passaggio di consegne da cui difendersi.
+
+    **Chi la chiama ha gia' verificato che il sistema sia da configurare.**
+    Questa funzione non lo verifica: e' un servizio, e i servizi di Aurora non
+    decidono chi puo' chiamarli. La verifica sta in
+    `app/services/setup.py`, che e' l'unico posto da cui questa funzione viene
+    richiamata, e la rotta la ripete prima di scrivere.
+    """
+    utente = User(
+        username=username,
+        first_name=first_name.strip(),
+        last_name=last_name.strip(),
+        email=email.strip(),
+        password_hash=passwords.hash_password(password),
+        must_change_password=False,
+        is_active=True,
+        global_role=GlobalRole.CREATORE,
+    )
+    db.add(utente)
+    db.flush()
+
+    audit.record(
+        db,
+        action=audit.ACTION_USER_CREATED,
+        entity_type=audit.ENTITY_USERS,
+        entity_id=utente.id,
+        # Nessun autore: al primo avvio non c'e' ancora nessuno.
+        user_id=None,
+        request=request,
+        etichetta=etichette.nome_utente(utente),
+        description=(
+            f"Primo accesso amministrativo creato dalla configurazione "
+            f"guidata: {etichette.nome_utente(utente)}."
+        ),
+        new_value={
+            "username": utente.username,
+            "email": utente.email,
+            "global_role": utente.global_role.value,
+        },
+    )
+    logger.info(
+        "Primo creatore '%s' creato dalla configurazione guidata", utente.username
+    )
+
+    return utente

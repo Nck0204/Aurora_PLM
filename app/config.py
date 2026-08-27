@@ -95,6 +95,20 @@ class Settings(BaseSettings):
     # app/services/doc_types.py e non si ferma.
     DOCUMENT_TYPES_CONFIG: Path = Path("config/tipi_documento.toml")
 
+    # File con le classificazioni, la griglia dei permessi e il percorso di
+    # fasi che un'installazione nuova si porta appresso. Lo leggono la
+    # configurazione guidata del primo avvio e scripts/seed.py, e devono
+    # leggere la stessa cosa.
+    #
+    # Sta fuori dal programma per la regola 8, e per una seconda ragione piu'
+    # stringente: le fasi di Aurora sono dati e non codice (D-055), e c'e' un
+    # test che diventa rosso se un nome di fase ricompare dentro app/.
+    #
+    # Se manca, Aurora parte lo stesso: si perde solo il pulsante che crea i
+    # dati iniziali, e le stesse cose si creano a mano dalle pagine «Permessi»
+    # e «Fasi».
+    INITIAL_DATA_CONFIG: Path = Path("config/dati_iniziali.toml")
+
     # Dimensione massima di un file caricato, in megabyte. Il valore di
     # partenza e' 2 GB: gli schemi meccanici e i firmware compilati di
     # quest'azienda ci stanno dentro con margine. Il limite si verifica
@@ -165,6 +179,34 @@ class Settings(BaseSettings):
     # perche' e' un segnalibro, non un dato dell'azienda.
     MAIL_GRAPH_STATE_PATH: Path = Path("storage/posta_graph.json")
 
+    # --- Le copie di sicurezza (sessione 12) -------------------------------
+    #
+    # Dove finiscono le copie. Su un disco **diverso** da quello di Aurora e
+    # dell'archivio: una copia di sicurezza sullo stesso disco protegge dallo
+    # sbaglio di una persona e da nient'altro, e il guasto che si teme di piu'
+    # e' proprio quello del disco.
+    BACKUP_PATH: Path = Path("backup")
+
+    # Quante copie si tengono. Alla decima, la piu' vecchia viene tolta.
+    # Sette copie giornaliere sono una settimana: e' il tempo entro cui, in
+    # un'azienda, qualcuno si accorge di aver perso qualcosa.
+    BACKUP_KEEP: int = 7
+
+    # La cartella "bin" di PostgreSQL, quella che contiene pg_dump.exe e
+    # psql.exe. Se resta vuota si cercano nel PATH di sistema, che e' quello
+    # che succede quando PostgreSQL e' stato installato con l'installatore
+    # ufficiale e si e' scelto di aggiungerlo. Esempio di valore:
+    #   C:\Program Files\PostgreSQL\18\bin
+    POSTGRES_BIN_PATH: str = ""
+
+    # Parola d'ordine per interrogare /salute dall'esterno. Vuota (di
+    # partenza) vuol dire che chiunque arrivi al server puo' leggere la
+    # diagnostica in JSON: su una rete aziendale chiusa va bene, ed e' come si
+    # comportava Aurora prima della sessione 12. Scrivendoci qualcosa, la
+    # rotta pretende quel valore nell'intestazione X-Aurora-Salute (o nel
+    # parametro "token") e senza risponde 401. Vedi D-089.
+    HEALTH_TOKEN: str = ""
+
     # Istruzioni per pydantic-settings: dove leggere e come comportarsi.
     model_config = SettingsConfigDict(
         env_file=ENV_FILE,
@@ -189,6 +231,11 @@ class Settings(BaseSettings):
     def mail_graph_state_file(self) -> Path:
         """Percorso assoluto del segnalibro della fonte Graph."""
         return _absolute(self.MAIL_GRAPH_STATE_PATH)
+
+    @property
+    def backup_dir(self) -> Path:
+        """Percorso assoluto della cartella in cui finiscono le copie."""
+        return _absolute(self.BACKUP_PATH)
 
     @property
     def mail_poll_seconds(self) -> int:
@@ -224,6 +271,11 @@ class Settings(BaseSettings):
     def document_types_config(self) -> Path:
         """Percorso assoluto del file con l'elenco dei tipi di documento."""
         return _absolute(self.DOCUMENT_TYPES_CONFIG)
+
+    @property
+    def initial_data_config(self) -> Path:
+        """Percorso assoluto del file con i dati iniziali."""
+        return _absolute(self.INITIAL_DATA_CONFIG)
 
     @property
     def max_upload_bytes(self) -> int:

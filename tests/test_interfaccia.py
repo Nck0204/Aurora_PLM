@@ -23,6 +23,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
+from app import navigation, templating
 from app.config import PROJECT_ROOT
 from app.models import GlobalRole
 from tests.conftest import (
@@ -160,39 +161,68 @@ def test_il_creatore_vede_le_voci_riservate(client, db_session):
     assert 'href="/stile"' in pagina
 
 
-def test_le_sezioni_non_ancora_fatte_non_sono_collegamenti(client, db_session):
-    """Le voci spente si vedono ma non si possono premere.
+def test_non_ci_sono_piu_sezioni_spente(client, db_session):
+    """Dalla sessione 12 tutte le voci del menu portano da qualche parte.
 
-    Sono <span> e non <a>: la tastiera non ci si ferma, perche' non c'e'
-    niente da aprire. Dire "in arrivo" e' piu' onesto che nascondere.
+    **Questo test ha cambiato bersaglio a ogni sezione realizzata**: fino alla
+    4 guardava "Prodotti", dalla 5 alla 6 "Documenti", dalla 7 alla 9 "Posta",
+    dalla 10 alla 11 "Diagnostica". La sessione 12 ha acceso l'ultima luce, e
+    da allora il test dice un'altra cosa: che non ne e' rimasta nessuna spenta.
+
+    Se una sessione futura aggiungera' una voce ancora da fare, questo test
+    diventera' rosso e chi lo legge dovra' decidere fra due cose: e' una voce
+    spenta per **scelta** (e allora si aggiunge qui il suo nome), oppure e'
+    rimasta spenta per **dimenticanza** (e allora si toglie `attiva=False`).
+    E' esattamente la domanda che il test serviva a far fare.
+
+    Il meccanismo con cui una voce spenta si disegna - uno <span> e non un
+    <a> - resta provato dal test qui sotto.
     """
+    spente = [
+        voce.etichetta
+        for voce in navigation.MENU_PRINCIPALE + navigation.MENU_SERVIZIO
+        if not voce.attiva
+    ]
+
+    assert spente == [], (
+        f"queste voci di menu sono ancora spente: {spente}. Se e' una scelta, "
+        "vanno elencate qui; se e' una dimenticanza, va tolto attiva=False"
+    )
+
+
+def test_una_voce_spenta_si_vede_ma_non_si_puo_premere(
+    client, db_session, monkeypatch
+):
+    """Le voci spente sono <span> e non <a>, e lo dicono anche a chi non vede.
+
+    La tastiera non ci si ferma, perche' non c'e' niente da aprire; dire "in
+    arrivo" e' piu' onesto che nascondere.
+
+    Non essendoci piu' nessuna voce spenta nel menu vero (vedi il test qui
+    sopra), il meccanismo si prova aggiungendone una finta. E' l'unico modo
+    che resta di verificarlo, ed e' meglio di lasciarlo senza prova: la
+    prossima sessione che ne spegnera' una si aspetta che funzioni.
+    """
+    finta = navigation.VoceMenu(
+        etichetta="Distinte base",
+        percorso="/distinte",
+        icona="prodotti",
+        attiva=False,
+        nota="rilascio R3",
+    )
+    monkeypatch.setattr(
+        templating, "MENU_PRINCIPALE", navigation.MENU_PRINCIPALE + (finta,)
+    )
+
     crea_utente(db_session, username="prova.mario.rossi")
     entra(client, "prova.mario.rossi", PASSWORD_DI_PROVA)
 
     pagina = client.get("/").text
 
-    # "Diagnostica" e' la prima sezione ancora da fare: arrivera' nella
-    # sessione 11.
-    #
-    # Questo test cambia bersaglio a ogni sezione che viene realizzata: fino
-    # alla sessione 4 guardava "Prodotti", dalla 5 alla 6 guardava
-    # "Documenti", dalla 7 alla 9 guardava "Posta", e adesso guarda
-    # "Diagnostica". Non e' un fastidio: e' il modo in cui ci si accorge che
-    # una voce e' rimasta spenta per dimenticanza invece che per scelta.
-    #
-    # La voce e' riservata al creatore, quindi il bersaglio va guardato con
-    # un creatore: a un utente qualunque la barra laterale non la mostra
-    # affatto, e il test passerebbe senza aver verificato niente.
-    crea_creatore(db_session)
-    client.get("/esci")
-    entra(client, "prova.capo.stile", PASSWORD_DI_PROVA)
-    pagina = client.get("/").text
-
-    assert "Diagnostica" in pagina, "la voce spenta si deve comunque vedere"
-    assert 'href="/diagnostica"' not in pagina, (
-        "ma non deve essere un collegamento"
-    )
+    assert "Distinte base" in pagina, "la voce spenta si deve comunque vedere"
+    assert 'href="/distinte"' not in pagina, "ma non deve essere un collegamento"
     assert 'aria-disabled="true"' in pagina
+    assert "rilascio R3" in pagina, "la nota dice quando arrivera'"
 
 
 def test_la_voce_del_menu_resta_accesa_nelle_sottopagine(client, db_session):

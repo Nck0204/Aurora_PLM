@@ -1,6 +1,6 @@
 # Stato di avanzamento
 
-Ultimo aggiornamento: **27 agosto 2026**, fine della sessione 11.
+Ultimo aggiornamento: **27 agosto 2026**, fine della sessione 12.
 
 Il progetto e' diviso in 13 sessioni di lavoro. Questa tabella dice a che
 punto siamo. Va aggiornata **alla fine di ogni sessione**, prima del commit.
@@ -25,10 +25,18 @@ Stati possibili: `da fare` · `in corso` · `completata`
 | 9 | Registro delle operazioni | **completata** | Catalogo di 58 azioni registrate, descrizione in italiano su ogni voce, catena di impronte SHA-256, permessi PostgreSQL che rendono `audit_logs` a sola aggiunta, pagina di consultazione con filtri e ricerca, esportazione CSV registrata, scheda "Storico" su cinque tipi di oggetto, tre script operativi. Dettaglio sotto. |
 | 10 | Notifiche e posta | **completata** | Il motore di acquisizione: interfaccia della fonte e fonte locale a file `.eml`, archiviazione del messaggio e degli allegati per impronta, quattro rami di attribuzione, quarantena con assegnazione a mano estesa alla conversazione, motivi configurabili dall'interfaccia, ricerca su mittente/oggetto/contenuto/date. **Le notifiche non sono state chieste e restano da ricollocare.** Dettaglio sotto. |
 | 11 | La casella aziendale | **completata** | La seconda `FonteEmail`: Microsoft Graph con le credenziali applicative, il MIME integrale, le delta query con il segnalibro, lo spostamento in `Elaborate` e `Quarantena`, il controllo periodico con APScheduler e il blocco, la pagina di configurazione con VERIFICA su ogni campo, la sorveglianza della scadenza del segreto, `docs/RICHIESTA_IT.md`. **Il motore non e' stato toccato.** I controlli notturni e il backup non sono stati chiesti e restano da ricollocare. Dettaglio sotto. |
-| 12 | Rapporti ed esportazioni | da fare | Cruscotto, rapporti di avanzamento, esportazione in CSV e PDF. |
+| 12 | Il sistema gestibile | **completata** | Pagina di diagnostica con dieci controlli a semaforo e `/salute` in JSON, copia di sicurezza e ripristino con la loro procedura scritta, configurazione guidata del primo avvio in sei passi, guida in linea con ricerca e icone «?». Dettaglio sotto. |
 | 13 | Messa in produzione | da fare | Irrobustimento, prestazioni, installazione sul server aziendale, manuale d'uso, consegna. |
 
-> **Nota sul piano.** La **sessione 11 si e' stretta**: era "Lavori pianificati
+> **Nota sul piano.** La **sessione 12 e' cambiata**: era "Rapporti ed
+> esportazioni" e l'azienda ha chiesto invece che il sistema diventasse
+> **gestibile da chi non lo ha scritto** - diagnostica, copie di sicurezza,
+> primo avvio guidato, guida in linea - che nel piano non compariva da nessuna
+> parte. I rapporti di avanzamento e le esportazioni in CSV e PDF restano da
+> fare e vanno ricollocati; l'esportazione del registro in CSV c'e' gia' dalla
+> sessione 9, il resto no.
+>
+> La **sessione 11 si e' stretta**: era "Lavori pianificati
 > e manutenzione" e l'azienda ha chiesto il collegamento vero alla casella
 > aziendale, cioe' la seconda meta' della posta. APScheduler e' arrivato lo
 > stesso, perche' la casella si controlla a orologio; i **controlli notturni** e
@@ -73,6 +81,282 @@ Stati possibili: `da fare` · `in corso` · `completata`
 > comportamento. Resta una **domanda aperta**: le tabelle di distinta base e
 > articoli sono del rilascio R3 e in questo piano non compaiono; va chiarito se
 > le 13 sessioni coprono il solo R1 o arrivano anche a R2 e R3.
+
+---
+
+## Sessione 12 — Il sistema gestibile da chi non lo ha scritto · completata (27 agosto 2026)
+
+La sessione aveva una domanda sola scritta nel requisito: **il sistema
+sopravvive alle ferie di chi lo ha costruito?** Fino a ieri la risposta era no,
+e non per un difetto del programma: perche' tutto quello che serve a tenerlo in
+piedi - sapere se sta bene, rimetterlo su dopo un guasto, installarlo la prima
+volta, capire come si usa - stava nella testa di chi lo aveva scritto.
+
+Adesso sta in quattro posti che si aprono da soli.
+
+> **Una tabella nuova.** `backups`, con la migrazione `f3a1d6c9084b`. Non tocca
+> nessuna tabella esistente e non riscrive nessun dato: si applica con le
+> credenziali di sempre, senza passare da `postgres`.
+
+### Le sei cose che c'erano da decidere
+
+| Domanda | Risposta | Dove |
+|---|---|---|
+| Che cosa scrive una riga di diagnostica? | **che cosa fare**, non che cosa e' successo | D-084 |
+| La guida in linea: template o file? | file Markdown, e il Markdown lo trasforma Aurora | D-085 |
+| Dove sta scritto dove porta un'icona «?» | in `guida.AIUTI`, in un posto solo, con due test | D-086 |
+| Come si copia un archivio da decine di gigabyte? | l'archivio e' uno e cresce, i salvataggi del database ruotano | D-087 |
+| Dove sta lo stato della configurazione guidata? | da nessuna parte: si ricava dal database | D-088 |
+| `/salute` va chiusa dietro l'accesso? | no: si chiude con un parametro, quando serve | D-089 |
+
+### Il pezzo su cui vale la pena tornare: la copia incrementale che non e' un compromesso
+
+Un archivio da decine di gigabyte non si copia per intero ogni notte. La
+soluzione ovvia sarebbe un backup incrementale con le sue date, i suoi
+confronti e i suoi casi limite; quella scelta invece **discende da una decisione
+presa nella sessione 6** e non costa niente.
+
+Un file dell'archivio ha per nome l'impronta SHA-256 del proprio contenuto
+(D-004). Quindi **non cambia mai**: se il contenuto cambiasse, cambierebbe il
+nome, e sarebbe un altro file. E non viene mai cancellato (regola 5).
+
+Ne discende la proprieta' che rende tutto semplice: la cartella `archivio/`
+della copia e' un **soprainsieme** dell'archivio a qualunque data passata.
+Ripristinando il database di martedi' insieme all'archivio di oggi si ottiene un
+sistema coerente - tutte le impronte che il database di martedi' nomina sono li'
+dentro, piu' qualcuna in piu' che nessuno riferisce e che non fa male a nessuno.
+
+Il confronto per decidere che cosa copiare e' quindi **sul nome e sulla
+dimensione**, non sul contenuto: lo stesso nome vuol dire lo stesso contenuto,
+e la dimensione serve solo per il caso che resta - la copia interrotta a meta'
+file. Sette righe di codice, e la seconda esecuzione dice `0 file copiati, 3745
+gia' presenti`.
+
+### Realizzato
+
+**1. La pagina `/diagnostica`, e la rotta `/salute` che la accompagna.**
+
+Dieci controlli, ciascuno con il suo semaforo. La regola da cui discende tutto
+il resto e' scritta in cima ad `app/services/diagnostics.py` e verificata da un
+test: **ogni riga che non e' verde dice che cosa fare.** Non che cosa e'
+successo: che cosa fare, con i nomi veri delle cose.
+
+> «Il servizio PostgreSQL non risponde» e' una diagnosi.
+> «Apri Servizi di Windows, cerca il servizio che comincia per postgresql e
+> premi Avvia» e' un'istruzione.
+
+| Controllo | Che cosa guarda |
+|---|---|
+| database | risponde? e in quanti millisecondi? |
+| posta | da dove arriva, ultimo controllo riuscito, messaggi elaborati in 24 ore |
+| quarantena | quanti messaggi aspettano una persona |
+| backup | l'ultima copia: quando, com'e' andata, quanto ha copiato |
+| disco | usato, libero, percentuale, **e fra quanti mesi finisce** |
+| archivio | file sul disco non riferiti, e file attesi che non ci sono |
+| registro | quante voci, a quando risale l'ultima |
+| contenuto | documenti, versioni, messaggi, persone attive |
+| segreto | fra quanti giorni scade quello della posta |
+| errori | quante righe di errore nelle ultime 24 ore, con il dettaglio |
+
+**Tre colori e non quattro.** Verde: niente da fare. Giallo: qualcosa da
+programmare, non oggi. Rosso: qualcosa e' gia' rotto. Non esiste il colore per
+i casi incerti, e un controllo che non riesce a rispondere e' **giallo**: non
+saperlo e' esso stesso un problema da guardare.
+
+**La stima dei mesi e' la parte che serve davvero.** Sapere che restano 400 GB
+non dice niente a nessuno; sapere che al ritmo degli ultimi trenta giorni
+finiscono fra cinque mesi fa comprare il disco *prima* che finiscano. Sopra i
+due anni si smette di contare: «bastano ancora 74 mesi» e' una precisione finta,
+e chi la legge lo sa.
+
+**Nessun controllo solleva mai.** Ognuno ha il suo `try`, e chi li mette in fila
+ne ha un altro attorno. Una pagina di diagnostica che si rompe quando c'e' un
+guasto e' una pagina che si rompe esattamente il giorno in cui serve.
+
+**Con il database spento si mostra una riga sola**, non dieci righe rosse fra
+cui cercarla.
+
+**`/salute`** risponde con gli stessi dati in JSON, e non e' piu' in `main.py`:
+sta accanto alla pagina, perche' i dati li compone lo stesso servizio. La forma
+vecchia non e' cambiata per chi la stesse gia' leggendo - `stato`,
+`applicazione`, `versione`, `ora`, `database` sono ancora li' - e accanto ci
+sono `semaforo` e `controlli`. Chi sorveglia guarda `semaforo`; chi voleva solo
+sapere se il server e' vivo continua a guardare `stato` (D-089).
+
+**2. La copia di sicurezza e il ripristino.**
+
+`scripts/backup.py` salva il database con `pg_dump` e copia l'archivio in modo
+incrementale. Cinque cose che meritano di essere sapute:
+
+- **il salvataggio viene riletto prima di essere dichiarato buono.** Un file
+  troncato - disco pieno, processo interrotto - esiste e non e' vuoto, e ci si
+  accorgerebbe che non vale il giorno in cui serve. `pg_restore --list` legge
+  l'indice interno senza ripristinare niente;
+- **la riga in `backups` si apre prima di cominciare**, non dopo aver finito:
+  cosi' una copia interrotta lascia traccia con esito `in_corso`, e non si
+  confonde con una copia che nessuno ha mai programmato;
+- **se il database non risponde, la copia si fa lo stesso**, senza la riga: una
+  copia senza il suo verbale vale infinitamente piu' di nessuna copia;
+- **la rotazione non tocca mai l'archivio dei file**, solo i salvataggi del
+  database;
+- **la password non finisce nella riga di comando** ma in `PGPASSWORD`: gli
+  argomenti di un processo si leggono da Gestione attivita'.
+
+`scripts/ripristino.py` chiede **due conferme**, e la prima non e' «si»: e'
+**scrivere per esteso il nome del database** che si sta per sovrascrivere. Chi
+lo scrive lo ha letto, e chi lo ha letto non sta ripristinando sul server
+sbagliato. Poi rimette il database, rimette i file che mancano, e **verifica la
+coerenza**: per ogni impronta che il database nomina, controlla che il file ci
+sia davvero. E' il passo che distingue un ripristino da una speranza di
+ripristino - usa la stessa funzione della diagnostica, quindi quello che dice
+li' e' quello che dira' la pagina domani mattina.
+
+`docs/BACKUP_E_RIPRISTINO.md` e' scritto per un informatico che non conosce
+Aurora, e comprende la programmazione notturna con l'Utilita' di pianificazione
+di Windows, scheda per scheda, con le tre righe che di solito si sbagliano
+(l'utente, «Inizia da», e il `exit /b %ERRORLEVEL%` senza il quale ogni notte
+risulta riuscita). `scripts/copia_notturna.cmd` e' gia' scritto: va corretto in
+un punto solo.
+
+**3. La configurazione guidata del primo avvio.**
+
+Sei passi a `/primo-avvio`: il database, la prima persona, l'archivio, le
+classificazioni, il percorso delle fasi, la posta (rimandabile). Ogni passo
+spiega **a che cosa serve** prima di chiedere qualcosa, ha un pulsante
+«Verifica» che prova senza cambiare niente, e un pulsante che fa la cosa.
+
+**La procedura si interrompe e si riprende, e non e' costato niente**: lo stato
+non e' scritto da nessuna parte, si ricava dal database ogni volta (D-088).
+
+**Il passo dell'archivio prova a scrivere davvero** un file nella cartella
+indicata, invece di guardare i permessi: su Windows i permessi effettivi
+dipendono da ereditarieta', gruppi e condivisioni, e l'unico modo affidabile di
+sapere se un programma ci puo' scrivere e' fargli scrivere un file.
+
+**Chi crea il proprio profilo entra subito**: senza, si troverebbe davanti la
+pagina di accesso e dovrebbe riscrivere quello che ha appena scritto.
+
+**Chi puo' aprirla e' una regola in due tempi.** Finche' non esiste nessun
+amministratore, chiunque - non c'e' nessuno a cui chiedere il permesso. Da
+quando esiste, solo lui. E «il sistema e' da configurare» sono **due**
+condizioni, non una: nessun creatore attivo *e* nessun documento. Senza la
+seconda, un sistema in uso da due anni in cui qualcuno ha disattivato per
+sbaglio l'ultimo amministratore aprirebbe a chiunque arrivi al server una pagina
+che crea amministratori senza credenziali.
+
+**4. La guida in linea.**
+
+Otto pagine in `docs/guida/`, mostrate dentro Aurora a `/aiuto` con indice e
+ricerca: primi passi, come si carica un documento, versioni e stati, come si fa
+avanzare un progetto, come si scrive l'oggetto delle email, la quarantena, chi
+vede che cosa, glossario.
+
+Sono file Markdown perche' **chi scrive la guida non e' chi scrive il
+programma**: un `.md` lo corregge chiunque con il Blocco note, entra in git, e
+si legge anche senza aprire Aurora - il che conta il giorno in cui Aurora non si
+apre. Il Markdown lo trasforma `app/services/guida.py`, su un sottoinsieme
+deciso da noi: nessuna libreria in piu' da installare e da aggiornare per
+sempre, e quello che sta fuori dal perimetro **non sparisce**, compare come
+testo normale (D-085).
+
+Le icone «?» accanto ai campi non ovvi portano a una **sezione precisa**, non
+alla guida intera: chi le preme vuole leggere tre righe. Le destinazioni stanno
+in `guida.AIUTI` e in nessun altro posto, con due test che le tengono in piedi -
+uno legge i template, l'altro apre ogni pagina nominata e verifica che l'ancora
+esista. **Rinominare un titolo della guida e' diventata un'operazione sicura.**
+
+**5. La pagina che compare quando il database e' spento.**
+
+Senza, un PostgreSQL fermo produceva l'errore 500 generico - «si e' verificato
+un problema imprevisto» - che e' vero e non serve a nessuno: quel problema non
+e' imprevisto, e' il piu' prevedibile di tutti. Adesso e' un 503 con una pagina
+in italiano che porta **la stessa identica istruzione** della riga rossa della
+diagnostica: e' la stessa costante, e c'e' un test che legge i sorgenti e
+diventa rosso se qualcuno ne scrive una seconda copia (D-090).
+
+Il gestore distingue i due casi con una connessione nuova: un'interrogazione
+scritta male resta un 500, perche' e' un difetto del programma e mostrarla come
+«il database non risponde» manderebbe chi indaga a riavviare un servizio che sta
+benissimo.
+
+**6. Due componenti nuovi, e un file di configurazione in piu'.**
+
+`components/semaforo.html` (verde/giallo/rosso e la riga di controllo) e
+`components/aiuto.html` (il punto interrogativo), tutti e due in vetrina a
+`/stile` e documentati in `docs/GUIDA_STILE.md`.
+
+`config/dati_iniziali.toml` e' il file in piu', e ha risolto un problema che
+non era stato notato: le classificazioni, la griglia dei permessi e il percorso
+delle fasi erano scritti **due volte**, in `scripts/seed.py` e nel programma, e
+bastava correggerne uno perche' due installazioni dessero due sistemi diversi.
+Adesso il posto e' uno e lo leggono in due. C'e' anche una seconda ragione, ed
+e' vincolante: le fasi sono dati e non codice (D-055), e c'e' un test che legge
+i sorgenti e diventa rosso se un nome di fase ricompare dentro `app/` - come
+infatti e' successo la prima volta che questa sessione ha scritto quegli
+elenchi in un servizio.
+
+### Verificato
+
+- **I quattro criteri di accettazione.**
+  1. **Database spento:** la riga diventa rossa con l'istruzione, e chi apre
+     una pagina qualunque riceve un 503 in italiano invece di un errore
+     tecnico. Provato con una sessione che rifiuta di rispondere come farebbe
+     un servizio fermo, e con il gestore vero (`tests/test_diagnostica.py`).
+  2. **Copia e ripristino:** la copia gira per davvero contro PostgreSQL 18.6
+     - `pg_dump`, rilettura con `pg_restore --list`, 3745 file copiati, `0
+     copiati / 3745 gia' presenti` alla seconda esecuzione. Il ripristino dei
+     file e la verifica di coerenza sono provati; il giro completo `pg_dump →
+     pg_restore` su un database vuoto e' descritto in
+     `docs/BACKUP_E_RIPRISTINO.md` sezione 7.
+  3. **Database vuoto:** parte la configurazione guidata, che porta fino a un
+     sistema utilizzabile senza toccare nessun file di testo. Provato con la
+     risposta «il sistema e' da configurare» sostituita, che e' il perno da cui
+     dipende tutto.
+  4. **La guida si apre e la ricerca funziona**, con e senza JavaScript.
+- **682 test passano** (536 prima della sessione, 146 nuovi in
+  `test_diagnostica.py`, `test_backup.py`, `test_primo_avvio.py`,
+  `test_guida.py`).
+- **La pagina e' stata guardata nel browser** contro il database di sviluppo:
+  dieci controlli, il rosso e il giallo prima dei verdi, il blocco «Che cosa
+  fare» con la sua barretta, il dettaglio aperto solo sulle righe da guardare.
+
+### Due difetti trovati mentre si costruiva, e valgono tutti e due
+
+**Il nome `stato` era gia' occupato.** La rotta della diagnostica passava alla
+pagina un contesto chiamato `stato`, che e' anche il nome del parametro di
+`pagina()` per il codice HTTP: la variabile finiva li' dentro e la pagina si
+apriva con `'stato' is undefined`. E' la trappola descritta nella sezione 4 di
+`docs/GUIDA_STILE.md` e nella docstring di `pagina()` dalla sessione 5, ed e'
+costata mezz'ora anche questa volta. Adesso il contesto si chiama `diagnosi`.
+
+**Le pagine del primo avvio non mostravano l'errore di un modulo rifiutato.**
+`base.html` disegna da solo l'avviso rosso quando una rotta passa `errore=`, ma
+quelle pagine estendono `base_nudo.html`, che quel blocco non ce l'ha: la
+password troppo corta veniva rifiutata con un 400 e senza dire perche'. Lo ha
+trovato un test, ed e' la ragione per cui i test si scrivono insieme al codice e
+non dopo.
+
+### Quello che resta da fare, e perche'
+
+- **Il giro completo `pg_dump → pg_restore` su un database vuoto** va eseguito
+  da una persona, perche' creare un database richiede i diritti di superutente
+  che l'utente di Aurora giustamente non ha. La procedura passo per passo e' in
+  `docs/BACKUP_E_RIPRISTINO.md`, sezione 7. **E' la prova piu' importante di
+  tutte** e va fatta prima della messa in esercizio, su una macchina diversa dal
+  server: una copia di sicurezza che non e' mai stata ripristinata non e' una
+  copia di sicurezza, e' una speranza.
+- **La sessione 12 nel piano era «Rapporti ed esportazioni».** L'azienda ha
+  chiesto invece la gestibilita', che nel piano non compariva. I rapporti di
+  avanzamento e le esportazioni in CSV e PDF restano da fare e vanno
+  ricollocati: l'esportazione del registro in CSV c'e' gia' dalla sessione 9, il
+  resto no.
+- **I controlli notturni** - la verifica periodica della catena del registro,
+  la pulizia dei temporanei rimasti - non ci sono ancora. La copia notturna si',
+  ma passa dall'Utilita' di pianificazione di Windows e non da APScheduler.
+- **Le notifiche continuano a non esserci**, come dalla sessione 10.
+- **La guida in linea copre l'uso, non l'amministrazione.** Chi amministra
+  Aurora ha `docs/` e la pagina di diagnostica; una guida per lui dentro il
+  programma non e' stata chiesta.
 
 ---
 
@@ -268,12 +552,13 @@ non e' installata.
   pianificati e manutenzione": APScheduler c'e', ed e' arrivato con la posta,
   ma i **controlli notturni** e la **procedura di backup e di ripristino** non
   sono stati chiesti e restano da fare. Vanno ricollocati, probabilmente nella
-  13.
+  13. *(La copia di sicurezza e il ripristino sono arrivati con la sessione 12;
+  i controlli notturni no.)*
 - **La pagina `/diagnostica` non esiste ancora**, e la voce di menu e' ancora
   spenta. La diagnostica di **questa** sessione sta dove serve, cioe' in cima
   alla pagina della configurazione posta: chi ha un problema con la posta apre
   quella. Una pagina di diagnostica generale - disco, database, archivio,
-  registro - resta da fare.
+  registro - resta da fare. *(Fatta nella sessione 12.)*
 - **Il collegamento non e' mai stato provato su una casella vera**, per la
   ragione piu' semplice: la registrazione applicativa non esiste ancora. E'
   esattamente quello che `docs/RICHIESTA_IT.md` serve a ottenere. Quello che si

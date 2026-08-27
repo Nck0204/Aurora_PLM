@@ -1,0 +1,109 @@
+{# ===========================================================================
+   SEMAFORO E RIGA DI CONTROLLO
+
+   QUANDO SI USA. Ogni volta che una pagina deve dire «questa cosa sta bene /
+   e' da guardare / e' rotta» a qualcuno che non conosce il programma: la
+   pagina di diagnostica, i passi della configurazione guidata, l'esito di una
+   verifica.
+
+   QUANDO NON SI USA. Per lo stato di un documento o di una versione di
+   prodotto: quelli sono le etichette di components/stato.html, hanno colori
+   fissati una volta per tutte e non vogliono dire "va bene / non va bene".
+   Un semaforo rosso vuol dire che qualcuno deve fare qualcosa; un documento
+   "superato" non chiede niente a nessuno.
+
+   I TRE COLORI, E SONO SOLO TRE.
+
+     verde   non c'e' niente da fare;
+     giallo  c'e' qualcosa da programmare, ma non oggi;
+     rosso   qualcosa e' gia' rotto.
+
+   Non esiste il quarto colore per i casi incerti: un controllo che non sa
+   rispondere e' giallo, perche' non saperlo e' un problema da guardare.
+
+   IL COLORE NON E' MAI L'UNICA INFORMAZIONE. Dentro l'etichetta c'e' la
+   parola scritta, perche' chi non distingue il rosso dal verde deve poter
+   leggere la stessa pagina (docs/GUIDA_STILE.md, sezione 7).
+
+   OGNI RIGA CHE NON E' VERDE DICE CHE COSA FARE. Non che cosa e' successo:
+   che cosa fare. E' la regola di app/services/diagnostics.py, e questo
+   componente e' fatto per renderla visibile - il blocco «Che cosa fare» e'
+   staccato, ha la sua icona e non si puo' confondere con il resto.
+
+   COME SI USA:
+
+       {% raw %}{% from "components/semaforo.html" import semaforo, controllo %}
+
+       {{ semaforo("giallo") }}
+
+       {{ controllo(riga) }}{% endraw %}
+
+   "controllo" vuole un oggetto con: colore, variante, titolo, valore,
+   che_fare, dettagli, dove. E' esattamente la forma di
+   diagnostics.Voce e di setup.Verifica, ed e' voluto: due pagine che mostrano
+   la stessa cosa devono riceverla nella stessa forma.
+   =========================================================================== #}
+
+{% from "components/icone.html" import icona %}
+{% from "components/stato.html" import etichetta %}
+{% from "components/riquadro.html" import riquadro %}
+{% from "components/descrizione.html" import descrizione, voce %}
+{% from "components/pulsanti.html" import pulsante_collegamento %}
+
+
+{# La pillola colorata, da sola. Il colore arriva gia' tradotto nella variante
+   dell'etichetta: la corrispondenza fra "verde" e "successo" la fa
+   diagnostics.VARIANTE_DEL_COLORE, in Python, e qui c'e' solo il ripiego per
+   chi passa il colore e basta. #}
+{% set VARIANTE_SEMAFORO = {
+    "verde": "successo",
+    "giallo": "attenzione",
+    "rosso": "errore",
+} %}
+
+{% macro semaforo(colore, variante=none) -%}
+{{ etichetta(colore, variante=variante or VARIANTE_SEMAFORO.get(colore, "informazione")) }}
+{%- endmacro %}
+
+
+{# Una riga di controllo dentro il suo riquadro: il semaforo a sinistra, la
+   misura, l'istruzione quando serve, il dettaglio richiudibile.
+
+   Il dettaglio e' un <details> gia' aperto quando la riga non e' verde: chi ha
+   un guasto vuole vedere i numeri senza dover premere, chi non ce l'ha non
+   vuole sei righe in piu' per ogni controllo. Funziona senza JavaScript,
+   perche' <details> e' del browser (D-036). #}
+{% macro controllo(riga) -%}
+{% call riquadro(riga.titolo,
+                 azioni=(pulsante_collegamento("Vai", riga.dove, misura="piccolo")
+                         if riga.dove else none)) %}
+<div class="controllo">
+    <div class="controllo-semaforo">
+        {{ semaforo(riga.colore, variante=riga.variante) }}
+    </div>
+    <div class="controllo-testo">
+        <p class="controllo-valore">{{ riga.valore }}</p>
+
+        {%- if riga.che_fare %}
+        <div class="controllo-cosa-fare">
+            <p class="controllo-cosa-fare-titolo">
+                {{ icona("informazione", 16) }} Che cosa fare
+            </p>
+            <p>{{ riga.che_fare }}</p>
+        </div>
+        {%- endif %}
+
+        {%- if riga.dettagli %}
+        <details class="controllo-dettagli"{% if riga.colore != "verde" %} open{% endif %}>
+            <summary>Dettaglio</summary>
+            {% call descrizione(stretta=true) %}
+                {%- for nome_riga, valore_riga in riga.dettagli %}
+                    {{ voce(nome_riga, valore_riga) }}
+                {%- endfor %}
+            {% endcall %}
+        </details>
+        {%- endif %}
+    </div>
+</div>
+{% endcall %}
+{%- endmacro %}

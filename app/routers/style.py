@@ -27,6 +27,7 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import Response
 
 from app.dependencies import richiedi_creatore
+from app.services import diagnostics
 from app.templating import pagina
 
 # La dipendenza sta sul router: vale per tutte le rotte qui dentro, comprese
@@ -209,7 +210,56 @@ def vetrina(
         VOCI_DI_ESEMPIO=VOCI_DI_ESEMPIO,
         MESSAGGIO_CORTO=MESSAGGIO_CORTO,
         MESSAGGIO_LUNGO=MESSAGGIO_LUNGO,
+        controllo_verde=CONTROLLO_VERDE,
+        controllo_giallo=CONTROLLO_GIALLO,
+        controllo_rosso=CONTROLLO_ROSSO,
     )
+
+
+# Le tre righe di controllo della vetrina. Sono `diagnostics.Voce` vere e non
+# dizionari con le stesse chiavi, ed e' il punto: se un giorno quella classe
+# cambiasse forma, la vetrina si romperebbe insieme alla pagina di diagnostica
+# invece che restare indietro mostrando un componente che non esiste piu'.
+#
+# I valori sono inventati - la vetrina non interroga niente (vedi la nota in
+# cima a questo file) - ma sono verosimili: un esempio con dentro "lorem ipsum"
+# non fa vedere come si legge il componente quando e' pieno.
+CONTROLLO_VERDE = diagnostics.Voce(
+    chiave="esempio-verde",
+    titolo="Collegamento al database",
+    colore=diagnostics.VERDE,
+    valore="Risponde in 4 millisecondi",
+    dettagli=(("Collegamento", "aurora_app@localhost:5432/aurora"),),
+)
+
+CONTROLLO_GIALLO = diagnostics.Voce(
+    chiave="esempio-giallo",
+    titolo="Scadenza del segreto applicativo",
+    colore=diagnostics.GIALLO,
+    valore="Fra 22 giorni (15/03/2027)",
+    che_fare=(
+        "Non c'e' ancora fretta, ma conviene chiedere ora all'ufficio "
+        "informatico di preparare il segreto nuovo: il giorno in cui scade, "
+        "la posta smette di arrivare."
+    ),
+    dove="/posta/configurazione",
+)
+
+CONTROLLO_ROSSO = diagnostics.Voce(
+    chiave="esempio-rosso",
+    titolo="Copia di sicurezza",
+    colore=diagnostics.ROSSO,
+    valore="L'ultimo tentativo, 9 ore fa, e' fallito",
+    che_fare=(
+        "pg_dump non e' stato trovato. Prova a eseguire la copia a mano dal "
+        "server, con «python scripts/backup.py»: lo script scrive per esteso "
+        "che cosa non e' andato."
+    ),
+    dettagli=(
+        ("Dove", r"D:\CopieAurora"),
+        ("Quando", "27/08/2026 alle 03:00"),
+    ),
+)
 
 
 @router.get("/esempio-ricerca")

@@ -20,6 +20,7 @@
 {% from "components/campi.html" import area_testo, csrf %}
 {% from "components/pulsanti.html" import pulsante, pulsante_collegamento %}
 {% from "components/riquadro.html" import riquadro %}
+{% from "components/aiuto.html" import aiuto %}
 {% from "components/avvisi.html" import avviso %}
 {% from "components/descrizione.html" import descrizione, voce %}
 {% from "components/area_file.html" import area_file %}
@@ -81,7 +82,7 @@
 
         {{ barra_caricamento() }}
 
-        {{ area_testo("Che cosa cambia", "nota", valore=nota_scritta, righe=4,
+        {{ area_testo("Che cosa cambia " ~ aiuto("nota-versione"), "nota", valore=nota_scritta, righe=4,
                       obbligatorio=true,
                       aiuto="Lo legge un collega, non il programma. E' l'unica "
                             "informazione che nessuno potra' ricostruire "

@@ -2,26 +2,39 @@
 
 Gestione progetti e documentazione tecnica. Gira in rete locale, senza cloud.
 
-## Avvio in sviluppo
+## Installazione
 
-1. Preparare il database seguendo `scripts/setup_postgres.md` (parte B).
+Dalla sessione 12 la strada normale e' la **configurazione guidata**: si
+prepara il database, si avvia il server e si apre il browser. Il resto lo
+spiega Aurora, un passo per volta, senza aprire nessun file di testo.
+
+1. Preparare PostgreSQL seguendo `scripts/setup_postgres.md` (parte B).
 2. Copiare `.env.example` in `.env` e adattare `DATABASE_URL`.
 3. Creare l'ambiente virtuale: `python -m venv .venv`
 4. Attivarlo: `.venv\Scripts\activate`
 5. Installare le dipendenze: `pip install -r requirements.txt`
 6. Applicare le migrazioni: `alembic upgrade head`
-7. Creare i dati iniziali: `python scripts/seed.py`
-   Stampa **una volta sola** la password dell'utente `admin`: annotarla.
-8. Avviare il server: `uvicorn app.main:app --reload`
-9. Controllare che sia vivo: <http://localhost:8000/salute> (attesa: `"stato": "ok"`)
-10. Entrare: <http://localhost:8000/entra>, utente `admin` con la password del
-    punto 7. Al primo accesso il programma obbliga a cambiarla.
-11. Rendere il registro delle operazioni a sola aggiunta, seguendo
-    `scripts/hardening_db.md`. **Va fatto dopo il punto 6 e non prima**: la
-    migrazione riempie le colonne delle righe gia' scritte, ed e' l'ultimo
-    `UPDATE` che verra' mai eseguito su quella tabella.
+7. Avviare il server: `uvicorn app.main:app --reload`
+8. Aprire <http://localhost:8000/>. Su un database vuoto Aurora manda da sola
+   alla **configurazione guidata**: sei passi - il database, la prima persona,
+   l'archivio dei file, le classificazioni, il percorso delle fasi, la posta -
+   ciascuno con la sua spiegazione e un pulsante che verifica. Si puo'
+   interrompere e riprendere: Aurora si ricorda a che punto era.
+9. Rendere il registro delle operazioni a sola aggiunta, seguendo
+   `scripts/hardening_db.md`. **Va fatto dopo il punto 6 e non prima**: la
+   migrazione riempie le colonne delle righe gia' scritte, ed e' l'ultimo
+   `UPDATE` che verra' mai eseguito su quella tabella.
+10. Programmare la copia di sicurezza notturna, seguendo
+    `docs/BACKUP_E_RIPRISTINO.md` (sezione 5). Finche' non e' fatta, la pagina
+    di diagnostica lo segnala in rosso.
+11. Controllare che vada tutto bene: <http://localhost:8000/diagnostica>
 12. Eseguire i test: `pytest`
 13. In caso di problemi, leggere il registro: `Get-Content logs\aurora.log -Tail 50`
+
+**Dalla riga di comando, per chi preferisce.** I dati iniziali si creano anche
+con `python scripts/seed.py`, che crea l'utente `admin` e stampa **una volta
+sola** la sua password. I due percorsi leggono lo stesso file
+(`config/dati_iniziali.toml`) e danno lo stesso sistema.
 
 ## Dove finiscono i file caricati
 
@@ -196,6 +209,75 @@ messaggio con un motivo fuori elenco viene attribuito lo stesso.
 **Chi vede la posta** e' deciso dalla stessa matrice dei documenti: un
 messaggio e' trattato come un documento di classificazione **Corrispondenza**
 nel progetto della versione a cui e' attaccato.
+
+## Come sta il sistema
+
+<http://localhost:8000/diagnostica> (serve il ruolo di creatore) risponde alla
+domanda «funziona tutto?» con dieci righe a semaforo. Ogni riga che non e'
+verde **dice che cosa fare** - non che cosa e' successo: che cosa fare, con i
+nomi veri delle cose.
+
+| Riga | Che cosa guarda |
+|---|---|
+| database | risponde? in quanti millisecondi? |
+| posta | da dove arriva, ultimo controllo riuscito, messaggi in 24 ore |
+| quarantena | quanti messaggi aspettano una persona |
+| copia di sicurezza | quando, com'e' andata, quanto ha copiato |
+| disco | usato, libero, e **fra quanti mesi finisce** al ritmo attuale |
+| archivio | file sul disco non riferiti, e file attesi che non ci sono |
+| registro | quante voci, a quando risale l'ultima |
+| contenuto | documenti, versioni, messaggi, persone attive |
+| segreto della posta | fra quanti giorni scade |
+| errori | quante righe di errore nelle ultime 24 ore |
+
+Gli stessi dati in forma leggibile da un programma di sorveglianza stanno in
+<http://localhost:8000/salute>, che risponde anche a chi non e' entrato e anche
+quando il database e' spento. Il verdetto complessivo e' il campo `semaforo`
+("verde", "giallo", "rosso"); `stato` continua a dire soltanto se il database
+risponde, come faceva prima. Se Aurora e' raggiungibile da fuori la rete
+dell'ufficio tecnico, la rotta si chiude scrivendo `HEALTH_TOKEN` nel `.env`.
+
+**Quando PostgreSQL e' spento** Aurora non mostra un errore tecnico: mostra una
+pagina che dice che il database non risponde e come riavviarlo, con la stessa
+identica frase che comparirebbe nella diagnostica.
+
+## Copie di sicurezza
+
+I dati di Aurora stanno in **due posti** e vanno copiati tutti e due: il
+database (chi ha caricato che cosa) e l'archivio dei file (il contenuto vero).
+
+```powershell
+python scripts\backup.py              una copia adesso
+python scripts\ripristino.py --elenca le copie disponibili
+python scripts\ripristino.py          ripristina l'ultima
+```
+
+L'archivio si copia **in modo incrementale** e la copia non si cancella mai;
+i salvataggi del database ruotano, e se ne tengono `BACKUP_KEEP`. Il
+salvataggio viene riletto prima di essere dichiarato buono: un file troncato
+esiste e non e' vuoto, e ci si accorgerebbe che non vale il giorno in cui serve.
+
+La procedura completa - la programmazione notturna con l'Utilita' di
+pianificazione di Windows, il ripristino, e **come si prova il ripristino su
+una macchina diversa prima della messa in esercizio** - e' in
+`docs/BACKUP_E_RIPRISTINO.md`.
+
+> Una copia di sicurezza che non e' mai stata ripristinata non e' una copia di
+> sicurezza: e' una speranza.
+
+## La guida in linea
+
+<http://localhost:8000/aiuto> (basta essere entrati): otto pagine con indice e
+ricerca - primi passi, come si carica un documento, versioni e stati, come si
+fa avanzare un progetto, come si scrive l'oggetto delle email, la quarantena,
+chi vede che cosa, glossario.
+
+Sono file Markdown in `docs/guida/`: li corregge chiunque con un editore di
+testo, la modifica si vede ricaricando la pagina, e si leggono anche senza
+aprire Aurora - il che conta il giorno in cui Aurora non si apre.
+
+Accanto ai campi non ovvi c'e' un **punto interrogativo** che porta alla
+sezione della guida che li spiega.
 
 ## Se nessuno riesce piu' a entrare
 

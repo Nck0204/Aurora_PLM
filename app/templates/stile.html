@@ -31,6 +31,8 @@
 {% from "components/riquadro.html" import riquadro %}
 {% from "components/dialogo.html" import dialogo, pulsante_apri, pulsante_chiudi %}
 {% from "components/avvisi.html" import avviso, notifica %}
+{% from "components/semaforo.html" import semaforo, controllo %}
+{% from "components/aiuto.html" import aiuto %}
 {% from "components/ricerca.html" import ricerca %}
 {% from "components/impaginazione.html" import impaginazione %}
 {% from "components/schede.html" import schede, scheda, schede_collegamento,
@@ -614,6 +616,63 @@
         {{ etichetta("errore", variante="errore") }}
         {{ etichetta("senza pallino", variante="accento", pallino=false) }}
         {{ etichetta("3 sessioni", pallino=false) }}
+    </div>
+
+    <h2 id="semaforo">Semaforo e riga di controllo</h2>
+    <p class="testo-tenue">
+        Il semaforo dice <strong>come sta una cosa</strong> a chi non conosce
+        il programma: verde non c'e' niente da fare, giallo c'e' qualcosa da
+        programmare, rosso qualcosa e' gia' rotto. Non esiste il quarto colore
+        per i casi incerti: un controllo che non sa rispondere e' giallo,
+        perche' non saperlo e' un problema da guardare.
+    </p>
+    <p class="testo-tenue">
+        Non va confuso con le etichette di stato qui sopra: quelle dicono a
+        che punto e' un documento o una versione, e non chiedono niente a
+        nessuno. Un semaforo rosso vuol dire che qualcuno deve fare qualcosa.
+    </p>
+
+    <div class="affianca">
+        {{ semaforo("verde") }}
+        {{ semaforo("giallo") }}
+        {{ semaforo("rosso") }}
+    </div>
+
+    <h3>La riga intera</h3>
+    <p class="testo-tenue">
+        La usano la pagina di diagnostica e i passi della configurazione
+        guidata. <strong>Ogni riga che non e' verde dice che cosa fare</strong>
+        - non che cosa e' successo: che cosa fare - e il dettaglio si apre solo
+        quando serve.
+    </p>
+
+    {{ controllo(controllo_verde) }}
+    {{ controllo(controllo_giallo) }}
+    {{ controllo(controllo_rosso) }}
+
+    <h2 id="punto-aiuto">Il punto interrogativo</h2>
+    <p class="testo-tenue">
+        Accanto a un campo il cui significato non e' ovvio a chi apre Aurora
+        per la prima volta. Porta a una <strong>sezione precisa</strong> di una
+        pagina della guida, non alla guida intera: chi lo preme vuole leggere
+        tre righe.
+    </p>
+    <p class="testo-tenue">
+        Non si mette su ogni campo: un'icona su ogni campo e' un'icona su
+        nessun campo. E non sostituisce il testo di aiuto sotto il campo, che
+        si legge senza fare niente e quindi viene prima.
+    </p>
+
+    <div class="colonna-stretta">
+        {{ campo("Classificazione " ~ aiuto("classificazione"), "esempio-classe",
+                 valore="Tecnico", sola_lettura=true,
+                 aiuto="La riga di aiuto sotto il campo si legge senza fare "
+                       "niente: viene prima del punto interrogativo.") }}
+        {{ campo("Stato del documento " ~ aiuto("stato-documento"),
+                 "esempio-stato-doc", valore="in verifica", sola_lettura=true) }}
+        {{ campo("Oggetto del messaggio " ~ aiuto("oggetto-email"),
+                 "esempio-oggetto", valore="RMS1100-24-110SW v2 [OFF] Offerta",
+                 sola_lettura=true, monospazio=true) }}
     </div>
 
     <h2>Avvisi in linea</h2>
