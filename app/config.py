@@ -10,6 +10,7 @@ loro tipo, la libreria si occupa di leggere il file .env, convertire i valori
 (le stringhe diventano numeri, percorsi, ecc.) e verificare che siano ammessi.
 """
 
+from datetime import date
 from pathlib import Path
 from typing import Literal
 
@@ -108,15 +109,61 @@ class Settings(BaseSettings):
     # Dettaglio dei registri: DEBUG, INFO, WARNING, ERROR, CRITICAL.
     LOG_LEVEL: str = "INFO"
 
-    # Come vengono spediti i messaggi di posta.
-    #   "locale" -> scritti su disco come file .eml, non partono davvero
-    #   "graph"  -> spediti tramite Microsoft Graph (Microsoft 365)
+    # Da dove Aurora prende i messaggi da archiviare.
+    #   "locale" -> file .eml letti da una cartella (MAIL_LOCAL_PATH)
+    #   "graph"  -> la casella aziendale, letta con Microsoft Graph
     # Literal impone che non siano ammessi altri valori: uno sbaglio di
     # battitura nel file .env viene scoperto all'avvio, non a runtime.
     MAIL_PROVIDER: Literal["locale", "graph"] = "locale"
 
     # Cartella dove finiscono i messaggi quando MAIL_PROVIDER = "locale".
     MAIL_LOCAL_PATH: Path = Path("storage/posta")
+
+    # --- I parametri della casella aziendale (MAIL_PROVIDER = "graph") -----
+    #
+    # Sono quattro e sono tutti obbligatori quando il provider e' "graph".
+    # Partono vuoti apposta: Aurora deve poter partire su una macchina in cui
+    # la registrazione applicativa non e' ancora stata fatta, e dirlo nella
+    # pagina di configurazione invece di rifiutarsi di accendersi. Chi li
+    # scrive non e' obbligato a toccare questo file: la pagina
+    # /posta/configurazione li salva nel .env da sola (D-081).
+    #
+    #   MAIL_TENANT_ID        l'organizzazione Microsoft 365 dell'azienda
+    #   MAIL_CLIENT_ID        la registrazione applicativa creata per Aurora
+    #   MAIL_CLIENT_SECRET    il segreto di quella registrazione
+    #   MAIL_MAILBOX_ADDRESS  l'indirizzo della casella da leggere
+    MAIL_TENANT_ID: str = ""
+    MAIL_CLIENT_ID: str = ""
+    MAIL_CLIENT_SECRET: str = ""
+    MAIL_MAILBOX_ADDRESS: str = ""
+
+    # Data di scadenza del segreto applicativo, scritta come 2027-03-15.
+    #
+    # E' una stringa e non una data perche' deve poter essere vuota e perche'
+    # un valore scritto storto non deve impedire ad Aurora di partire: la
+    # conversione la fa scadenza_segreto(), che davanti a una data illeggibile
+    # restituisce None e lo segnala nella diagnostica. Un programma che non si
+    # accende perche' qualcuno ha scritto "15/03/2027" e' un programma che ha
+    # scelto la lite invece del servizio.
+    MAIL_SECRET_EXPIRES_ON: str = ""
+
+    # Ogni quanti minuti Aurora va a vedere se nella casella c'e' posta nuova.
+    # Sotto il minuto non si scende: un controllo che parte piu' spesso di
+    # quanto duri si accavallerebbe con se stesso, e Microsoft comincerebbe a
+    # rispondere "troppe richieste".
+    MAIL_POLL_MINUTES: int = 5
+
+    # Se falso, il controllo periodico non parte: la posta si legge soltanto
+    # con il pulsante "Controlla adesso". Serve sulle macchine di collaudo e
+    # nei test, dove un lavoro che parte da solo mentre si sta guardando
+    # un'altra cosa e' solo un modo di non capire piu' niente.
+    MAIL_SCHEDULER_ENABLED: bool = True
+
+    # File in cui la fonte Graph tiene il segno di dove era arrivata: il
+    # gettone delta e l'ultimo istante elaborato. Non e' configurazione ed e'
+    # ricostruibile da solo (D-082); sta in un file e non in una tabella
+    # perche' e' un segnalibro, non un dato dell'azienda.
+    MAIL_GRAPH_STATE_PATH: Path = Path("storage/posta_graph.json")
 
     # Istruzioni per pydantic-settings: dove leggere e come comportarsi.
     model_config = SettingsConfigDict(
@@ -137,6 +184,36 @@ class Settings(BaseSettings):
     def mail_local_dir(self) -> Path:
         """Percorso assoluto della cartella dei messaggi scritti su disco."""
         return _absolute(self.MAIL_LOCAL_PATH)
+
+    @property
+    def mail_graph_state_file(self) -> Path:
+        """Percorso assoluto del segnalibro della fonte Graph."""
+        return _absolute(self.MAIL_GRAPH_STATE_PATH)
+
+    @property
+    def mail_poll_seconds(self) -> int:
+        """Ogni quanti secondi parte il controllo periodico della posta.
+
+        Il minimo e' un minuto: sotto, il controllo si accavallerebbe con se
+        stesso e Microsoft comincerebbe a rispondere "troppe richieste".
+        """
+        return max(60, self.MAIL_POLL_MINUTES * 60)
+
+    def scadenza_segreto(self) -> date | None:
+        """La data di scadenza del segreto applicativo, se e' leggibile.
+
+        None quando il parametro e' vuoto **oppure** quando e' scritto in un
+        modo che non si riesce a leggere. La differenza fra i due casi la dice
+        `mail_config`, che e' il posto in cui si compone il messaggio per chi
+        guarda: qui si risponde alla sola domanda "che data e'?".
+        """
+        testo = (self.MAIL_SECRET_EXPIRES_ON or "").strip()
+        if not testo:
+            return None
+        try:
+            return date.fromisoformat(testo)
+        except ValueError:
+            return None
 
     @property
     def product_code_config(self) -> Path:

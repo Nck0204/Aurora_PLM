@@ -45,6 +45,7 @@ from app.routers import customers as router_customers
 from app.routers import documents as router_documents
 from app.routers import emails as router_emails
 from app.routers import home as router_home
+from app.routers import mail_config as router_mail_config
 from app.routers import permissions as router_permissions
 from app.routers import phases as router_phases
 from app.routers import products as router_products
@@ -53,6 +54,7 @@ from app.routers import storico as router_storico
 from app.routers import style as router_style
 from app.routers import users as router_users
 from app.routers import versions as router_versions
+from app.services import mail_scheduler
 from app.services.configuration import registra_configurazione
 from app.services.cookies import applica_cookie
 from app.services.csrf import verifica_csrf
@@ -177,13 +179,21 @@ async def lifespan(app: FastAPI):
 
     logger.info("Avvio di %s versione %s", settings.APP_NAME, VERSION)
     logger.info("Archivio file: %s", settings.storage_dir)
-    logger.info("Invio posta: modalita' %s", settings.MAIL_PROVIDER)
+    logger.info("Lettura della posta: modalita' %s", settings.MAIL_PROVIDER)
 
     _registra_la_configurazione()
 
+    # Il controllo periodico della posta. Parte solo con MAIL_PROVIDER=graph e
+    # solo se MAIL_SCHEDULER_ENABLED e' vero: la decisione e le sue ragioni
+    # stanno tutte in app/services/mail_scheduler.py, qui c'e' solo
+    # l'accensione.
+    mail_scheduler.avvia()
+
     yield
 
-    # Alla chiusura: si restituiscono al sistema le connessioni al database.
+    # Alla chiusura: si spegne l'orologio e si restituiscono al sistema le
+    # connessioni al database.
+    mail_scheduler.ferma()
     logger.info("Arresto di %s", settings.APP_NAME)
     engine.dispose()
 
@@ -438,6 +448,12 @@ app.include_router(router_home.router)
 app.include_router(router_auth.router)
 app.include_router(router_customers.router)
 app.include_router(router_documents.router)
+# La configurazione della posta va registrata **prima** delle pagine della
+# posta, e non e' un dettaglio: routers/emails.py dichiara `/posta/{message_id}`,
+# e FastAPI prova le rotte nell'ordine in cui sono state registrate. Al
+# contrario, l'indirizzo `/posta/configurazione` finirebbe in quella rotta, che
+# aspetta un identificativo e risponderebbe che non e' valido.
+app.include_router(router_mail_config.router)
 app.include_router(router_emails.router)
 app.include_router(router_products.router)
 app.include_router(router_versions.router)

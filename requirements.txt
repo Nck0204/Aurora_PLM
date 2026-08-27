@@ -30,6 +30,17 @@ argon2-cffi==25.1.0
 # --- Lavori pianificati ----------------------------------------------------
 APScheduler==3.11.3
 
+# --- Casella di posta aziendale (sessione 11) ------------------------------
+# Autenticazione a Microsoft 365 con il flusso a credenziali applicative.
+# Serve solo con MAIL_PROVIDER=graph: il programma la importa dentro la
+# funzione che chiede il gettone (app/services/graph_api.py), cosi' Aurora
+# parte e i test girano anche su una macchina in cui non e' installata.
+msal==1.38.0
+
+# Le chiamate a Microsoft Graph. Era gia' qui come dipendenza dei test - la
+# usa il finto browser di Starlette - e dalla sessione 11 la usa anche il
+# programma: una libreria HTTP sola, non due (D-083).
+httpx==0.28.1
+
 # --- Test ------------------------------------------------------------------
 pytest==9.1.1
-httpx==0.28.1

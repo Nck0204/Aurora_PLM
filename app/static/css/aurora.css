@@ -795,6 +795,27 @@ fieldset.gruppo-campi legend {
     font-weight: 600;
 }
 
+/* Un campo con accanto il suo pulsante, allineato in fondo cosi' che stia
+   sulla riga della casella e non su quella dell'etichetta. Sotto i 520 pixel
+   il pulsante va a capo e diventa largo quanto il campo.
+   Serve alla pagina di configurazione della posta, dove ogni parametro ha il
+   suo VERIFICA. */
+.riga-parametro {
+    display: flex;
+    gap: var(--spazio-3);
+    align-items: flex-end;
+    flex-wrap: wrap;
+}
+
+.riga-parametro > .campo,
+.riga-parametro > .gruppo-campi {
+    flex: 1 1 320px;
+}
+
+.riga-parametro-azione {
+    padding-bottom: var(--spazio-2);
+}
+
 /* La riga in fondo al modulo, con l'azione principale e l'annulla. */
 .modulo-azioni {
     display: flex;

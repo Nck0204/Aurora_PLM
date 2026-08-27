@@ -56,7 +56,13 @@ logger = logging.getLogger("aurora.configurazione")
 
 # I parametri di cui si registra l'impronta e non il valore. Sono i segreti:
 # quello che serve sapere e' se sono cambiati, non che cosa sono diventati.
-PARAMETRI_RISERVATI = ("SECRET_KEY",)
+#
+# Dalla sessione 11 sono due: alla chiave di firma dei cookie si e' aggiunto il
+# segreto della registrazione applicativa con cui Aurora legge la casella
+# aziendale. Chi lo avesse potrebbe leggere la posta dell'azienda, e il
+# registro delle operazioni lo puo' esportare in CSV chiunque amministri
+# Aurora.
+PARAMETRI_RISERVATI = ("SECRET_KEY", "MAIL_CLIENT_SECRET")
 
 # Quello che si scrive al posto di un file di configurazione che non c'e'.
 # Non e' un errore da fermare qui - il programma continua a funzionare anche
@@ -139,6 +145,18 @@ def configurazione_effettiva() -> dict[str, Any]:
         "MAX_UPLOAD_MB": settings.MAX_UPLOAD_MB,
         "MAIL_PROVIDER": settings.MAIL_PROVIDER,
         "MAIL_LOCAL_PATH": str(settings.mail_local_dir),
+        # I parametri della casella aziendale. Il segreto non c'e': la sua
+        # impronta viene aggiunta piu' sotto insieme a quella della chiave dei
+        # cookie. La scadenza del segreto si registra perche' e' la data che,
+        # arrivando, ferma la lettura della posta: sapere quando e' stata
+        # scritta o corretta e' esattamente il genere di domanda che si fa chi
+        # indaga su una posta che non arriva piu'.
+        "MAIL_TENANT_ID": settings.MAIL_TENANT_ID,
+        "MAIL_CLIENT_ID": settings.MAIL_CLIENT_ID,
+        "MAIL_MAILBOX_ADDRESS": settings.MAIL_MAILBOX_ADDRESS,
+        "MAIL_SECRET_EXPIRES_ON": settings.MAIL_SECRET_EXPIRES_ON,
+        "MAIL_POLL_MINUTES": settings.MAIL_POLL_MINUTES,
+        "MAIL_SCHEDULER_ENABLED": settings.MAIL_SCHEDULER_ENABLED,
         "PRODUCT_CODE_CONFIG": str(settings.product_code_config),
         "DOCUMENT_TYPES_CONFIG": str(settings.document_types_config),
     }

@@ -253,6 +253,12 @@ CATALOGO: dict[str, TipoAzione] = _tipi(
     ("email_reason.updated", "Motivo della posta modificato", GRUPPO_POSTA),
     ("email_reason.deactivated", "Motivo della posta disattivato", GRUPPO_POSTA),
     ("email_reason.reactivated", "Motivo della posta riattivato", GRUPPO_POSTA),
+    # La sessione 11 aggiunge la pagina di configurazione della posta, che e'
+    # la prima pagina di Aurora che modifica il file .env. Il fatto va
+    # registrato come qualunque altra modifica: chi, quando, e quali parametri.
+    # Il valore del segreto no: il registro deve dire che e' cambiato, non che
+    # cosa e' diventato.
+    ("mail_config.updated", "Configurazione della posta modificata", GRUPPO_POSTA),
     # --- Sistema ---------------------------------------------------------
     (ACTION_CONFIG_LOADED, "Configurazione letta all'avvio", GRUPPO_SISTEMA),
     (ACTION_CONFIG_CHANGED, "Configurazione cambiata", GRUPPO_SISTEMA),

@@ -51,6 +51,7 @@ Vincoli che discendono dal contesto e che non cambiano:
 | Password | argon2-cffi |
 | Lettura e scrittura di PDF | pypdf (solo per la filigrana, D-046) |
 | Lavori pianificati | APScheduler |
+| Casella di posta aziendale | msal (autenticazione) + httpx (chiamate a Microsoft Graph) |
 | Test | pytest + httpx |
 
 Le versioni bloccate stanno in `requirements.txt`. Non aggiungere dipendenze
@@ -113,6 +114,15 @@ difficile una soluzione, si cambia la soluzione, non la regola.
    Il file `.env` non entra in git; `.env.example` si', aggiornato ogni volta
    che si aggiunge un parametro.
 
+   **Dalla sessione 11 quel file lo puo' scrivere anche il programma**, e
+   l'unico che lo fa e' `app/services/env_file.py` (D-081): la pagina
+   «Configurazione posta» ci salva i parametri della casella aziendale, perche'
+   chi li riceve dall'ufficio informatico non ha accesso al server. La regola
+   non cambia - la configurazione vive ancora e soltanto nel `.env` - cambia
+   chi la scrive. Chi aggiunge una pagina che modifica la configurazione passa
+   di li', riscrive **solo la riga del parametro cambiato** e lascia stare i
+   commenti.
+
    Quando un parametro non e' una riga sola - un'espressione regolare con le
    sue etichette, una tabella di corrispondenze - va in un file dentro
    `config/`, e nel `.env` ci finisce il suo percorso. Quei file **entrano in
@@ -156,7 +166,9 @@ aurora/
 │                       una riga sola: la scomposizione dei codici prodotto,
 │                       l'elenco dei tipi di documento
 ├── docs/                  STATO.md, DECISIONI.md, MODELLO_DATI.md,
-│                       GUIDA_STILE.md
+│                       GUIDA_STILE.md, piu' RICHIESTA_IT.md - il documento
+│                       da mandare all'ufficio informatico per farsi dare
+│                       l'accesso alla casella aziendale
 ├── scripts/               procedure operative (installazione, manutenzione).
 │                       Fra queste: hardening_db.sql, che rende audit_logs
 │                       a sola aggiunta; verifica_audit.py, che ricalcola
@@ -169,9 +181,12 @@ aurora/
 │   ├── tmp/               i file a meta' scrittura. In condizioni normali e'
 │   │                   vuota: quello che ci resta e' un caricamento
 │   │                   interrotto, e non lo riferisce nessuno
-│   └── posta/             la cartella della posta (MAIL_LOCAL_PATH): i .eml
-│                       da leggere, piu' elaborate/ e quarantena/ dove
-│                       finiscono dopo l'archiviazione
+│   ├── posta/             la cartella della posta (MAIL_LOCAL_PATH): i .eml
+│   │                   da leggere, piu' elaborate/ e quarantena/ dove
+│   │                   finiscono dopo l'archiviazione
+│   └── posta_graph.json   il segnalibro della casella aziendale: dove Aurora
+│                       era arrivata a leggere. Non e' configurazione, si
+│                       ricostruisce da solo, cancellarlo non fa danni (D-082)
 └── logs/                  registro applicativo rotativo (NON in git)
 ```
 
@@ -248,11 +263,25 @@ Dove mettere una cosa nuova:
   template che trasforma un valore in un'etichetta contiene una regola, e le
   regole non si provano con un test se stanno dentro l'HTML
   (`docs/GUIDA_STILE.md`, sezione 5);
-- **una sorgente di posta nuova** (Microsoft Graph, IMAP, una cartella su un
-  altro disco) → una classe che rispetta l'interfaccia `FonteEmail` in
+- **una sorgente di posta nuova** (IMAP, una cartella su un altro disco) → una
+  classe che rispetta l'interfaccia `FonteEmail` in
   `app/services/mail_source.py`, e una riga in `fonte_configurata()`. Sono
   quattro metodi e sono tutti quelli che servono; il motore di
-  `app/services/emails.py` non va toccato (D-076);
+  `app/services/emails.py` non va toccato (D-076). Ce ne sono gia' due,
+  `FonteLocale` e `FonteGraph`, e la seconda e' entrata **senza toccare una
+  riga** del motore: se dovesse servire modificarlo, l'astrazione e' sbagliata
+  e si corregge li';
+- **una chiamata nuova a Microsoft 365** → `app/services/graph_api.py`, che e'
+  l'unico file che parla con Microsoft. Da li' **non esce mai un errore
+  tecnico grezzo**: ogni guasto diventa un `ErroreGraph` con la frase italiana
+  da mostrare e il dettaglio da registrare, e quando si puo' dice quale
+  parametro della configurazione e' sbagliato;
+- **un lavoro che deve girare a orologio** → una funzione in `app/services/`,
+  piu' l'accensione in `app/main.py` dentro `lifespan`. Il modello e'
+  `app/services/mail_scheduler.py`: il lavoro pianificato e il pulsante che lo
+  fa partire a mano chiamano **la stessa funzione**, protetta da un blocco
+  preso senza aspettare, e quella funzione **non solleva mai** - un lavoro
+  pianificato che muore non riparte piu' (D-080);
 - **una regola su come si legge un messaggio** (un prefisso di risposta in
   piu', un modo diverso di scomporre l'oggetto) → `app/services/email_parsing.py`,
   che **non tocca il database**: sono funzioni pure sui byte di un `.eml`, e si
@@ -364,6 +393,15 @@ Tutti dalla radice del progetto (`aurora/`), con l'ambiente virtuale attivo:
   byte a zero va archiviato lo stesso e messo in quarantena, con scritto
   perche'. "Mai scartare, mai bloccarsi": un messaggio che Aurora non capisce e'
   comunque un messaggio che l'azienda ha ricevuto (D-070, D-074, D-075).
+- **Cancellare un messaggio dalla casella aziendale, o segnarlo come letto.**
+  Un messaggio archiviato viene **spostato** in `Elaborate` o in `Quarantena`
+  (D-079); lo stato di lettura appartiene alla casella di chi la usa, e Aurora
+  non e' il suo programma di posta.
+- **Far uscire da `app/services/graph_api.py` un errore tecnico grezzo.** Un
+  codice HTTP, un codice `AADSTS` o una traccia di Python mostrati a chi guarda
+  una pagina sono un guasto in piu', non un'informazione in piu': il dettaglio
+  va nel registro su file, e a chi guarda va una frase in italiano che dice
+  che cosa fare.
 - Mettere una password o un indirizzo di server dentro un file `.py`.
 - Modificare a mano una migrazione gia' applicata in produzione: se ne scrive
   una nuova.

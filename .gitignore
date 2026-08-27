@@ -11,7 +11,13 @@ __pycache__/
 
 # Configurazione locale: contiene segreti, non deve mai finire in git.
 # In repository resta solo .env.example.
+#
+# Le altre due righe sono i file che nascono quando la pagina
+# «Configurazione posta» salva i parametri (D-081): la copia di sicurezza del
+# file di prima e il file a meta' scrittura. Contengono gli stessi segreti.
 .env
+.env.precedente
+.env.tmp
 
 # Archivio dei file caricati: sono dati aziendali, non codice.
 # La cartella resta in git (grazie a .gitkeep), il contenuto no.

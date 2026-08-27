@@ -32,6 +32,7 @@ impronta SHA-256 e non con il loro:
 storage/objects/3f/9a/3f9a2c11...   il file
 storage/tmp/                        i file a meta' scrittura
 storage/posta/                      la cartella della posta (MAIL_LOCAL_PATH)
+storage/posta_graph.json            dove Aurora era arrivata a leggere la casella
 ```
 
 Il nome originale, il tipo e tutti i metadati stanno nel database. Due
@@ -122,9 +123,41 @@ storage/posta/elaborate/     quelli archiviati e attribuiti
 storage/posta/quarantena/    quelli che aspettano una persona
 ```
 
-Il collegamento alla casella aziendale (Microsoft Graph) arriva con la sessione
-11: fino ad allora `MAIL_PROVIDER=graph` si ferma con un messaggio che lo
-spiega, invece di far credere che la casella sia vuota.
+Con `graph`, Aurora si collega alla **casella aziendale** di Microsoft 365,
+legge i messaggi non letti della posta in arrivo e, dopo averli archiviati, li
+sposta in due cartelle della casella stessa:
+
+```
+Posta in arrivo    i messaggi ancora da leggere
+Elaborate          quelli archiviati e attribuiti
+Quarantena         quelli che aspettano una persona
+```
+
+Le due cartelle le crea Aurora la prima volta che servono. **Dalla casella non
+si cancella mai niente.**
+
+**Come si configura la casella.** Tutto da
+<http://localhost:8000/posta/configurazione> (serve il ruolo di creatore),
+senza toccare nessun file di testo: ogni campo ha accanto un pulsante
+**Verifica** che prova il collegamento e dice subito che cosa non torna. I
+parametri li fornisce l'ufficio informatico: il documento gia' pronto da
+mandargli - con i comandi PowerShell e la spiegazione del perche' - e'
+`docs/RICHIESTA_IT.md`.
+
+Serve la libreria `msal`, che si installa con `pip install -r requirements.txt`
+insieme a tutto il resto. Se manca, la pagina di configurazione lo dice invece
+di rompersi.
+
+**Ogni quanto si controlla.** Con `MAIL_PROVIDER=graph` Aurora guarda la
+casella ogni `MAIL_POLL_MINUTES` minuti (cinque, di partenza). Due controlli
+non si sovrappongono mai, e il pulsante **Controlla adesso** nella pagina della
+posta ne fa partire uno subito. Con `MAIL_PROVIDER=locale` l'orologio non parte:
+i file `.eml` li mette una persona, che puo' premere il pulsante subito dopo.
+
+**Quando scade il segreto dell'applicazione** la posta smette di arrivare, e
+Microsoft non avvisa nessuno. Per questo la data di scadenza e' un parametro
+(`MAIL_SECRET_EXPIRES_ON`): Aurora la segnala nella pagina di configurazione a
+partire da trenta giorni prima, e sempre piu' forte man mano che si avvicina.
 
 **Come si prova, senza toccare nessuna casella:**
 
@@ -135,8 +168,8 @@ python scripts/genera_email_prova.py
 Scrive ventiquattro messaggi che esercitano tutti i casi - oggetti corretti,
 con `R:` e `Fwd:` davanti, senza codice, risposte in conversazione, allegati
 grandi e accentati, un file malformato - usando i codici dei prodotti veri del
-database. Poi si apre <http://localhost:8000/posta> e si preme **Elabora la
-posta**. Rieseguendo tutto una seconda volta non compare nessun doppione.
+database. Poi si apre <http://localhost:8000/posta> e si preme **Controlla
+adesso**. Rieseguendo tutto una seconda volta non compare nessun doppione.
 
 **Come Aurora capisce a chi appartiene un messaggio**, nell'ordine:
 

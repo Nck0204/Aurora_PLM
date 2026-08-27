@@ -1,6 +1,6 @@
 # Stato di avanzamento
 
-Ultimo aggiornamento: **26 agosto 2026**, fine della sessione 10.
+Ultimo aggiornamento: **27 agosto 2026**, fine della sessione 11.
 
 Il progetto e' diviso in 13 sessioni di lavoro. Questa tabella dice a che
 punto siamo. Va aggiornata **alla fine di ogni sessione**, prima del commit.
@@ -24,11 +24,18 @@ Stati possibili: `da fare` · `in corso` · `completata`
 | 8 | Fasi e flusso di avanzamento | **completata** | Amministrazione dei modelli di fasi immutabili e versionati, barra dell'avanzamento con date e durate, avanzamento diretto e per richiesta con approvazione o rifiuto, divieto di tornare indietro da una fase che lo blocca, chiusura del progetto e sola lettura, storico completo. Dettaglio sotto. |
 | 9 | Registro delle operazioni | **completata** | Catalogo di 58 azioni registrate, descrizione in italiano su ogni voce, catena di impronte SHA-256, permessi PostgreSQL che rendono `audit_logs` a sola aggiunta, pagina di consultazione con filtri e ricerca, esportazione CSV registrata, scheda "Storico" su cinque tipi di oggetto, tre script operativi. Dettaglio sotto. |
 | 10 | Notifiche e posta | **completata** | Il motore di acquisizione: interfaccia della fonte e fonte locale a file `.eml`, archiviazione del messaggio e degli allegati per impronta, quattro rami di attribuzione, quarantena con assegnazione a mano estesa alla conversazione, motivi configurabili dall'interfaccia, ricerca su mittente/oggetto/contenuto/date. **Le notifiche non sono state chieste e restano da ricollocare.** Dettaglio sotto. |
-| 11 | Lavori pianificati e manutenzione | da fare | APScheduler, controlli notturni, procedura di backup e di ripristino. **Piu' il collegamento vero a Microsoft Graph**, cioe' la seconda `FonteEmail`: l'interfaccia c'e' dalla sessione 10 e il motore non va toccato. |
+| 11 | La casella aziendale | **completata** | La seconda `FonteEmail`: Microsoft Graph con le credenziali applicative, il MIME integrale, le delta query con il segnalibro, lo spostamento in `Elaborate` e `Quarantena`, il controllo periodico con APScheduler e il blocco, la pagina di configurazione con VERIFICA su ogni campo, la sorveglianza della scadenza del segreto, `docs/RICHIESTA_IT.md`. **Il motore non e' stato toccato.** I controlli notturni e il backup non sono stati chiesti e restano da ricollocare. Dettaglio sotto. |
 | 12 | Rapporti ed esportazioni | da fare | Cruscotto, rapporti di avanzamento, esportazione in CSV e PDF. |
 | 13 | Messa in produzione | da fare | Irrobustimento, prestazioni, installazione sul server aziendale, manuale d'uso, consegna. |
 
-> **Nota sul piano.** La **sessione 10 e' cambiata a meta'**: era "Notifiche
+> **Nota sul piano.** La **sessione 11 si e' stretta**: era "Lavori pianificati
+> e manutenzione" e l'azienda ha chiesto il collegamento vero alla casella
+> aziendale, cioe' la seconda meta' della posta. APScheduler e' arrivato lo
+> stesso, perche' la casella si controlla a orologio; i **controlli notturni** e
+> la **procedura di backup e di ripristino** non sono stati chiesti e restano da
+> ricollocare, probabilmente nella 13.
+>
+> La **sessione 10 era cambiata a meta'**: era "Notifiche
 > e posta" e l'azienda ha chiesto la sola meta' della posta, cioe' il motore di
 > acquisizione. **Le notifiche non sono state fatte e non hanno piu' una
 > sessione loro**: la tabella delle notifiche, i modelli dei messaggi e l'invio
@@ -66,6 +73,217 @@ Stati possibili: `da fare` · `in corso` · `completata`
 > comportamento. Resta una **domanda aperta**: le tabelle di distinta base e
 > articoli sono del rilascio R3 e in questo piano non compaiono; va chiarito se
 > le 13 sessioni coprono il solo R1 o arrivano anche a R2 e R3.
+
+---
+
+## Sessione 11 — La casella aziendale · completata (27 agosto 2026)
+
+La sessione aveva un vincolo scritto nel titolo del requisito: **il motore di
+elaborazione non va toccato.** Se ci si fosse accorti di doverlo modificare,
+l'astrazione della sessione 10 sarebbe stata sbagliata e andava corretta li'.
+
+Non e' successo. `FonteGraph` e' entrata rispettando le stesse quattro firme di
+`FonteLocale`, e `app/services/emails.py` **non ha una riga diversa da ieri**.
+E' il conto che torna: l'interfaccia scritta prima della seconda
+implementazione (D-076) e' servita esattamente a quello per cui era stata
+scritta.
+
+> **Nessuna migrazione.** Non c'e' nessuna tabella nuova e nessuna colonna
+> nuova. Quello che la sessione aggiunge al database sono soltanto righe:
+> i messaggi archiviati, e una voce di registro quando qualcuno cambia la
+> configurazione della posta.
+
+### Le quattro cose che c'erano da decidere
+
+| Domanda | Risposta | Dove |
+|---|---|---|
+| Che cosa si conserva di un messaggio? | il MIME integrale, non i campi che Graph offre gia' pronti | D-077 |
+| Come si sa che cosa c'e' di nuovo? | delta query, con il filtro sulla data come riserva; il segno avanza solo a giro finito | D-078 |
+| Che fine fa un messaggio archiviato? | si sposta in `Elaborate` o `Quarantena`, non si cancella e non si segna come letto | D-079 |
+| Dove si scrivono i parametri? | nel `.env`, ma dall'interfaccia | D-081 |
+
+### Il pezzo su cui vale la pena tornare: il segno avanza solo a giro finito
+
+Le delta query rispondono alla domanda "che cosa e' **cambiato** da quando ho
+guardato l'ultima volta". E' quello che le rende efficienti, ed e' anche la
+trappola: un messaggio che Aurora ha elencato ma non e' riuscita a elaborare
+non e' cambiato, quindi al giro successivo **non ricomparirebbe** - resterebbe
+nella posta in arrivo, non letto, per sempre.
+
+La regola e' che il gettone delta si salva **solo quando ogni messaggio
+elencato e' stato spostato fuori dalla posta in arrivo**. Se anche uno solo e'
+rimasto indietro, il segno non avanza: al controllo successivo Microsoft
+ripropone la stessa finestra, i messaggi gia' archiviati vengono riconosciuti
+dal loro `Message-ID` e spostati allora, e quello rimasto indietro viene
+riprovato.
+
+E' la stessa proprieta' della fonte locale, dove il file resta nella cartella
+finche' non e' andato a posto, tradotta su una casella. C'e' un test che la
+verifica muovendo un messaggio per volta e guardando il segnalibro.
+
+**Un'eccezione, e ha una ragione.** Se lo spostamento fallisce con un 403 -
+cioe' perche' all'applicazione manca il permesso di spostare, come succede con
+`Mail.Read` e basta - il segno avanza lo stesso. Quel 403 lo darebbe anche fra
+un'ora e domani: tenere il segno indietro vorrebbe dire riscaricare tutta la
+posta in arrivo a ogni controllo per riprovare una cosa che non riuscira' mai.
+Nel registro resta scritto, messaggio per messaggio, quale permesso manca.
+
+### Realizzato
+
+**`app/services/graph_api.py`** — il collegamento vero e proprio: il gettone,
+le chiamate, gli errori. Meta' del file sono gli errori, ed e' voluto: Aurora
+gira su una macchina in cui non c'e' nessuno seduto davanti, e l'unica cosa che
+resta di un guasto e' la frase scritta nel registro.
+
+**Non esce mai di li' un errore tecnico grezzo.** Ogni guasto diventa un
+`ErroreGraph` con dentro due cose: la frase in italiano da mostrare - che
+quando si puo' dice **quale parametro** e' sbagliato - e il dettaglio vero
+(codice HTTP, codice `AADSTS`, corpo della risposta), che finisce nel registro
+su file e da nessun'altra parte.
+
+| Che cosa succede | Come si vede | Che cosa fa Aurora |
+|---|---|---|
+| la rete non c'e' | httpx non si collega | si ferma e lo dice; al controllo dopo riprova |
+| il gettone e' scaduto | HTTP 401 | ne chiede uno nuovo e **rifa' la chiamata**, una volta sola |
+| troppe richieste | HTTP 429 o 503 | aspetta i secondi di `Retry-After` e riprova, fino a tre volte |
+| manca un permesso | HTTP 403 | si ferma: riprovare non serve, serve una persona |
+
+Il gettone si rinnova anche **prima** di scadere - si tiene in memoria con la
+sua ora di scadenza e si rinnova a cinque minuti dalla fine - e non finisce mai
+ne' su disco ne' nel database.
+
+**`FonteGraph`, in `app/services/mail_source.py`** — le stesse quattro
+operazioni di `FonteLocale`, su una casella:
+
+    la cartella "Posta in arrivo"  <->  MAIL_LOCAL_PATH
+    la cartella "Elaborate"        <->  MAIL_LOCAL_PATH/elaborate/
+    la cartella "Quarantena"       <->  MAIL_LOCAL_PATH/quarantena/
+
+Le due cartelle di arrivo le crea Aurora la prima volta che servono. Il
+messaggio si scarica da `/$value`, cioe' il **MIME integrale**: e' identico al
+contenuto di un file `.eml`, ed e' il motivo per cui `email_parsing.py` non ha
+dovuto cambiare (D-077).
+
+**`app/services/mail_scheduler.py`** — l'orologio e il blocco. APScheduler ogni
+`MAIL_POLL_MINUTES` minuti (cinque, di partenza) e il pulsante «Controlla
+adesso» chiamano **la stessa funzione**, protetta da un blocco preso senza
+aspettare: chi arriva mentre un controllo e' in corso riceve una risposta che
+lo dice e se ne va, invece di mettersi in coda (D-080).
+
+Il controllo periodico non parte con `MAIL_PROVIDER=locale`: la cartella dei
+file `.eml` non si riempie da sola.
+
+**`app/services/mail_config.py` e la pagina `/posta/configurazione`** — otto
+parametri, ciascuno con il suo pulsante **VERIFICA** che prova il valore
+**scritto nel modulo** e risponde subito. Con un pulsante solo in fondo, la
+risposta a quattro parametri sbagliati sarebbe "non funziona"; cosi' e'
+"l'organizzazione indicata non esiste" oppure "il segreto e' scaduto", e si sa
+quale riga del foglio riguardare.
+
+La pagina scrive il `.env` da sola (D-081), riscrivendo **solo la riga del
+parametro cambiato**: i commenti di quel file sono la sola documentazione che
+chi amministra il server abbia sottomano. La copia precedente resta accanto
+come `.env.precedente`.
+
+**Senza JavaScript funziona lo stesso**: i pulsanti VERIFICA sono normali
+pulsanti di invio con `formaction`, e la stessa rotta risponde con il frammento
+a HTMX e con la pagina intera a chi lo script non ce l'ha (D-036).
+
+**La diagnostica, in cima alla pagina.** Chi apre quella pagina lo fa quasi
+sempre per una domanda sola - *"perche' non arriva piu' la posta?"* - e la
+risposta sta sopra il modulo, non sotto: da dove arriva la posta, se i
+parametri ci sono tutti, se l'orologio gira e quando tocchera' di nuovo, com'e'
+andato l'ultimo controllo, e **quando scade il segreto**.
+
+**La scadenza del segreto, con evidenza crescente** (punto 8). Quando il
+segreto dell'applicazione scade, la posta smette di arrivare e Microsoft non
+avvisa nessuno: da un giorno all'altro non arriva piu' niente. Sapendo la data
+si segnala prima, e sempre piu' forte:
+
+| Quanto manca | Come si vede |
+|---|---|
+| piu' di 30 giorni | niente: sarebbe rumore |
+| da 30 a 15 giorni | una nota, per programmare il rinnovo |
+| da 14 a 8 giorni | avviso giallo |
+| 7 giorni o meno, e dopo la scadenza | avviso rosso |
+
+**`docs/RICHIESTA_IT.md`** — il documento da mandare all'ufficio informatico,
+scritto per chi amministra Microsoft 365 e non ha mai sentito parlare di
+Aurora. Cinque richieste, ciascuna con il perche', il comando PowerShell gia'
+pronto e che cosa mandare indietro; piu' un elenco esplicito di **quello che
+non chiediamo**, che e' la prima domanda che si fa chi riceve una richiesta di
+accesso alla posta aziendale.
+
+Dentro c'e' anche la restrizione a una sola casella (`Application Access
+Policy`, con il comando e i due comandi di verifica) - che **chiediamo noi**,
+perche' `Mail.Read` di tipo applicazione, da solo, varrebbe su tutte le caselle
+del tenant - e la regola di trasporto che copia sulla casella i messaggi con un
+codice prodotto nell'oggetto.
+
+### Verificato
+
+- **I quattro criteri di accettazione.**
+  1. Con `MAIL_PROVIDER=locale` non e' cambiato niente: i **467 test** della
+     sessione 10 passano senza una modifica.
+  2. Con `MAIL_PROVIDER=graph` e parametri sbagliati la pagina dice quale
+     parametro e' sbagliato, in italiano. Provato nel browser contro il
+     servizio vero di Microsoft: con un identificativo di organizzazione
+     inesistente la pagina risponde *«L'organizzazione indicata non e' stata
+     riconosciuta da Microsoft. Controlla l'identificativo
+     dell'organizzazione...»*, e nel registro su file resta il codice
+     `AADSTS90002` per intero.
+  3. I test con le risposte di Graph simulate ci sono: elaborazione,
+     limitazione di frequenza con `Retry-After` rispettato, gettone scaduto
+     rinnovato e chiamata rifatta.
+  4. `docs/RICHIESTA_IT.md` e' scritto per chi non conosce il progetto.
+- **536 test passano** (467 prima della sessione, 69 nuovi in
+  `tests/test_posta_graph.py`).
+- **La catena delle impronte del registro e' integra** dopo le 136 voci:
+  `scripts/verifica_audit.py` lo conferma.
+- **Un difetto trovato provando nel browser**, e vale la pena saperlo: la
+  costruzione dell'oggetto `msal` stava **fuori** dal `try`. Non e' un
+  dettaglio di stile - msal, quando costruisce l'applicazione, va a chiedere a
+  Microsoft se l'organizzazione esiste, e con un tenant scritto storto solleva
+  li', prima di qualunque richiesta. Il risultato era una pagina di errore 500
+  al posto della frase che spiega. Adesso la costruzione e la richiesta stanno
+  nello stesso `try`, e c'e' un ramo apposta per quel `ValueError`.
+
+### Come si simula Microsoft nei test
+
+Non con un finto server e non con una libreria di simulazione: con
+`httpx.MockTransport`, che sostituisce la rete **dentro** httpx.
+`FintaCasella`, in `tests/test_posta_graph.py`, risponde come risponderebbe
+Graph - stesse chiavi, stessi codici HTTP, stessa intestazione `Retry-After` -
+e tiene il conto di che cosa le e' stato chiesto.
+
+E' quello che permette di provare le due cose che su una casella vera non si
+riescono a far capitare quando si vuole: **il 429 con `Retry-After`** e **il
+gettone rifiutato a meta' giro**. Nessuno di questi test ha bisogno di `msal`,
+perche' il gettone si inietta: girano anche su una macchina in cui la libreria
+non e' installata.
+
+### Quello che resta da fare, e perche'
+
+- **La sessione 11 nel piano era piu' larga di cosi'.** Il titolo era "Lavori
+  pianificati e manutenzione": APScheduler c'e', ed e' arrivato con la posta,
+  ma i **controlli notturni** e la **procedura di backup e di ripristino** non
+  sono stati chiesti e restano da fare. Vanno ricollocati, probabilmente nella
+  13.
+- **La pagina `/diagnostica` non esiste ancora**, e la voce di menu e' ancora
+  spenta. La diagnostica di **questa** sessione sta dove serve, cioe' in cima
+  alla pagina della configurazione posta: chi ha un problema con la posta apre
+  quella. Una pagina di diagnostica generale - disco, database, archivio,
+  registro - resta da fare.
+- **Il collegamento non e' mai stato provato su una casella vera**, per la
+  ragione piu' semplice: la registrazione applicativa non esiste ancora. E'
+  esattamente quello che `docs/RICHIESTA_IT.md` serve a ottenere. Quello che si
+  e' potuto provare contro il servizio vero di Microsoft e' il rifiuto: un
+  tenant inesistente riceve la risposta giusta, tradotta nella frase giusta.
+- **`msal` va installata sul server** (`pip install -r requirements.txt`): non
+  c'era, ed e' stata aggiunta a `requirements.txt` insieme alle cinque
+  librerie che si porta dietro. Senza, la pagina di configurazione lo dice con
+  una frase invece di rompersi (verificato).
+- **Le notifiche continuano a non esserci**, come dalla sessione 10.
 
 ---
 

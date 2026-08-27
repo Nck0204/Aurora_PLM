@@ -1,0 +1,25 @@
+{# ===========================================================================
+   L'esito di un pulsante VERIFICA della pagina di configurazione posta.
+
+   E' un frammento, non una pagina: HTMX lo va a prendere e lo infila dentro
+   #esito-verifica. Lo stesso file viene incluso dalla pagina intera quando lo
+   script non c'e' e la verifica e' arrivata come un invio normale del modulo -
+   cosi' la frase e' la stessa nei due casi, invece di essere scritta due volte
+   e diventare due frasi diverse alla prima correzione.
+   =========================================================================== #}
+{% from "components/avvisi.html" import avviso %}
+
+<div id="esito-verifica" aria-live="polite">
+{% if esito %}
+    {% call avviso("", variante=esito.variante,
+                   titolo=("Verifica riuscita" if esito.riuscita
+                           else "Verifica non riuscita")) %}
+        <p>{{ esito.messaggio }}</p>
+        {% if esito.parametro and esito.parametro != provato %}
+        <p class="testo-piccolo">
+            Il valore da correggere e' quello del campo evidenziato qui sotto.
+        </p>
+        {% endif %}
+    {% endcall %}
+{% endif %}
+</div>

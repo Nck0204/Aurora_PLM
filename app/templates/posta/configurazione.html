@@ -1,0 +1,200 @@
+{# ===========================================================================
+   Configurazione della posta. Riservata al creatore.
+
+   LA PAGINA E' DIVISA IN DUE ED E' VOLUTO. Sopra c'e' **come sta adesso** il
+   collegamento - da dove arriva la posta, se l'orologio gira, com'e' andata
+   l'ultima lettura, quando scade il segreto; sotto c'e' **che cosa si puo'
+   cambiare**. Chi apre questa pagina lo fa quasi sempre per la prima domanda
+   ("perche' non arriva piu' la posta?"), non per la seconda: la risposta deve
+   stare in cima, senza dover scorrere un modulo.
+
+   IL PULSANTE VERIFICA ACCANTO A OGNI CAMPO. Prova il valore **scritto nel
+   modulo**, non quello salvato: si incolla il valore che l'ufficio informatico
+   ha appena mandato e si sa subito se e' quello giusto, senza aver salvato e
+   senza aver riavviato niente.
+
+   SENZA JAVASCRIPT FUNZIONA LO STESSO. I pulsanti VERIFICA sono normali
+   pulsanti di invio con "formaction": senza HTMX ricaricano la pagina con
+   l'esito in cima, con HTMX sostituiscono il solo riquadro dell'esito. E' la
+   regola D-036 applicata a una pagina che, senza, sarebbe inutilizzabile
+   proprio nel momento in cui serve.
+   =========================================================================== #}
+{% extends "base.html" %}
+
+{% from "components/campi.html" import campo, csrf, scelta, spunta %}
+{% from "components/pulsanti.html" import pulsante, pulsante_collegamento, modulo_pulsante %}
+{% from "components/riquadro.html" import riquadro %}
+{% from "components/descrizione.html" import descrizione, voce %}
+{% from "components/avvisi.html" import avviso, notifica %}
+{% from "components/stato.html" import etichetta %}
+
+{% block titolo %}Configurazione posta{% endblock %}
+{% block sezione %}Posta{% endblock %}
+
+{% block notifiche %}
+    {% if request.query_params.get("salvati") == "0" %}
+        {{ notifica("Non era cambiato niente: non e' stato modificato nessun "
+                    "parametro.", variante="informazione",
+                    titolo="Niente da salvare") }}
+    {% elif request.query_params.get("salvati") %}
+        {{ notifica("I parametri sono stati scritti nel file di configurazione "
+                    "e valgono da adesso.", variante="successo",
+                    titolo="Configurazione salvata") }}
+    {% endif %}
+{% endblock %}
+
+{% block contenuto %}
+
+<div class="testata">
+    <div>
+        <h1>Configurazione posta</h1>
+        <p class="sottotitolo">
+            Da dove Aurora prende i messaggi da archiviare, e come sta il
+            collegamento. I parametri della casella aziendale li fornisce
+            l'ufficio informatico: la richiesta gia' pronta da mandargli e'
+            in <span class="mono">docs/RICHIESTA_IT.md</span>.
+        </p>
+    </div>
+    <div class="testata-azioni">
+        {{ pulsante_collegamento("La posta", "/posta", icona_nome="posta") }}
+        {{ modulo_pulsante(request, "/posta/elabora", "Controlla adesso",
+                           variante="primario", icona_nome="carica",
+                           in_linea=true) }}
+    </div>
+</div>
+
+{# --- Come sta adesso -------------------------------------------------- #}
+
+{% call riquadro("Come sta il collegamento") %}
+    {% call descrizione(righe=true) %}
+        {%- for riga in diagnostica %}
+            {#- Il valore si compone qui e arriva al macro gia' pronto: quando
+                la riga ha una variante e' un'etichetta colorata, altrimenti e'
+                testo. La nota, quando c'e', va sotto. -#}
+            {%- set valore = etichetta(riga.valore, variante=riga.variante)
+                             if riga.variante else riga.valore -%}
+            {%- set nota %}
+                {%- if riga.nota %}<div class="testo-piccolo testo-tenue">{{ riga.nota }}</div>{% endif -%}
+            {%- endset -%}
+            {{ voce(riga.etichetta, valore ~ nota) }}
+        {%- endfor %}
+    {% endcall %}
+
+    {% if ultimo and ultimo.dettagli %}
+    {% call avviso("", variante="attenzione",
+                   titolo="Messaggi su cui qualcosa e' andato storto") %}
+        <ul>
+            {% for riga in ultimo.dettagli %}
+            <li class="testo-piccolo">{{ riga }}</li>
+            {% endfor %}
+        </ul>
+        <p class="testo-piccolo">
+            Restano dove sono e verranno riprovati al controllo successivo.
+        </p>
+    {% endcall %}
+    {% endif %}
+{% endcall %}
+
+{# --- L'esito dell'ultima verifica -------------------------------------- #}
+
+{% include "posta/verifica.html" %}
+
+{# --- I parametri -------------------------------------------------------- #}
+
+<form method="post" action="/posta/configurazione" class="modulo">
+    {{ csrf(request) }}
+
+    {% call riquadro("Parametri",
+                     piede=pulsante("Salva la configurazione",
+                                    variante="primario")
+                           ~ pulsante("Prova il collegamento",
+                                      nome="parametro", valore=prova_tutto,
+                                      icona_nome="cerca",
+                                      attributi='formaction="/posta/configurazione/verifica"'
+                                                ' hx-post="/posta/configurazione/verifica"'
+                                                ' hx-include="closest form"'
+                                                ' hx-target="#esito-verifica"'
+                                                ' hx-swap="outerHTML"')) %}
+
+        {% for parametro in parametri %}
+        {% set errore = errori.get(parametro.nome)
+                        or (esito.messaggio if esito and not esito.riuscita
+                            and esito.parametro == parametro.nome else none) %}
+        <div class="riga-parametro">
+
+            {% if parametro.tipo == "scelta" %}
+                {{ scelta(parametro.etichetta, parametro.nome,
+                          opzioni=parametro.opzioni,
+                          scelto=valori.get(parametro.nome),
+                          aiuto=parametro.aiuto) }}
+
+            {% elif parametro.tipo == "spunta" %}
+                {{ spunta(parametro.etichetta, parametro.nome,
+                          spuntata=(valori.get(parametro.nome) == "si"),
+                          aiuto=parametro.aiuto) }}
+
+            {% elif parametro.tipo == "segreto" %}
+                {{ campo(parametro.etichetta, parametro.nome,
+                         valore="", tipo="password",
+                         errore=errore,
+                         autocomplete="new-password",
+                         aiuto=(parametro.aiuto ~ (
+                                    " Un segreto e' gia' stato scritto: se "
+                                    "lasci il campo vuoto resta quello."
+                                    if segreto_impostato else
+                                    " Non e' ancora stato scritto nessun "
+                                    "segreto."))) }}
+
+            {% elif parametro.tipo == "numero" %}
+                {{ campo(parametro.etichetta, parametro.nome,
+                         valore=valori.get(parametro.nome, ""),
+                         tipo="number", errore=errore,
+                         aiuto=parametro.aiuto) }}
+
+            {% elif parametro.tipo == "data" %}
+                {{ campo(parametro.etichetta, parametro.nome,
+                         valore=valori.get(parametro.nome, ""),
+                         tipo="date", errore=errore,
+                         aiuto=parametro.aiuto,
+                         segnaposto=parametro.segnaposto) }}
+
+            {% else %}
+                {{ campo(parametro.etichetta, parametro.nome,
+                         valore=valori.get(parametro.nome, ""),
+                         errore=errore, monospazio=true,
+                         aiuto=parametro.aiuto,
+                         segnaposto=parametro.segnaposto) }}
+            {% endif %}
+
+            <div class="riga-parametro-azione">
+                {{ pulsante("Verifica", misura="piccolo",
+                            nome="parametro", valore=parametro.nome,
+                            titolo="Prova questo valore adesso",
+                            attributi='formaction="/posta/configurazione/verifica"'
+                                      ' hx-post="/posta/configurazione/verifica"'
+                                      ' hx-include="closest form"'
+                                      ' hx-target="#esito-verifica"'
+                                      ' hx-swap="outerHTML"') }}
+            </div>
+        </div>
+        {% endfor %}
+
+    {% endcall %}
+</form>
+
+{% call riquadro("Dove finiscono questi valori") %}
+    <p>
+        I parametri vengono scritti nel file di configurazione del server,
+        <span class="mono">{{ file_env }}</span>, e valgono da subito: non serve
+        riavviare Aurora. L'unica eccezione e' il controllo automatico, che si
+        accende all'avvio del programma.
+    </p>
+    <p class="testo-piccolo testo-tenue">
+        Il file precedente viene conservato accanto con il nome
+        <span class="mono">.env.precedente</span>. Il segreto
+        dell'applicazione e' una password: chi puo' leggere quel file puo'
+        leggere la casella.
+    </p>
+{% endcall %}
+
+{% endblock %}

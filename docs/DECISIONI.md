@@ -2474,3 +2474,262 @@ alla casella di chi la usa, e Aurora non e' il suo programma di posta.
 **`MAIL_PROVIDER=graph` si ferma con una spiegazione** invece di far finta di
 niente. Una fonte che restituisse un elenco vuoto lascerebbe credere che la
 casella sia vuota, che e' il modo peggiore di non funzionare.
+
+---
+
+## D-077 — Di un messaggio si conserva il MIME integrale, non quello che Graph racconta
+
+**Data:** 27 agosto 2026 · **Stato:** attiva
+
+**Decisione.** `FonteGraph` scarica ogni messaggio dall'indirizzo
+`/messages/{id}/$value`, che restituisce il messaggio **come e' arrivato alla
+casella**: intestazioni originali, corpo in tutte le sue forme, allegati
+dentro. Non si usano i campi che Graph offre gia' pronti (`subject`, `body`,
+`from`, `attachments`), che pure sarebbero piu' comodi da leggere.
+
+**Il problema.** Con i campi pronti si scriverebbero meno righe: Microsoft ha
+gia' scomposto il messaggio, e Aurora dovrebbe solo copiare. Il guaio e' che
+quello che copierebbe non e' il messaggio: e' l'interpretazione che ne da'
+Microsoft oggi. Le intestazioni `In-Reply-To` e `References` - su cui si regge
+il terzo ramo dell'attribuzione (D-076) - nei campi pronti non ci sono tutte;
+la codifica dei caratteri e' gia' stata decisa da qualcun altro; e la firma
+digitale di un messaggio firmato, se c'e', non sopravvive a una ricomposizione.
+
+**Le due ragioni per cui si e' scelto il MIME.**
+
+1. **La corrispondenza e' un fatto avvenuto, e i fatti si conservano interi.**
+   Meta' delle decisioni tecniche di un progetto sta nelle mail: il file che
+   Aurora deposita nell'archivio deve essere quello che si potrebbe mostrare a
+   un cliente o a un perito, non una versione ricostruita.
+2. **E' identico al contenuto di un file `.eml`.** Il motore della sessione 10
+   sa gia' leggerlo, `email_parsing.py` non cambia di una riga, e i ventiquattro
+   file di prova continuano a esercitare esattamente lo stesso codice che
+   esercitano i messaggi veri. Con i campi pronti ci sarebbero due strade di
+   lettura, e la seconda si proverebbe solo in produzione.
+
+**Il costo.** Una chiamata in piu' per messaggio (l'elenco da' solo gli
+identificativi) e messaggi piu' grossi da scaricare. Su qualche decina di
+messaggi al giorno non si misura.
+
+---
+
+## D-078 — Le delta query, con il filtro sulla data come strada di riserva
+
+**Data:** 27 agosto 2026 · **Stato:** attiva
+
+**Decisione.** Per sapere che cosa c'e' di nuovo nella casella, `FonteGraph`
+prova prima le **delta query** (`/mailFolders/inbox/messages/delta`), che sono
+il modo con cui Microsoft risponde alla domanda "che cosa e' cambiato da quando
+ho guardato l'ultima volta". Se la casella le rifiuta per un motivo che non
+riguarda i permessi, si passa al **filtro sulla data di ricezione**
+(`isRead eq false and receivedDateTime ge <ultimo istante>`), scrivendolo nel
+registro.
+
+Le due strade non si scelgono da configurazione. Un parametro in piu' da
+decidere sarebbe un parametro che qualcuno mette storto, e il programma sa gia'
+riconoscere da solo quale delle due funziona.
+
+**Il segno avanza solo a giro finito.** E' la parte che conta. Finche' c'e'
+anche un solo messaggio elencato e non ancora spostato fuori dalla posta in
+arrivo, il gettone delta non viene salvato: al controllo successivo Microsoft
+riproporra' la stessa finestra, i messaggi gia' archiviati verranno riconosciuti
+dal loro `Message-ID` (D-074) e spostati allora, e quello rimasto indietro
+verra' riprovato.
+
+Senza questa regola ci sarebbe un buco vero: le delta query restituiscono le
+**differenze**, e un messaggio che noi abbiamo elencato ma non siamo riusciti a
+elaborare non e' cambiato - quindi non ricomparirebbe mai piu', e resterebbe
+nella posta in arrivo non letto per sempre. E' lo stesso ragionamento del file
+che resta nella cartella di `FonteLocale`, applicato a una casella.
+
+**Il confronto sulla data e' "maggiore o uguale" e non "maggiore".** Due
+messaggi arrivati nello stesso secondo esistono. Rileggerne uno gia' archiviato
+non costa niente - viene riconosciuto e saltato - mentre perderne uno per una
+disuguaglianza stretta e' un messaggio che l'azienda ha ricevuto e Aurora non
+ha.
+
+---
+
+## D-079 — I messaggi elaborati si spostano in due cartelle della casella
+
+**Data:** 27 agosto 2026 · **Stato:** attiva
+
+**Decisione.** Dopo l'archiviazione, il messaggio viene **spostato** in una
+cartella della casella: `Elaborate` se e' stato attribuito a una versione di
+prodotto, `Quarantena` se aspetta una persona. Le due cartelle le crea Aurora
+la prima volta che servono. Dalla casella non si cancella mai niente, e i
+messaggi **non vengono segnati come letti**.
+
+    Posta in arrivo   i messaggi che Aurora deve ancora elaborare
+    Elaborate         quelli archiviati e attribuiti
+    Quarantena        quelli archiviati che aspettano una persona
+
+**Perche' si sposta invece di segnare come letto.** Segnare come letto sarebbe
+meno invadente, ma lo stato di lettura appartiene alla casella di chi la usa,
+e Aurora non e' il suo programma di posta - e' la stessa ragione per cui
+l'interfaccia `FonteEmail` non ha `segna_come_letto` (D-076). Soprattutto:
+spostando, la posta in arrivo contiene **sempre e soltanto quello che resta da
+fare**. Chi apre Outlook lo vede a colpo d'occhio, senza aprire Aurora; e la
+lettura successiva ha poco da leggere anche se il segnalibro e' andato perso.
+
+**Perche' non si cancella.** Regola 5 di CLAUDE.md, e non e' un formalismo:
+il giorno in cui l'attribuzione sbagliasse, l'originale nella casella e' la
+seconda copia da cui ripartire. La prima e' nell'archivio per impronta.
+
+**Le due cartelle rispecchiano le due sottocartelle di `FonteLocale`.** Chi
+passa dalla cartella di collaudo alla casella vera ritrova la stessa
+organizzazione, e la spiegazione da dare a chi usa il programma e' una sola.
+
+---
+
+## D-080 — Un controllo della posta per volta, e il blocco sta nel processo
+
+**Data:** 27 agosto 2026 · **Stato:** attiva
+
+**Decisione.** Il controllo periodico (APScheduler, ogni `MAIL_POLL_MINUTES`
+minuti) e il pulsante «Controlla adesso» chiamano la **stessa** funzione,
+`mail_scheduler.controlla()`, protetta da un `threading.Lock` preso senza
+aspettare. Chi arriva mentre un controllo e' in corso non si mette in coda:
+riceve una risposta che dice "e' gia' in corso" e se ne va.
+
+**Perche' una funzione sola.** La differenza fra le due strade e' di due cose:
+chi risulta l'autore nel registro (una persona, oppure nessuno) e da dove
+arriva la sessione del database. Se fossero due funzioni, la seconda
+comincerebbe a differire dalla prima al primo pezzetto aggiunto in fretta, e la
+lettura pianificata - quella che nessuno guarda mai - sarebbe quella che si
+allontana.
+
+**Perche' il blocco e non una coda.** Due acquisizioni sovrapposte proverebbero
+a scrivere lo stesso messaggio due volte - `internet_message_id` e' unico,
+quindi la seconda fallirebbe - e a spostare due volte lo stesso messaggio nella
+casella. Nessuna delle due cose e' un guasto grave, e tutte e due riempiono il
+registro di errori che non raccontano niente. Mettersi in coda sarebbe peggio:
+chi ha premuto il pulsante resterebbe fermo ad aspettare la fine di un giro che
+non ha chiesto lui.
+
+**Perche' il blocco sta nel processo e non nel database.** Aurora gira come un
+processo solo su un server solo (CLAUDE.md, sezione 1). Un blocco nel database
+sarebbe una tabella in piu' da scrivere, da mantenere e da sbloccare a mano il
+giorno in cui il server si spegne mentre lo tiene: macchinario per un problema
+che questa installazione non ha. Se un giorno Aurora girasse su piu' processi,
+questa decisione va rifatta - ed e' scritta qui perche' si sappia dove
+guardare.
+
+**Il controllo periodico non parte con `MAIL_PROVIDER=locale`**: la cartella
+dei file `.eml` non si riempie da sola, e chi ce li mette puo' premere
+«Controlla adesso» subito dopo invece di aspettare cinque minuti.
+
+---
+
+## D-081 — La configurazione della posta si scrive dall'interfaccia, nel file `.env`
+
+**Data:** 27 agosto 2026 · **Stato:** attiva
+
+**Decisione.** La pagina `/posta/configurazione`, riservata al creatore, scrive
+i parametri della casella **nel file `.env`**, passando da
+`app/services/env_file.py`. E' la prima pagina di Aurora che modifica la
+configurazione. La regola 8 di CLAUDE.md non cambia: la configurazione vive
+ancora e soltanto nel `.env`, e li' la va a leggere chi amministra il server.
+Cambia chi la scrive.
+
+**Il problema.** I quattro parametri della casella (organizzazione,
+applicazione, segreto, indirizzo) arrivano dall'ufficio informatico su un
+foglio, e chi li riceve non ha accesso al server per scriverli. L'azienda ha
+chiesto esplicitamente che la configurazione si possa completare senza toccare
+file di testo.
+
+**Le due alternative scartate.**
+
+- *Una tabella nel database.* Avrebbe voluto dire una migrazione, un secondo
+  posto in cui cercare la configurazione, e il segreto dell'applicazione
+  scritto in una tabella che si esporta e si copia. Soprattutto: due sorgenti
+  di verita' per la stessa domanda, che e' esattamente la forma di guaio che
+  D-051 e D-048 hanno gia' evitato altrove.
+- *Lasciare tutto al `.env` a mano.* Onesta, e gia' rifiutata dall'azienda.
+
+**Che cosa garantisce la scrittura.** Si riscrive **solo la riga del parametro
+cambiato**, al posto in cui gia' stava - i commenti del `.env` sono la sola
+documentazione che chi amministra il server abbia sottomano; la scrittura e'
+atomica (prima un file accanto, poi la sostituzione), perche' un `.env` troncato
+e' un programma che non riparte piu'; e la copia precedente resta accanto come
+`.env.precedente`.
+
+**I valori si applicano anche a `settings` in memoria**, cosi' valgono subito
+senza riavviare. L'unica eccezione e' il controllo periodico, che si accende
+all'avvio: la pagina lo dice.
+
+**Il fatto finisce nel registro** (`mail_config.updated`), con i valori di prima
+e di dopo dei soli parametri cambiati. Del segreto si registra che e' cambiato,
+non che cosa e' diventato - e' la stessa regola con cui `configuration.py`
+tratta la chiave di firma dei cookie (D-068).
+
+**Il pulsante VERIFICA e' su ogni campo, non uno solo in fondo.** Con un
+pulsante solo, la risposta a quattro parametri sbagliati e' "non funziona", e
+chi la legge non sa da dove cominciare. Microsoft, per fortuna, ci mette del
+suo: i codici `AADSTS` dicono esattamente quale delle tre credenziali ha
+rifiutato, e `graph_api.SPIEGAZIONI_AAD` li traduce in una frase italiana che
+nomina il campo da riguardare.
+
+---
+
+## D-082 — Il segno di lettura della casella e' un file, non una tabella
+
+**Data:** 27 agosto 2026 · **Stato:** attiva
+
+**Decisione.** Il gettone delta e l'ultimo istante elaborato - cioe' il punto a
+cui Aurora era arrivata a leggere la casella - stanno in un file JSON
+(`MAIL_GRAPH_STATE_PATH`, di partenza `storage/posta_graph.json`), scritto in
+modo atomico. Non in una tabella del database.
+
+**Perche'.** Non e' un dato dell'azienda: e' un segnalibro. Non si consulta,
+non si esporta, non entra in nessun rapporto, e **perderlo non costa niente**.
+Se sparisce, al controllo successivo Aurora rilegge la posta in arrivo da capo
+- che contiene solo messaggi non ancora elaborati, perche' quelli elaborati li
+ha spostati lei (D-079) - e il `Message-ID` impedisce comunque i doppioni
+(D-074). Il segnalibro fa risparmiare lavoro, non garantisce la correttezza:
+quella la garantisce l'unicita' dell'identificativo.
+
+Una tabella avrebbe voluto dire una migrazione e una riga di dati operativi in
+mezzo ai dati aziendali, per una cosa che si puo' cancellare senza conseguenze.
+
+**Un file illeggibile non ferma niente**: vale come nessun file, con una riga
+nel registro. E' la stessa regola dei file di `config/` (D-039).
+
+---
+
+## D-083 — httpx diventa una dipendenza del programma, non solo dei test
+
+**Data:** 27 agosto 2026 · **Stato:** attiva
+
+**Decisione.** Le chiamate a Microsoft Graph si fanno con **httpx**, che in
+`requirements.txt` passa dalla sezione dei test a quella del programma. Non si
+aggiunge `requests`, che pure entrerebbe comunque come dipendenza di `msal`.
+
+**Motivazione.** Una libreria HTTP sola invece di due: un timeout da capire, un
+modo di trattare gli errori, una libreria da aggiornare quando esce una
+correzione di sicurezza. httpx c'era gia' - la usa il finto browser con cui
+sono scritti tutti i test delle pagine - quindi non e' una dipendenza nuova, e'
+una dipendenza che smette di essere solo dei test.
+
+**Il guadagno vero e' nei test.** `httpx.MockTransport` sostituisce la rete
+dentro la libreria stessa: la casella finta di `tests/test_posta_graph.py`
+risponde come risponderebbe Graph - stessi codici HTTP, stesse intestazioni,
+stesso `Retry-After` - senza nessun finto server da avviare e senza nessuna
+libreria di simulazione in piu'. La limitazione di frequenza e il gettone
+scaduto si provano cosi', e sono due cose che su una casella vera non si
+riescono a far capitare quando si vuole.
+
+**msal resta separata e si importa dentro una funzione.** Serve solo con
+`MAIL_PROVIDER=graph`, e Aurora deve poter partire - e i suoi test devono poter
+girare - su una macchina in cui non e' installata. Con l'import in cima al
+file, la sua assenza romperebbe l'avvio del programma intero invece della sola
+pagina della posta.
+
+**Quello che msal si porta dietro, e va saputo.** `pip install msal` installa
+anche `requests`, `urllib3`, `cryptography`, `PyJWT` e `charset_normalizer`.
+Sono cinque librerie in piu' da aggiornare quando esce una correzione di
+sicurezza, ed e' il prezzo di non scrivere a mano il flusso di autenticazione
+di Microsoft - che vorrebbe dire firmare richieste e trattare certificati, cioe'
+esattamente il genere di codice che non si scrive a mano. Nessuna di loro serve
+con `MAIL_PROVIDER=locale`: su un'installazione che legge da una cartella si
+puo' fare a meno di installarle, e il programma lo dice invece di rompersi.

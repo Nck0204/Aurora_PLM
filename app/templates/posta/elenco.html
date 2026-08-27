@@ -62,7 +62,9 @@
                                      icona_nome="attenzione") }}
             {{ pulsante_collegamento("Motivi", "/posta/motivi",
                                      icona_nome="permessi") }}
-            {{ modulo_pulsante(request, "/posta/elabora", "Elabora la posta",
+            {{ pulsante_collegamento("Configurazione", "/posta/configurazione",
+                                     icona_nome="diagnostica") }}
+            {{ modulo_pulsante(request, "/posta/elabora", "Controlla adesso",
                                variante="primario", icona_nome="carica",
                                in_linea=true) }}
         {% endif %}
@@ -72,6 +74,11 @@
 {% if request.query_params.get("problema") %}
     {{ avviso(request.query_params.get("problema"),
               variante="errore", titolo="La posta non e' stata letta") }}
+{% endif %}
+
+{% if request.query_params.get("informazione") %}
+    {{ avviso(request.query_params.get("informazione"),
+              variante="informazione", titolo="Un controllo e' gia' in corso") }}
 {% endif %}
 
 {% if request.query_params.get("errori") and request.query_params.get("errori") != "0" %}
@@ -145,9 +152,10 @@
 {% else %}
 
     {{ vuoto("Non c'e' ancora nessun messaggio",
-             "Aurora legge i file .eml dalla cartella della posta e li attacca "
+             "Aurora legge i messaggi dalla casella aziendale - o dalla "
+             "cartella del server, secondo com'e' configurata - e li attacca "
              "alla versione di prodotto di cui parlano. Il primo messaggio "
-             "arriva alla prima elaborazione.",
+             "arriva al primo controllo.",
              icona_nome="posta") }}
 
 {% endif %}

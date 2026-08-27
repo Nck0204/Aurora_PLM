@@ -1,7 +1,7 @@
 """Le pagine della posta archiviata.
 
     GET  /posta                            elenco con ricerca, filtri, date
-    POST /posta/elabora                    legge la cartella e archivia
+    POST /posta/elabora                    "Controlla adesso": legge e archivia
     GET  /posta/quarantena                 i messaggi non attribuiti (creatore)
     GET  /posta/motivi                     i motivi ammessi (creatore)
     POST /posta/motivi                     crea o corregge un motivo
@@ -50,7 +50,7 @@ from app.services import (
     documents,
     email_reasons,
     emails,
-    mail_source,
+    mail_scheduler,
     permissions,
     projects,
     storage,
@@ -262,7 +262,7 @@ def elabora(
     creatore: User = Depends(richiedi_creatore),
     db: Session = Depends(get_db),
 ) -> Response:
-    """Legge la cartella della posta e archivia quello che trova.
+    """Il pulsante «Controlla adesso»: legge la posta e archivia quello che trova.
 
     E' un POST e non un GET perche' cambia qualcosa nel programma: un
     collegamento lo puo' far scattare chiunque, anche una pagina ostile
@@ -273,19 +273,28 @@ def elabora(
     `emails.acquisisci()`, perche' un messaggio storto non deve portarsi via
     quelli gia' archiviati (D-070).
 
-    Dalla sessione 11 la stessa funzione la chiamera' un lavoro pianificato,
-    senza nessuna persona davanti: e' il motivo per cui `acquisisci()` prende
-    l'autore come argomento facoltativo invece di andarselo a cercare.
+    **Passa dal pianificatore e non dal motore.** Dalla sessione 11 la stessa
+    lettura la avvia anche un lavoro periodico, e le due strade devono essere
+    la stessa: `mail_scheduler.controlla()` tiene il blocco che impedisce a due
+    letture di sovrapporsi e conserva l'esito per la diagnostica. Chiamare
+    `emails.acquisisci()` da qui vorrebbe dire scavalcare tutti e due.
     """
-    try:
-        fonte = mail_source.fonte_configurata()
-        riepilogo = emails.acquisisci(
-            db, fonte, autore=creatore, request=request
-        )
-    except mail_source.FonteNonDisponibile as errore:
-        logger.error("Acquisizione non avviata: %s", errore)
+    esito = mail_scheduler.controlla(
+        db,
+        autore=creatore,
+        request=request,
+        origine=mail_scheduler.ORIGINE_MANUALE,
+    )
+
+    if esito.sovrapposto:
         return RedirectResponse(
-            url=f"/posta?problema={quote(str(errore), safe='')}",
+            url=f"/posta?informazione={quote(esito.messaggio, safe='')}",
+            status_code=303,
+        )
+
+    if not esito.riuscito:
+        return RedirectResponse(
+            url=f"/posta?problema={quote(esito.messaggio, safe='')}",
             status_code=303,
         )
 
@@ -293,11 +302,11 @@ def elabora(
     # cosi' la pagina si puo' ricaricare senza rispedire il modulo, e chi
     # copia l'indirizzo copia anche l'esito che sta guardando.
     parametri = (
-        f"letti={riepilogo.letti}"
-        f"&archiviati={riepilogo.archiviati}"
-        f"&quarantena={riepilogo.in_quarantena}"
-        f"&gia={riepilogo.gia_presenti}"
-        f"&errori={riepilogo.errori}"
+        f"letti={esito.letti}"
+        f"&archiviati={esito.archiviati}"
+        f"&quarantena={esito.in_quarantena}"
+        f"&gia={esito.gia_presenti}"
+        f"&errori={esito.errori}"
     )
     return RedirectResponse(url=f"/posta?{parametri}", status_code=303)
 
