@@ -119,8 +119,8 @@ def mostra_accesso(
 @router.post("/entra")
 def esegui_accesso(
     request: Request,
-    username: Annotated[str, Form()],
-    password: Annotated[str, Form()],
+    username: Annotated[str, Form()] = "",
+    password: Annotated[str, Form()] = "",
     ricordami: Annotated[str | None, Form()] = None,
     dopo: Annotated[str, Form()] = "",
     db: Session = Depends(get_db),
@@ -286,9 +286,9 @@ def mostra_cambio_password(
 @router.post("/cambio-password")
 def esegui_cambio_password(
     request: Request,
-    password_attuale: Annotated[str, Form()],
-    password_nuova: Annotated[str, Form()],
-    password_ripetuta: Annotated[str, Form()],
+    password_attuale: Annotated[str, Form()] = "",
+    password_nuova: Annotated[str, Form()] = "",
+    password_ripetuta: Annotated[str, Form()] = "",
     utente: User = Depends(richiedi_login),
     db: Session = Depends(get_db),
 ) -> Response:

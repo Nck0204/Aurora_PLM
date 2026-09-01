@@ -1,6 +1,16 @@
 # Stato di avanzamento
 
-Ultimo aggiornamento: **27 agosto 2026**, fine della sessione 12.
+Ultimo aggiornamento: **1 settembre 2026**, fine della sessione 13.
+
+> # RILASCIO R1 COMPLETATO
+>
+> Tredici sessioni su tredici. Aurora e' pronta per la messa in esercizio sul
+> server aziendale: la procedura e' in `docs/INSTALLAZIONE.md`, chi la
+> mantiene ha `docs/MANUALE_OPERATIVO.md`, e quello che resta per R2 e R3 e'
+> in `docs/DA_FARE.md`, in ordine e con scritto quanto ne e' gia' predisposto.
+>
+> **717 test passano.** Nessuna pagina supera i cento millisecondi con 42
+> prodotti, 64 progetti, 608 documenti e 1024 messaggi nel database.
 
 Il progetto e' diviso in 13 sessioni di lavoro. Questa tabella dice a che
 punto siamo. Va aggiornata **alla fine di ogni sessione**, prima del commit.
@@ -26,9 +36,24 @@ Stati possibili: `da fare` · `in corso` · `completata`
 | 10 | Notifiche e posta | **completata** | Il motore di acquisizione: interfaccia della fonte e fonte locale a file `.eml`, archiviazione del messaggio e degli allegati per impronta, quattro rami di attribuzione, quarantena con assegnazione a mano estesa alla conversazione, motivi configurabili dall'interfaccia, ricerca su mittente/oggetto/contenuto/date. **Le notifiche non sono state chieste e restano da ricollocare.** Dettaglio sotto. |
 | 11 | La casella aziendale | **completata** | La seconda `FonteEmail`: Microsoft Graph con le credenziali applicative, il MIME integrale, le delta query con il segnalibro, lo spostamento in `Elaborate` e `Quarantena`, il controllo periodico con APScheduler e il blocco, la pagina di configurazione con VERIFICA su ogni campo, la sorveglianza della scadenza del segreto, `docs/RICHIESTA_IT.md`. **Il motore non e' stato toccato.** I controlli notturni e il backup non sono stati chiesti e restano da ricollocare. Dettaglio sotto. |
 | 12 | Il sistema gestibile | **completata** | Pagina di diagnostica con dieci controlli a semaforo e `/salute` in JSON, copia di sicurezza e ripristino con la loro procedura scritta, configurazione guidata del primo avvio in sei passi, guida in linea con ricerca e icone «?». Dettaglio sotto. |
-| 13 | Messa in produzione | da fare | Irrobustimento, prestazioni, installazione sul server aziendale, manuale d'uso, consegna. |
+| 13 | Messa in produzione | **completata** | Revisione del codice con sei difetti corretti, dati di prova e misura dei tempi (la diagnostica da 1808 a 100 ms), intestazioni di sicurezza HTTP, errori di validazione in italiano, avvio in https, servizio Windows che riparte da solo, e i quattro documenti della consegna. Dettaglio sotto. |
 
-> **Nota sul piano.** La **sessione 12 e' cambiata**: era "Rapporti ed
+> **Nota sul piano.** La **sessione 13 e' andata come era scritta**, ed e'
+> l'unica delle ultime cinque. Con lei il rilascio **R1 e' completo**.
+>
+> Tutto quello che le sessioni precedenti hanno lasciato in sospeso - le
+> notifiche, i rapporti, l'approvazione dei documenti, la ricerca trasversale,
+> le milestone, il cambio di ruolo globale - **non e' piu' sparso nelle note di
+> questo file**: sta in `docs/DA_FARE.md`, in ordine di peso, con scritto per
+> ciascuna cosa quanto ne e' gia' predisposto. Le note qui sotto restano dove
+> sono perche' raccontano il *perche'* una cosa non e' stata fatta; per sapere
+> *che cosa resta* si guarda quel file.
+>
+> Resta aperta la domanda di fondo: **le tredici sessioni coprivano il solo
+> R1?** La risposta di fatto e' si', e va confermata con l'azienda insieme alla
+> decisione su come si affronta R2.
+>
+> La **sessione 12 e' cambiata**: era "Rapporti ed
 > esportazioni" e l'azienda ha chiesto invece che il sistema diventasse
 > **gestibile da chi non lo ha scritto** - diagnostica, copie di sicurezza,
 > primo avvio guidato, guida in linea - che nel piano non compariva da nessuna
@@ -81,6 +106,333 @@ Stati possibili: `da fare` · `in corso` · `completata`
 > comportamento. Resta una **domanda aperta**: le tabelle di distinta base e
 > articoli sono del rilascio R3 e in questo piano non compaiono; va chiarito se
 > le 13 sessioni coprono il solo R1 o arrivano anche a R2 e R3.
+
+---
+
+## Sessione 13 — Messa in produzione · completata (1 settembre 2026)
+
+La sessione aveva una domanda sola, ed era diversa da tutte le precedenti:
+**il sistema regge fuori dal computer di chi lo ha scritto?** Non «funziona»
+- funzionava gia' - ma: sta in piedi su una macchina che nessuno guarda,
+riparte da sola quando il server si riavvia, resta veloce quando dentro c'e' il
+lavoro di due anni, e si lascia tenere in vita da un collega che non lo ha mai
+visto.
+
+Le quattro risposte erano no, e adesso sono si'.
+
+> **Nessuna migrazione.** Questa sessione non tocca il database: aggiunge
+> comportamento, correzioni e documenti. `alembic current` non si muove.
+
+### Le sei cose che c'erano da decidere
+
+| Domanda | Risposta | Dove |
+|---|---|---|
+| Che intestazioni di sicurezza, e quanto stretta la politica dei contenuti? | strettissima: `script-src 'self'`, perche' Aurora non carica niente da fuori | D-091 |
+| Un identificativo storto nell'indirizzo che risposta merita? | **404**, con la stessa frase di uno che non esiste | D-092 |
+| La verifica dell'archivio costa due secondi: si toglie o si tiene? | si tiene, e si ricorda per cinque minuti | D-093 |
+| Come si accende Aurora in produzione? | da uno script che legge il `.env`, non da una riga dentro il servizio | D-094 |
+| Come ci si accorge che la sessione viaggia in chiaro? | una riga rossa nella diagnostica, finche' non e' vero il contrario | D-095 |
+| Su quale database si misurano i tempi? | su quello vero, con dati generati e mai inventati | D-096 |
+
+### Il pezzo su cui vale la pena tornare: due secondi che erano tutti in un punto solo
+
+Con il volume di prova - 608 documenti, 1024 messaggi, 6358 file
+nell'archivio - **una pagina sola superava il limite dei due secondi**, e non
+era quella che ci si aspettava.
+
+Gli elenchi, che erano i sospetti naturali, rispondevano tutti in meno di
+cinquanta millisecondi: le condizioni SQL dei permessi (D-051), i
+`selectinload` messi a suo tempo e l'impaginazione hanno retto senza che
+servisse toccare niente. La pagina lenta era **`/diagnostica`**, e con lei
+`/salute`.
+
+Misurando controllo per controllo, il conto e' venuto fuori subito: dieci
+controlli costavano diciotto millisecondi in tutto, e l'undicesimo - la
+verifica dell'archivio - ne costava **2288**. Non perche' legga tanti file:
+perche' apre tante cartelle. L'archivio ne ha fino a 65.536, due livelli da due
+caratteri esadecimali (D-004), quasi tutte con dentro pochi file.
+
+Le correzioni sono state due e sono diverse fra loro:
+
+- `os.scandir` al posto di `Path.rglob("*")` — che sembra un dettaglio e non lo
+  e': `rglob` costruisce un `Path` per ogni voce e poi chiede al sistema
+  operativo, una per una, se sia un file. **Da 2288 a 578 millisecondi**;
+- il risultato si tiene da parte per cinque minuti — e questa e' la meta' che
+  risolve il problema vero. Con 578 millisecondi la pagina sarebbe tornata
+  accettabile *oggi*; con centomila file non lo sarebbe piu'. E soprattutto:
+  `/diagnostica` la apre una persona ogni tanto, ma **`/salute` la interroga un
+  programma di sorveglianza**, che la chiama ogni minuto per sempre.
+
+Risultato: `/diagnostica` da **1808 a 100 millisecondi**, `/salute` da **2257 a
+94**. Nessuna pagina di Aurora supera il decimo di secondo (D-093).
+
+### 1. La revisione: sei difetti trovati e corretti
+
+Rileggendo tutto il programma con le sei domande della sessione - permessi
+fuori dalla funzione centrale, interrogazioni che caricano troppo, errori non
+gestiti, testi in inglese, valori scritti a mano, codice duplicato - i primi
+due filoni non hanno prodotto niente: **nessun controllo di permesso fuori da
+`permissions.puo()`**, nessun colore fuori dalle variabili, nessun `if` sul
+nome di una fase, nessun `except` muto. I quattro test che leggono i sorgenti
+dalla sessione 7 e i due della sessione 8 hanno fatto il loro mestiere per
+dodici sessioni.
+
+Quello che si e' trovato sta altrove, ed e' interessante proprio per questo.
+
+**a) Un identificativo storto nell'indirizzo rispondeva in inglese, con dentro
+i nomi interni.** E' il difetto piu' grosso dei sei, ed era invisibile perche'
+nessun test ne aveva mai scritto uno. Aprendo `/prodotti/non-un-uuid` -
+cioe' un preferito di sei mesi fa, o un collegamento tagliato a meta' da un
+programma di posta - FastAPI rispondeva da solo, **anche a un browser**:
+
+```json
+{"detail":[{"type":"uuid_parsing","loc":["path","product_id"],
+            "msg":"Input should be a valid UUID, ..."}]}
+```
+
+Tre regole rotte insieme: la lingua (regola 3), il dettaglio tecnico mostrato a
+chi usa il programma, e il nome del parametro della rotta - che a chi guarda
+non serve e a chi prova gli indirizzi serve. Adesso e' un **404 con la stessa
+identica frase** di un identificativo inesistente, che e' D-052 portato fino in
+fondo (D-092).
+
+**b) Undici campi di modulo senza valore di partenza.** La sessione 5 aveva
+gia' stabilito che i campi che il programma verifica da se' devono avere un
+valore vuoto, cosi' una casella vuota arriva al nostro codice e non alla
+validazione di FastAPI. Undici non l'avevano: nome utente, password, le tre
+password del cambio, nome/cognome/posta in due moduli.
+
+**c) La parola d'ordine di `/salute` si confrontava con l'uguale normale.**
+`csrf.py` spiega da tre sessioni perche' si usa `secrets.compare_digest`;
+questa rotta, scritta dopo, non lo faceva. Due modi diversi di confrontare un
+segreto nello stesso programma sono uno di troppo.
+
+**d) La stessa parola d'ordine finiva in chiaro nel registro.** D-089 permette
+di presentarla anche come `?token=...`, perche' non tutti i programmi di
+sorveglianza sanno aggiungere un'intestazione. Uvicorn pero' scrive nel
+registro degli accessi la riga di richiesta per intero, query compresa: la
+parola d'ordine finiva dentro `logs/aurora.log`, che e' il file che si manda
+per posta quando si chiede aiuto. Adesso un filtro del registro la sostituisce
+con `***`.
+
+**e) Due interrogazioni del registro ordinavano per `occurred_at`.**
+`documents.ultimo_rilascio()` e `documents.scarichi_di()`. PostgreSQL da' a
+`now()` lo stesso valore per tutta la transazione - e' il difetto n. 3 della
+sessione 6, gia' scritto - quindi due righe scritte nella stessa richiesta
+hanno la stessa ora e «la piu' recente» non e' decidibile. `registro.py`
+ordinava gia' per `seq` e spiegava perche'; queste due erano rimaste indietro.
+
+**f) Uno script scritto dentro la pagina, una volta per pulsante.** Il macro
+`modulo_pulsante` emetteva un `<script>` per ogni pulsante con conferma. Non
+era un difetto finche' non e' arrivata la politica dei contenuti, che lo
+avrebbe bloccato facendo sparire la domanda **in silenzio**. Adesso la conferma
+e' un attributo `data-conferma` e a farla e' `aurora.js`, una volta sola.
+
+### 2. Il collaudo
+
+**Il percorso completo, dal browser** (`tests/test_percorso_completo.py`,
+cinque test). Non provano un servizio per volta: percorrono la strada che li
+attraversa tutti, perche' i difetti che restano dopo dodici sessioni non stanno
+dentro una funzione, stanno **fra** due funzioni che prese una per volta fanno
+esattamente quello che devono.
+
+| Test | Che cosa percorre |
+|---|---|
+| il giro intero | cliente → prodotto → progetto → documento → rilascio → fase → V1 rilasciata → V2 derivata e rilasciata → **V1 superata da sola** → e tutto nel registro |
+| l'altro lato del muro | lo stesso giro visto da un ingegnere: vede, carica, **chiede** invece di avanzare, e le cinque sezioni riservate gli rispondono 403 |
+| la posta entra nel giro | un messaggio con il codice nell'oggetto si attacca da solo alla versione di un prodotto appena creato |
+| il progetto arriva in fondo | percorrendo tutte le fasi si chiude e diventa di sola lettura - **tranne per il creatore**, che e' anche l'unico a poterlo riaprire |
+| il rilasciato non si sostituisce | caricando su un documento rilasciato nasce la versione successiva e il documento torna in bozza, con la versione di prima intatta e la stessa impronta |
+
+**Le verifiche della messa in esercizio** (`tests/test_produzione.py`, trenta
+test). Sono cose che la sessione chiedeva di **verificare**, non di costruire:
+intestazioni di sicurezza su ogni risposta, gettone in tutti i moduli
+(verificato leggendo i template), limite di dimensione dei caricamenti,
+limitazione di frequenza sull'accesso, niente di riservato nei registri e negli
+indirizzi, errori che non raccontano niente di tecnico, cookie come devono
+essere in produzione.
+
+Un test che verifica una precauzione ha un mestiere diverso da uno che verifica
+una funzione: la funzione, se si rompe, qualcuno se ne accorge il giorno
+stesso; la precauzione, se sparisce, non se ne accorge nessuno finche' non
+serve.
+
+**I dati di prova** (`scripts/dati_prova.py`). Genera in trenta secondi 15
+persone, 8 clienti, 20 prodotti, 40 versioni, ~30 progetti con le fasi
+avanzate, 300 documenti e 500 messaggi. **Passa dai servizi veri**, non scrive
+le righe a mano: i codici scomposti come li scompone il programma, il registro
+con la sua catena di impronte, i file depositati per impronta, i messaggi
+attribuiti dalle stesse quattro regole (D-096).
+
+**La misura** (`scripts/misura_tempi.py`). Apre ventitre' pagine, tre volte
+ciascuna piu' un giro di riscaldamento, e riporta il tempo **peggiore** e non
+la media - una pagina che di solito risponde in 300 millisecondi e ogni tanto
+ne impiega tremila e' una pagina lenta, e la media lo nasconde. Misura due
+volte: come un amministratore, che non ha nessun filtro sui documenti, e come
+una persona normale, che porta con se' due `EXISTS` correlati.
+
+### 3. L'irrobustimento
+
+**Le intestazioni di sicurezza** su ogni risposta, comprese quelle di errore
+(D-091). La politica dei contenuti si e' potuta scrivere strettissima -
+`script-src 'self'`, nessuno script dentro la pagina viene eseguito - **perche'
+la regola 1 di CLAUDE.md e' vera**: Aurora non carica niente da un indirizzo
+esterno, quindi `default-src 'self'` e' la descrizione esatta del programma e
+non un compromesso.
+
+**Quello che era gia' a posto**, e vale la pena scriverlo perche' la sessione
+chiedeva di verificarlo:
+
+| Cosa | Come sta |
+|---|---|
+| protezione CSRF | dipendenza globale dalla sessione 3; **tutti** i moduli hanno il gettone (verificato leggendo i template) |
+| limite dei caricamenti | `MAX_UPLOAD_MB`, verificato **mentre** il file arriva; il temporaneo del file rifiutato viene tolto |
+| limitazione di frequenza | cinque tentativi in un quarto d'ora, sul nome scritto e non sull'utente trovato (D-029) |
+| password nei registri | mai, in nessuna forma: nel database c'e' argon2id, nel registro delle operazioni nemmeno l'impronta |
+| gettoni nel database | SHA-256 e nient'altro (D-025) |
+| segreti negli indirizzi | nessuna rotta accetta un segreto come parametro, e c'e' un test che legge le rotte vere |
+| errori all'utente | codice di riferimento, mai la traccia; il database spento da' un 503 con l'istruzione, non il messaggio di psycopg |
+
+### 4. La messa in esercizio
+
+**`scripts/avvia.py`** — il programma che il servizio esegue. Legge dal `.env`
+indirizzo, porta e certificato, e **controlla tre cose prima di accendere**:
+che il certificato indicato esista (e se manca si ferma dicendo quale),
+che https e i cookie vadano d'accordo (e se non vanno lo dice e parte lo
+stesso, perche' un server che non si accende e' peggio), e dice a voce alta
+l'indirizzo per esteso - che e' la riga che risponde a «ma questo e' il server
+di produzione o quello di prova?» (D-094).
+
+**Quattro parametri nuovi**: `SERVER_HOST`, `SERVER_PORT`, `HTTPS_CERT_FILE`,
+`HTTPS_KEY_FILE`, tutti commentati in `.env.example`.
+
+**Un controllo di diagnostica in piu'**, «Connessione cifrata» (D-095). E' il
+difetto piu' probabile di un'installazione nuova ed e' anche quello che non si
+vede: Aurora in http funziona perfettamente, nessuno si lamenta, e intanto ogni
+password attraversa la rete in chiaro. `COOKIE_SECURE` era gia' un parametro
+dalla sessione 3 e D-024 diceva gia' che in produzione deve valere `true`: fino
+a ieri era una raccomandazione in un documento, adesso e' una riga rossa che
+resta li' finche' non e' vera.
+
+**`docs/INSTALLAZIONE.md`** — quattordici sezioni, dalla macchina vuota al
+sistema in esercizio. Ogni passo finisce con una verifica e la sua risposta
+attesa. Dentro ci sono: le cinque richieste all'ufficio informatico gia'
+scritte come email da inoltrare (antivirus, percorsi lunghi, porta,
+destinazione delle copie, certificato), la conversione del `.pfx` in due file
+PEM, il servizio NSSM con le tre righe che lo fanno ripartire da solo senza
+finire in un ciclo infinito, l'irrobustimento del registro, e **l'ambiente di
+prova sulla stessa macchina** con database, archivio e porta separati.
+
+**`docs/AGGIORNAMENTO.md`** — dieci passi, con una regola sopra tutte: *prima
+si fa la copia, poi si tocca*. Comprende la strada del ritorno in due varianti
+(con e senza migrazioni applicate), la nota sulle migrazioni che toccano
+`audit_logs` - che vanno eseguite come `postgres`, D-064 - e le sette verifiche
+di fine aggiornamento, di cui **la quinta e' quella che conta**: scaricare un
+documento vecchio, che e' l'unica che dica che i dati di prima sono ancora
+raggiungibili.
+
+### 5. La consegna
+
+**`docs/MANUALE_OPERATIVO.md`** — per chi tiene in piedi Aurora al posto di
+chi l'ha costruita. E' scritto per essere letto di sabato mattina da qualcuno
+chiamato al telefono: come si avvia e si ferma, dove sono i registri, come si
+legge la diagnostica, **i cinque problemi piu' probabili** con la loro
+diagnosi e il loro rimedio, come si ripristina una copia, che cosa fare ogni
+giorno / settimana / mese / anno, le sette cose da non fare mai, e chi
+chiamare.
+
+I cinque problemi sono in ordine di probabilita': «Aurora non si apre», «non
+riesco a entrare», «il disco e' pieno», «la posta non arriva piu'», «Aurora e'
+lentissima». Il primo finisce nove volte su dieci con `Restart-Service Aurora`,
+e il manuale lo dice.
+
+**`docs/DA_FARE.md`** — quello che finora era sparso nelle sezioni «rimasto in
+sospeso» di questo file, sessione per sessione, raccolto in un posto solo e
+messo in ordine. Ogni voce dice **che cosa manca**, **che cosa c'e' gia'** -
+che e' la parte utile, perche' quasi tutto ha gia' sotto la sua tabella o la
+sua funzione - e **quanto costa**.
+
+Le due voci in cima non sono funzioni nuove: sono la prova di ripristino su
+una macchina diversa e la prova del collegamento alla casella vera. Sono le
+due cose che restano aperte di R1.
+
+### Verificato
+
+- **I quattro criteri di accettazione.**
+  1. **Tutti i test passano**: 717, contro i 682 di fine sessione 12. I 35
+     nuovi stanno in `test_percorso_completo.py` (5) e `test_produzione.py`
+     (30), e coprono sia i sei difetti corretti sia le precauzioni che la
+     sessione chiedeva di verificare.
+  2. **`docs/INSTALLAZIONE.md` porta da una macchina pulita a un sistema che
+     funziona.** Ogni sezione ha la sua verifica con la risposta attesa; la
+     procedura non e' stata eseguita su una macchina vuota vera - servirebbe
+     un server - ma ogni comando che si poteva provare su questa macchina e'
+     stato provato, `scripts/avvia.py` compreso.
+  3. **Riavvio il server: l'applicazione riparte da sola.** E' la sezione 9.5
+     dell'installazione, ed e' un passo esplicito con la sua verifica. La
+     configurazione del servizio e' scritta per intero; l'esecuzione spetta a
+     chi installa, perche' richiede i diritti di amministratore sul server.
+  4. **Il manuale operativo e' comprensibile da un collega che non ha mai
+     visto il progetto**: nessun comando dato per scontato, i nomi dei servizi
+     scritti per esteso, e ogni sezione comincia da «come si riconosce» invece
+     che da «che cosa e' successo».
+- **I tempi, misurati due volte** (prima e dopo le correzioni), su 42 prodotti,
+  64 progetti, 608 documenti, 1024 messaggi:
+
+  | Pagina | Prima | Dopo |
+  |---|---|---|
+  | Diagnostica | 1808 ms | **100 ms** |
+  | Salute (JSON) | 2257 ms | **94 ms** |
+  | Scheda di un progetto | 62 ms | 63 ms |
+  | Elenco documenti | 30 ms | 30 ms |
+  | Cruscotto | 47 ms | 42 ms |
+  | *tutte le altre* | < 60 ms | < 60 ms |
+
+- **Le pagine sono state guardate nel browser** con il server avviato: nessun
+  errore nella consolle su cinque pagine diverse, la politica dei contenuti non
+  blocca niente, 70 moduli con la domanda di conferma sulla sola pagina degli
+  utenti e **zero script scritti dentro le pagine**. La domanda di conferma e'
+  stata provata in tutti e due i versi: rispondendo «no» il modulo non parte,
+  rispondendo «si» parte.
+- **La riga «Connessione cifrata» compare in rosso** sul server di sviluppo,
+  con la sua istruzione, e le quattro combinazioni di https e `COOKIE_SECURE`
+  sono verificate una per una da un test.
+
+### Un difetto trovato scrivendo un test, e vale la pena saperlo
+
+Il test del progetto chiuso, alla prima stesura, provava a caricare un
+documento **come creatore** e si aspettava un 403. Ne ha ricevuto uno 303:
+sembrava un difetto del programma.
+
+Non lo era. D-058 dice che un progetto chiuso e' in sola lettura **tranne che
+per il creatore**, che e' anche l'unico che lo possa riaprire. Il test era
+sbagliato, non il programma. Adesso il rifiuto lo prova l'ingegnere e il
+permesso lo prova il creatore, e la ragione e' scritta nella docstring del
+test: e' il genere di cosa su cui qualcuno rischia di inciampare di nuovo.
+
+### Quello che resta da fare, e perche'
+
+Tutto quanto sta in **`docs/DA_FARE.md`**, che da questa sessione e' il posto
+in cui guardare. Le due cose che restano aperte di R1:
+
+- **la prova di ripristino su una macchina diversa** va eseguita da una
+  persona, perche' creare un database richiede i diritti di superutente che
+  l'utente di Aurora giustamente non ha. E' la prova piu' importante di tutte e
+  va fatta **prima** della messa in esercizio;
+- **il collegamento alla casella aziendale non e' mai stato provato su una
+  casella vera**, perche' la registrazione applicativa non esiste ancora. E'
+  esattamente quello che `docs/RICHIESTA_IT.md` serve a ottenere.
+
+**Sul database di sviluppo restano i due lotti di `scripts/dati_prova.py`**,
+riconoscibili dai codici prodotto che cominciano per `PRV` seguito da sei
+lettere. Sono 40 prodotti, 600 documenti, 1000 messaggi e 30 persone finte, e
+**non si cancellano** (regola 5). Fanno comodo: sono il volume su cui si
+rimisurano i tempi il giorno in cui qualcuno aggiunge una pagina.
+
+Il primo dei due lotti ha i codici prodotto che **non si scompongono**, perche'
+la coda casuale conteneva delle cifre: e' rimasto ed e' utile cosi' com'e', ed
+e' il caso previsto da D-039 - i codici veri di un listino di vent'anni non
+seguono tutti la stessa regola.
 
 ---
 

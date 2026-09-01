@@ -373,6 +373,13 @@ def ultimo_rilascio(db: Session, document_id: uuid.UUID) -> AuditLog | None:
     registrati (regola 6 di CLAUDE.md). Duplicarlo vorrebbe dire due verita'
     che possono divergere.
     """
+    # Si ordina per "seq" e non per "occurred_at", per la stessa ragione
+    # scritta in app/services/registro.py: PostgreSQL da' a now() lo stesso
+    # valore per tutta la transazione, quindi due righe scritte nella stessa
+    # richiesta hanno la stessa ora e "la piu' recente" non e' decidibile.
+    # "seq" e' l'ordine totale della catena del registro (D-063): con lui la
+    # risposta e' sempre la stessa, e la scheda non puo' mostrare un giorno un
+    # rilascio e il giorno dopo un altro.
     return db.scalars(
         select(AuditLog)
         .where(
@@ -382,7 +389,7 @@ def ultimo_rilascio(db: Session, document_id: uuid.UUID) -> AuditLog | None:
             AuditLog.new_value["state"].astext == DocumentState.RILASCIATO.value,
         )
         .options(selectinload(AuditLog.user))
-        .order_by(AuditLog.occurred_at.desc())
+        .order_by(AuditLog.seq.desc())
     ).first()
 
 
@@ -405,7 +412,11 @@ def scarichi_di(
                 AuditLog.action == ACTION_DOCUMENT_DOWNLOADED,
             )
             .options(selectinload(AuditLog.user))
-            .order_by(AuditLog.occurred_at.desc())
+            # Per "seq" e non per "occurred_at": vedi ultimo_rilascio() qui
+            # sopra. Due scarichi nella stessa richiesta hanno la stessa ora,
+            # e un ordine ambiguo su un elenco tagliato a venti righe puo'
+            # farne sparire una e mostrarne un'altra due volte.
+            .order_by(AuditLog.seq.desc())
             .limit(limite)
         ).all()
     )

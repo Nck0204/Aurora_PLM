@@ -199,6 +199,37 @@ class Settings(BaseSettings):
     #   C:\Program Files\PostgreSQL\18\bin
     POSTGRES_BIN_PATH: str = ""
 
+    # --- Come si accende il server (sessione 13) ---------------------------
+    #
+    # Questi quattro parametri li legge `scripts/avvia.py`, che e' il modo in
+    # cui Aurora parte in produzione: un servizio di Windows esegue quello
+    # script, e lo script accende uvicorn con quello che trova scritto qui.
+    #
+    # In sviluppo non servono: si scrive `uvicorn app.main:app --reload` e si
+    # lavora su http://localhost:8000.
+    #
+    # SERVER_HOST vale 0.0.0.0, cioe' "rispondi su tutte le schede di rete
+    # della macchina": e' quello che serve perche' Aurora si apra dagli altri
+    # computer dell'ufficio. Scrivendoci 127.0.0.1 il server risponde soltanto
+    # a chi e' seduto davanti al server, che e' utile per una prova e inutile
+    # per il resto.
+    SERVER_HOST: str = "0.0.0.0"
+    SERVER_PORT: int = 8000
+
+    # Il certificato con cui Aurora parla in https, e la sua chiave privata.
+    # Vuoti = niente https, cioe' quello che si fa in sviluppo.
+    #
+    # **Se sono valorizzati, COOKIE_SECURE deve essere vero**, altrimenti i
+    # cookie continuerebbero a viaggiare anche in chiaro. Il contrario -
+    # COOKIE_SECURE acceso senza https davanti - e' peggio ancora: nessuno
+    # riesce piu' a entrare, perche' il browser non rimanda mai il cookie. La
+    # pagina di diagnostica guarda proprio questa coppia e lo dice.
+    #
+    # Sono due file separati in formato PEM (.crt e .key). Un certificato .pfx
+    # va convertito una volta sola: la procedura e' in docs/INSTALLAZIONE.md.
+    HTTPS_CERT_FILE: str = ""
+    HTTPS_KEY_FILE: str = ""
+
     # Parola d'ordine per interrogare /salute dall'esterno. Vuota (di
     # partenza) vuol dire che chiunque arrivi al server puo' leggere la
     # diagnostica in JSON: su una rete aziendale chiusa va bene, ed e' come si
@@ -276,6 +307,17 @@ class Settings(BaseSettings):
     def initial_data_config(self) -> Path:
         """Percorso assoluto del file con i dati iniziali."""
         return _absolute(self.INITIAL_DATA_CONFIG)
+
+    @property
+    def https_acceso(self) -> bool:
+        """Dice se Aurora e' configurata per parlare in https.
+
+        Sono due parametri e devono esserci tutti e due: mezzo certificato non
+        serve a niente, e un file indicato e mancante e' un server che non si
+        accende. Se il file c'e' davvero lo verifica `scripts/avvia.py`, che e'
+        l'unico che debba aprirlo.
+        """
+        return bool(self.HTTPS_CERT_FILE.strip() and self.HTTPS_KEY_FILE.strip())
 
     @property
     def max_upload_bytes(self) -> int:

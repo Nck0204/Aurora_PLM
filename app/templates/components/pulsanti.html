@@ -105,23 +105,18 @@
 {% macro modulo_pulsante(request, azione, etichetta, variante="secondario",
                          misura="normale", icona_nome=none, conferma=none,
                          titolo=none, in_linea=true, nome=none, valore=none) -%}
-<form method="post" action="{{ azione }}"{% if in_linea %} class="modulo-in-linea"{% endif %}>
+{# La domanda di conferma viaggia come attributo data-conferma sul modulo, e a
+   farla e' app/static/js/aurora.js. E' l'unico modo compatibile con la
+   politica dei contenuti (Content-Security-Policy in app/main.py), che vieta
+   gli script scritti dentro la pagina: uno script in linea qui sarebbe stato
+   bloccato dal browser, la domanda sarebbe sparita in silenzio e la consolle
+   si sarebbe riempita di segnalazioni.
+
+   Sta sul modulo e non sul pulsante perche' cosi' scatta anche quando si
+   invia con Invio da tastiera. #}
+<form method="post" action="{{ azione }}"{% if in_linea %} class="modulo-in-linea"{% endif %}{% if conferma %} data-conferma="{{ conferma }}"{% endif %}>
     <input type="hidden" name="csrf" value="{{ token_csrf(request) }}">
     {{ pulsante(etichetta, tipo="submit", variante=variante, misura=misura,
                 icona_nome=icona_nome, titolo=titolo, nome=nome, valore=valore) }}
-    {%- if conferma %}
-    {# La domanda di conferma la fa il modulo, non il pulsante: cosi' scatta
-       anche quando si invia con Invio da tastiera. #}
-    <script>
-        (function () {
-            var modulo = document.currentScript.parentElement;
-            modulo.addEventListener("submit", function (evento) {
-                if (!window.confirm({{ conferma|tojson }})) {
-                    evento.preventDefault();
-                }
-            });
-        })();
-    </script>
-    {%- endif %}
 </form>
 {%- endmacro %}

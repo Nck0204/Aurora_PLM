@@ -21,11 +21,13 @@ Avvio in sviluppo:
 
 import http
 import logging
+import re
 import uuid
 from contextlib import asynccontextmanager
 from logging.handlers import RotatingFileHandler
 
 from fastapi import Depends, FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
@@ -80,6 +82,43 @@ LOG_MAX_BYTES = 5 * 1024 * 1024
 LOG_BACKUP_COUNT = 10
 
 
+# I parametri dell'indirizzo il cui **valore** non deve finire nel registro.
+# Ce n'e' uno solo e basta cosi': la parola d'ordine di /salute, che D-089
+# permette di presentare anche come "?token=..." perche' non tutti i programmi
+# di sorveglianza sanno aggiungere un'intestazione.
+#
+# Uvicorn scrive nel registro degli accessi la riga di richiesta per intero,
+# query compresa: senza questa sostituzione, la parola d'ordine finirebbe in
+# chiaro dentro logs/aurora.log a ogni interrogazione, cioe' in un file che si
+# manda per posta quando si chiede aiuto.
+_PARAMETRI_DA_NASCONDERE = re.compile(
+    r"\b(token)=[^&\s\"]*", re.IGNORECASE
+)
+
+
+class NascondiSegretiNegliIndirizzi(logging.Filter):
+    """Sostituisce con *** il valore dei parametri riservati nelle righe.
+
+    E' un filtro del registro e non una modifica alle rotte perche' la riga la
+    scrive uvicorn, dentro di se', prima che il nostro programma la veda. Si
+    applica a tutti i gestori: una riga che passa dal registro degli accessi e
+    una che passa dal nostro sono la stessa riga per chi la legge.
+
+    Non solleva mai: un filtro del registro che fallisce fa sparire la riga che
+    stava ripulendo, ed e' esattamente il momento in cui quella riga serviva.
+    """
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        try:
+            messaggio = record.getMessage()
+            if "token=" in messaggio.lower():
+                record.msg = _PARAMETRI_DA_NASCONDERE.sub(r"\1=***", messaggio)
+                record.args = ()
+        except Exception:  # noqa: BLE001 - vedi la docstring
+            pass
+        return True
+
+
 def configure_logging() -> None:
     """Prepara la scrittura del registro su file e a schermo.
 
@@ -104,6 +143,13 @@ def configure_logging() -> None:
 
     console_handler = logging.StreamHandler()
     console_handler.setFormatter(formatter)
+
+    # Il filtro sta sui gestori e non sul registro principale: cosi' vale
+    # anche per le righe che arrivano dai registri di uvicorn, che hanno un
+    # nome diverso ma finiscono in questi stessi due gestori.
+    nascondi = NascondiSegretiNegliIndirizzi()
+    file_handler.addFilter(nascondi)
+    console_handler.addFilter(nascondi)
 
     root_logger = logging.getLogger()
     root_logger.setLevel(settings.LOG_LEVEL.upper())
@@ -234,6 +280,96 @@ app.mount(
 # ---------------------------------------------------------------------------
 #  Consegna dei cookie
 # ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+#  Le intestazioni di sicurezza
+# ---------------------------------------------------------------------------
+
+# Le intestazioni che accompagnano **ogni** risposta di Aurora. Sono cinque e
+# ciascuna chiude una porta che, senza di lei, resta aperta.
+#
+# Content-Security-Policy e' la piu' importante, e in Aurora si puo' scrivere
+# stretta come non si potrebbe scrivere quasi da nessun'altra parte: la regola
+# 1 di CLAUDE.md dice che non esiste nessuna risorsa caricata da un indirizzo
+# esterno, quindi "default-src 'self'" e' la descrizione esatta di come il
+# programma e' fatto, non un compromesso. Se un giorno qualcuno aggiungesse un
+# collegamento a una CDN, la pagina si romperebbe subito e in modo evidente -
+# che e' precisamente quello che si vuole.
+#
+#   'unsafe-inline' su style-src perche' i componenti scrivono qualche
+#   attributo style= per le larghezze calcolate (la barra di caricamento, la
+#   barra dell'avanzamento). Su script-src invece non c'e', ed e' la meta' che
+#   conta: nessuno script scritto dentro la pagina viene eseguito.
+#
+#   form-action 'self' vieta a un modulo di questa pagina di inviare i propri
+#   dati altrove; frame-ancestors 'none' vieta di mettere Aurora dentro la
+#   cornice di un'altra pagina, che e' il modo con cui si fa premere a
+#   qualcuno un pulsante che non sta vedendo.
+#
+# X-Content-Type-Options impedisce al browser di indovinare il tipo di un file
+# scaricato dall'archivio: un .txt caricato da qualcuno non deve poter essere
+# interpretato come HTML e finire eseguito.
+#
+# Referrer-Policy fa si' che, seguendo un collegamento, l'indirizzo della
+# pagina di partenza non viaggi verso l'esterno. Gli indirizzi di Aurora
+# contengono UUID di documenti e progetti: non sono segreti, ma non hanno
+# ragione di uscire.
+#
+# Strict-Transport-Security si aggiunge **solo con COOKIE_SECURE acceso**,
+# cioe' solo quando Aurora sta dietro a https. Mandarla su http sarebbe
+# inutile; mandarla da un server di prova raggiunto per nome finirebbe per
+# impedire di aprirlo in http per i mesi successivi, perche' il browser se la
+# ricorda.
+INTESTAZIONI_DI_SICUREZZA = {
+    "Content-Security-Policy": (
+        "default-src 'self'; "
+        "script-src 'self'; "
+        "style-src 'self' 'unsafe-inline'; "
+        "img-src 'self' data:; "
+        "font-src 'self'; "
+        "connect-src 'self'; "
+        "object-src 'none'; "
+        "base-uri 'self'; "
+        "form-action 'self'; "
+        "frame-ancestors 'none'"
+    ),
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Referrer-Policy": "same-origin",
+    "Cross-Origin-Opener-Policy": "same-origin",
+}
+
+# Sei mesi. Dice al browser: da qui in avanti questo indirizzo si apre solo in
+# https, anche se qualcuno scrive http a mano. Non c'e' "includeSubDomains"
+# perche' Aurora sta su un nome solo del dominio aziendale e non ha nessun
+# titolo per decidere degli altri.
+HSTS = "max-age=15552000"
+
+
+@app.middleware("http")
+async def intestazioni_di_sicurezza(request: Request, call_next):
+    """Aggiunge a ogni risposta le intestazioni che il browser deve rispettare.
+
+    E' un middleware e non una cosa scritta rotta per rotta per la stessa
+    ragione per cui la protezione CSRF e' una dipendenza globale (D-028): una
+    rotta a cui mancassero funzionerebbe benissimo, e la mancanza si
+    scoprirebbe il giorno in cui qualcuno ne approfitta.
+
+    Le intestazioni gia' scritte da chi ha composto la risposta non si
+    sovrascrivono: se un giorno una rotta avesse bisogno di una politica sua,
+    la scrive e questa la rispetta.
+    """
+    response = await call_next(request)
+
+    for nome, valore in INTESTAZIONI_DI_SICUREZZA.items():
+        if nome not in response.headers:
+            response.headers[nome] = valore
+
+    if settings.COOKIE_SECURE and "Strict-Transport-Security" not in response.headers:
+        response.headers["Strict-Transport-Security"] = HSTS
+
+    return response
 
 
 @app.middleware("http")
@@ -386,6 +522,67 @@ async def http_exception_handler(
         exc.status_code,
         message_override=messaggio_specifico(exc),
     )
+
+
+# Il messaggio del 404 quando un identificativo nell'indirizzo non e' scritto
+# come un UUID. E' **la stessa frase** che riceve chi chiede un identificativo
+# ben scritto che non esiste: e' la regola di D-052 portata fino in fondo. Un
+# messaggio diverso direbbe a chi prova gli indirizzi che la forma era quella
+# giusta, che e' meta' dell'informazione che D-052 vuole non dare.
+MESSAGGIO_INDIRIZZO_NON_VALIDO = ERROR_MESSAGES[404][1]
+
+
+@app.exception_handler(RequestValidationError)
+async def validazione_handler(
+    request: Request, exc: RequestValidationError
+) -> Response:
+    """Un parametro che FastAPI non riesce a leggere non e' un errore tecnico.
+
+    **Che cosa succedeva senza questo gestore.** Aprendo un indirizzo con
+    dentro un identificativo storto - un preferito di sei mesi fa, un
+    collegamento tagliato a meta' da un programma di posta, un indirizzo
+    ribattuto a mano - FastAPI rispondeva da solo con un 422 e un JSON come
+    questo, anche a un browser:
+
+        {"detail":[{"type":"uuid_parsing","loc":["path","product_id"],
+                    "msg":"Input should be a valid UUID, ..."}]}
+
+    Sono tre cose sbagliate insieme: e' in inglese (regola 3 di CLAUDE.md), e'
+    un dettaglio tecnico interno mostrato a chi usa il programma, e dice il
+    nome del parametro della rotta, che a chi guarda non serve e a chi prova
+    gli indirizzi serve.
+
+    **Adesso ci sono due risposte, e la distinzione conta.** Se quello che non
+    si e' letto sta nel **percorso**, la risposta e' un 404 con la stessa
+    identica frase di un identificativo inesistente: perche' e' esattamente
+    quello che e' - un indirizzo che non porta da nessuna parte - e perche' due
+    frasi diverse per la stessa domanda sono il buco che D-052 e' andato a
+    chiudere. Per tutto il resto - un campo di modulo mancante, un parametro di
+    ricerca che non si converte - e' un 400: la richiesta e' malfatta, e chi
+    l'ha inviata la puo' correggere.
+
+    Il dettaglio vero finisce nel registro su file, dove chi indaga lo trova.
+    """
+    posizioni = [
+        errore.get("loc", ()) for errore in exc.errors()
+    ]
+    solo_percorso = bool(posizioni) and all(
+        posizione and posizione[0] == "path" for posizione in posizioni
+    )
+
+    logger.warning(
+        "Parametri non validi su %s %s: %s",
+        request.method,
+        request.url.path,
+        exc.errors(),
+    )
+
+    if solo_percorso:
+        return build_error_response(
+            request, 404, message_override=MESSAGGIO_INDIRIZZO_NON_VALIDO
+        )
+
+    return build_error_response(request, 400)
 
 
 def database_irraggiungibile() -> bool:

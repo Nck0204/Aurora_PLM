@@ -1155,6 +1155,57 @@ class Integrita:
     leggibile: bool = True
 
 
+def _nomi_nell_archivio(cartella: Path) -> set[str]:
+    """I nomi dei file dell'archivio, letti con os.scandir.
+
+    **Perche' non `rglob("*")`.** L'archivio ha una forma fissa e conosciuta:
+    `objects/<due caratteri>/<due caratteri>/<impronta>` (D-004). Sono fino a
+    65.536 cartelle, quasi tutte con dentro pochi file, e il costo di questa
+    funzione non e' leggere i file - e' aprire le cartelle.
+
+    `Path.rglob()` costruisce un oggetto `Path` per ogni voce trovata e poi
+    `is_file()` chiede al sistema operativo, una per una, se sia un file: e'
+    una chiamata di sistema in piu' per ogni voce. `os.scandir` restituisce
+    invece voci che il tipo se lo portano gia' dietro, perche' Windows lo
+    fornisce insieme al nome quando legge la cartella.
+
+    Su un archivio di seimila file la differenza misurata e' fra 2,3 secondi e
+    0,6: la pagina di diagnostica passa da «lenta» a «pronta», e cresce piu'
+    piano quando l'archivio crescera'.
+
+    Una cartella che non si legge - permessi, disco staccato a meta' giro - non
+    ferma la lettura delle altre: si salta e si annota. Un archivio letto per
+    tre quarti darebbe pero' un conto di file mancanti che non vuol dire
+    niente, ed e' per questo che chi chiama distingue i due casi guardando se
+    e' stato sollevato un OSError sulla cartella di partenza.
+    """
+    trovati: set[str] = set()
+    da_visitare = [cartella]
+
+    while da_visitare:
+        corrente = da_visitare.pop()
+        try:
+            with os.scandir(corrente) as voci:
+                for voce in voci:
+                    if voce.is_dir():
+                        da_visitare.append(Path(voce.path))
+                    else:
+                        trovati.add(voce.name.lower())
+        except OSError as errore:
+            if corrente == cartella:
+                # La cartella di partenza: senza di lei non c'e' niente da
+                # confrontare, e il chiamante deve saperlo.
+                raise
+            logger.warning(
+                "Diagnostica: sottocartella dell'archivio illeggibile "
+                "(%s): %s",
+                corrente,
+                errore,
+            )
+
+    return trovati
+
+
 def verifica_archivio(db: Session, *, esempi: int = 5) -> Integrita:
     """Confronta i file sul disco con le impronte scritte nel database.
 
@@ -1185,9 +1236,7 @@ def verifica_archivio(db: Session, *, esempi: int = 5) -> Integrita:
 
     if cartella.is_dir():
         try:
-            for percorso in cartella.rglob("*"):
-                if percorso.is_file():
-                    sul_disco.add(percorso.name.lower())
+            sul_disco = _nomi_nell_archivio(cartella)
         except OSError as errore:
             logger.error("Diagnostica: archivio illeggibile (%s)", errore)
             leggibile = False
@@ -1207,10 +1256,70 @@ def verifica_archivio(db: Session, *, esempi: int = 5) -> Integrita:
     )
 
 
+# Per quanti secondi vale la verifica dell'archivio gia' fatta.
+#
+# **Perche' questo controllo si tiene da parte e gli altri no.** Tutti gli
+# altri sono interrogazioni al database su tabelle indicizzate e costano
+# millisecondi. Questo apre una per una tutte le cartelle dell'archivio, e il
+# suo costo cresce con l'archivio: con seimila file sono sei decimi di
+# secondo, con centomila saranno parecchi secondi. La pagina /diagnostica la
+# apre una persona ogni tanto e potrebbe anche aspettare; **/salute la
+# interroga un programma di sorveglianza**, che la chiama ogni minuto per
+# sempre - e un minuto di lavoro su disco ogni minuto e' una macchina che si
+# tiene occupata da sola.
+#
+# Cinque minuti sono la misura giusta perche' il guasto che questo controllo
+# scopre - dei file spariti dall'archivio - non e' un guasto che si risolve
+# in cinque minuti: chi lo vede deve fermarsi e ripristinare una copia. Un
+# ritardo di cinque minuti nell'accorgersene non cambia niente; una pagina di
+# diagnostica che ci mette dieci secondi ad aprirsi, si'.
+SECONDI_VALIDITA_ARCHIVIO = 300
+
+# Quello che la verifica ha trovato l'ultima volta, e quando. Sta in una
+# variabile di modulo e non in una tabella perche' non e' un dato
+# dell'azienda: e' il risultato di una misura, si rifa' da solo, e perderlo al
+# riavvio del server non costa niente (e' la stessa ragione di D-082).
+_archivio_gia_verificato: tuple[float, Integrita] | None = None
+
+
+def archivio_verificato(db: Session, *, forza: bool = False) -> Integrita:
+    """La verifica dell'archivio, rifatta al massimo ogni cinque minuti.
+
+    Con `forza=True` si rifa' comunque: e' quello che serve a chi ha appena
+    ripristinato una copia di sicurezza e vuole sapere **adesso** se i file
+    ci sono tutti, non che cosa si era misurato cinque minuti fa.
+
+    `verifica_archivio()` resta esatta e senza memoria: la usano
+    `scripts/ripristino.py` e i test, che non devono mai vedere una risposta
+    vecchia.
+    """
+    global _archivio_gia_verificato
+
+    if not forza and _archivio_gia_verificato is not None:
+        quando, esito = _archivio_gia_verificato
+        if perf_counter() - quando < SECONDI_VALIDITA_ARCHIVIO:
+            return esito
+
+    esito = verifica_archivio(db)
+    _archivio_gia_verificato = (perf_counter(), esito)
+    return esito
+
+
+def dimentica_archivio_verificato() -> None:
+    """Butta via la verifica tenuta da parte.
+
+    Serve ai test, che devono poter cambiare l'archivio e vedere subito la
+    riga cambiare: senza, il secondo test di fila leggerebbe la misura del
+    primo e verificherebbe la memoria invece del programma.
+    """
+    global _archivio_gia_verificato
+    _archivio_gia_verificato = None
+
+
 def _controllo_archivio(db: Session) -> Voce:
     """La riga che riassume il confronto fra disco e database."""
     try:
-        esito = verifica_archivio(db)
+        esito = archivio_verificato(db)
     except Exception as errore:  # noqa: BLE001 - qui non si solleva mai
         logger.exception("Diagnostica: la verifica dell'archivio e' fallita")
         return Voce(
@@ -1378,6 +1487,118 @@ def _controllo_registro(db: Session) -> Voce:
 # ---------------------------------------------------------------------------
 
 # L'ordine in cui i controlli compaiono nella pagina, ed e' l'ordine in cui
+# ---------------------------------------------------------------------------
+#  13. LA CONNESSIONE E' CIFRATA?
+# ---------------------------------------------------------------------------
+
+# L'istruzione per accendere https, scritta una volta sola. La citano la riga
+# rossa e la riga gialla, che parlano dello stesso rimedio visto da due parti.
+CHE_FARE_HTTPS = (
+    "Apri il file .env sul server, scrivi il percorso del certificato in "
+    "HTTPS_CERT_FILE e quello della sua chiave in HTTPS_KEY_FILE, metti "
+    "COOKIE_SECURE=true, e riavvia il servizio «Aurora» da Servizi di "
+    "Windows. La procedura completa, certificato compreso, e' in "
+    "docs/INSTALLAZIONE.md, sezione 6."
+)
+
+
+def _controllo_sicurezza() -> Voce:
+    """La sessione di chi usa Aurora viaggia cifrata, oppure no.
+
+    **Perche' questo controllo esiste.** E' il difetto piu' probabile di
+    un'installazione nuova, ed e' anche quello che non si vede: Aurora
+    funziona perfettamente in http, le pagine si aprono, nessuno si lamenta -
+    e intanto il gettone di sessione di ogni persona attraversa la rete
+    aziendale in chiaro, dove chiunque abbia accesso a uno switch lo puo'
+    leggere e riusare.
+
+    **Sono due parametri e vanno d'accordo o non vanno.** Il certificato dice
+    come parla il server; `COOKIE_SECURE` dice al browser di non rimandare il
+    cookie su una connessione in chiaro. Con il primo e senza il secondo la
+    cifratura c'e' ma non protegge la sessione; con il secondo e senza il
+    primo **non si riesce a entrare**, ed e' un guasto che sembra qualunque
+    altra cosa - il modulo di accesso accetta la password e rimanda al modulo
+    di accesso.
+
+    Il caso «COOKIE_SECURE acceso e nessun certificato» resta **giallo** e non
+    rosso, ed e' voluto: e' anche la configurazione giusta di chi ha messo
+    davanti ad Aurora un altro server che parla in https. Aurora non ha modo
+    di saperlo, e dare del rosso a una configurazione corretta insegna a
+    ignorare i rossi.
+
+    Non riceve la sessione del database: la risposta sta tutta nel file `.env`.
+    """
+    dati = {
+        "https": settings.https_acceso,
+        "cookie_secure": settings.COOKIE_SECURE,
+    }
+    dettagli = (
+        ("Certificato", settings.HTTPS_CERT_FILE or "(nessuno)"),
+        ("Chiave privata", settings.HTTPS_KEY_FILE or "(nessuna)"),
+        ("Cookie con l'attributo Secure", "si" if settings.COOKIE_SECURE else "no"),
+    )
+
+    if settings.https_acceso and settings.COOKIE_SECURE:
+        return Voce(
+            chiave="sicurezza",
+            titolo="Connessione cifrata",
+            colore=VERDE,
+            valore="Aurora parla in https e i cookie viaggiano solo cifrati",
+            dettagli=dettagli,
+            dati=dati,
+        )
+
+    if settings.https_acceso and not settings.COOKIE_SECURE:
+        return Voce(
+            chiave="sicurezza",
+            titolo="Connessione cifrata",
+            colore=ROSSO,
+            valore="Aurora parla in https, ma i cookie non lo pretendono",
+            che_fare=(
+                "Il certificato c'e' e la connessione e' cifrata, ma "
+                "COOKIE_SECURE nel file .env e' falso: il browser rimanderebbe "
+                "il gettone di sessione anche su una connessione in chiaro, e "
+                "chiunque sulla rete lo potrebbe leggere. Scrivi "
+                "COOKIE_SECURE=true nel file .env e riavvia il servizio "
+                "«Aurora» da Servizi di Windows."
+            ),
+            dettagli=dettagli,
+            dati=dati,
+        )
+
+    if settings.COOKIE_SECURE and not settings.https_acceso:
+        return Voce(
+            chiave="sicurezza",
+            titolo="Connessione cifrata",
+            colore=GIALLO,
+            valore="I cookie pretendono https, ma Aurora non ha un certificato",
+            che_fare=(
+                "COOKIE_SECURE e' vero e Aurora non ha nessun certificato. Se "
+                "davanti c'e' gia' un altro server che parla in https, va "
+                "bene cosi' e questa riga si puo' ignorare. Se non c'e', "
+                "nessuno riuscira' a entrare: il browser accetta la password "
+                "e non rimanda mai il cookie. " + CHE_FARE_HTTPS
+            ),
+            dettagli=dettagli,
+            dati=dati,
+        )
+
+    return Voce(
+        chiave="sicurezza",
+        titolo="Connessione cifrata",
+        colore=ROSSO,
+        valore="Aurora parla in chiaro: le password attraversano la rete cosi'",
+        che_fare=(
+            "Ogni password scritta nel modulo di accesso e ogni gettone di "
+            "sessione attraversano la rete aziendale in chiaro, dove chi ha "
+            "accesso a uno switch li puo' leggere e riusare. In sviluppo va "
+            "bene; su un server in esercizio no. " + CHE_FARE_HTTPS
+        ),
+        dettagli=dettagli,
+        dati=dati,
+    )
+
+
 # conviene guardarli: prima quello senza il quale non funziona niente, poi
 # quelli che dicono se qualcosa si e' fermato, poi quelli che parlano del
 # futuro, e per ultimo il conteggio, che non e' un controllo.
@@ -1419,6 +1640,7 @@ def stato_del_sistema(db: Session, *, oggi: date | None = None) -> Stato:
     for chiave, controllo in _CONTROLLI_CON_DATABASE:
         voci.append(_al_riparo(chiave, lambda: controllo(db)))
 
+    voci.append(_al_riparo("sicurezza", _controllo_sicurezza))
     voci.append(_al_riparo("segreto", lambda: _controllo_segreto(oggi=oggi)))
     voci.append(_al_riparo("errori", _controllo_errori))
 

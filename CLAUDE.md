@@ -8,6 +8,19 @@ Gli altri due file di governo sono:
 - `docs/STATO.md` — a che punto siamo, sessione per sessione;
 - `docs/DECISIONI.md` — le decisioni tecniche gia' prese e il perche'.
 
+Dalla sessione 13, per sapere **che cosa resta** non si spulciano piu' le note
+in fondo a ogni sessione di `STATO.md`: c'e' un file solo,
+
+- `docs/DA_FARE.md` — quello che manca per R2 e R3, in ordine, con scritto per
+  ciascuna cosa **quanto ne e' gia' predisposto**.
+
+E per la macchina su cui Aurora gira davvero:
+
+- `docs/INSTALLAZIONE.md` — dalla macchina vuota al sistema in esercizio;
+- `docs/AGGIORNAMENTO.md` — come si installa una versione nuova senza perdere
+  niente, e come si torna indietro;
+- `docs/MANUALE_OPERATIVO.md` — per chi la tiene accesa al posto nostro.
+
 Accanto a loro, da leggere prima di toccare una tabella:
 
 - `docs/MODELLO_DATI.md` — le tabelle del database, una riga di spiegazione
@@ -174,19 +187,30 @@ aurora/
 │                       una riga sola: la scomposizione dei codici prodotto,
 │                       l'elenco dei tipi di documento, i dati iniziali di
 │                       un'installazione nuova (dati_iniziali.toml)
-├── docs/                  STATO.md, DECISIONI.md, MODELLO_DATI.md,
-│                       GUIDA_STILE.md, RICHIESTA_IT.md - il documento da
-│                       mandare all'ufficio informatico per farsi dare
-│                       l'accesso alla casella aziendale - e
-│                       BACKUP_E_RIPRISTINO.md
+├── docs/                  i documenti del progetto. Si dividono in tre
+│                       famiglie:
+│                       - **governo**: STATO.md, DECISIONI.md,
+│                         MODELLO_DATI.md, GUIDA_STILE.md, DA_FARE.md
+│                       - **esercizio** (sessione 13): INSTALLAZIONE.md, come
+│                         si installa sul server aziendale; AGGIORNAMENTO.md,
+│                         come si installa una versione nuova senza perdere
+│                         niente; MANUALE_OPERATIVO.md, per chi tiene in piedi
+│                         Aurora al posto di chi l'ha scritta;
+│                         BACKUP_E_RIPRISTINO.md
+│                       - **da mandare fuori**: RICHIESTA_IT.md, il documento
+│                         per l'ufficio informatico sull'accesso alla casella
 │   └── guida/             la guida in linea: file .md mostrati dentro
 │                       Aurora all'indirizzo /aiuto (D-085)
 ├── scripts/               procedure operative (installazione, manutenzione).
-│                       Fra queste: hardening_db.sql, che rende audit_logs
-│                       a sola aggiunta; verifica_audit.py, che ricalcola
-│                       la catena delle impronte; archivia_audit.py, che
-│                       ne copia le voci vecchie su file compresso;
-│                       backup.py e ripristino.py, la copia di sicurezza
+│                       Fra queste: avvia.py, il programma che il servizio di
+│                       Windows esegue in produzione (D-094);
+│                       hardening_db.sql, che rende audit_logs a sola
+│                       aggiunta; verifica_audit.py, che ricalcola la catena
+│                       delle impronte; archivia_audit.py, che ne copia le
+│                       voci vecchie su file compresso; backup.py e
+│                       ripristino.py, la copia di sicurezza; dati_prova.py e
+│                       misura_tempi.py, il volume realistico e il cronometro
+│                       delle pagine (D-096)
 ├── backup/                le copie di sicurezza (NON in git). In produzione
 │                       va su un DISCO DIVERSO: vedi docs/BACKUP_E_RIPRISTINO.md
 ├── tests/                 test pytest
@@ -306,6 +330,14 @@ Dove mettere una cosa nuova:
   `/salute` e diventa rosso se un controllo non verde non porta
   un'istruzione (D-084). Nessun controllo solleva mai: un guasto diventa una
   riga gialla che lo dice;
+- **uno script che deve girare dentro una pagina** → non si scrive dentro
+  l'HTML: **la politica dei contenuti lo blocca** (`script-src 'self'`, D-091),
+  e lo blocca in silenzio. Si aggiunge una funzione ad
+  `app/static/js/aurora.js` e la si aggancia con un attributo `data-qualcosa`
+  nel template - mai con una classe del foglio di stile, che prima o poi
+  qualcuno rinomina. C'e' un test che legge i template e diventa rosso se
+  ricompare uno `<script>` scritto dentro una pagina. E vale sempre D-036:
+  quello che sta in quel file non puo' essere indispensabile;
 - **una pagina della guida in linea** → un file `NN-nome.md` in `docs/guida/`.
   Il numero mette in ordine e non compare nell'indirizzo. Il Markdown lo
   trasforma `app/services/guida.py`, su un sottoinsieme deciso da noi: quello
@@ -351,6 +383,9 @@ Tutti dalla radice del progetto (`aurora/`), con l'ambiente virtuale attivo:
 | Cosa | Comando |
 |---|---|
 | Avviare il server in sviluppo | `uvicorn app.main:app --reload` |
+| Avviare il server **come in produzione** | `python scripts/avvia.py` |
+| Riempire il database di dati realistici | `python scripts/dati_prova.py` |
+| Misurare i tempi delle pagine | `python scripts/misura_tempi.py` |
 | Controllare che sia vivo | aprire <http://localhost:8000/salute> |
 | Documentazione automatica delle rotte | <http://localhost:8000/docs> |
 | Eseguire i test | `pytest` |

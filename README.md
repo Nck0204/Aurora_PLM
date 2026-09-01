@@ -2,11 +2,48 @@
 
 Gestione progetti e documentazione tecnica. Gira in rete locale, senza cloud.
 
-## Installazione
+**Stato: rilascio R1 completato** (1 settembre 2026, fine della sessione 13).
+Il sistema e' pronto per la messa in esercizio sul server aziendale. Quello che
+resta - notifiche, rapporti, approvazione dei documenti, distinta base - e'
+elencato in `docs/DA_FARE.md`, in ordine, con scritto quanto ne e' gia'
+predisposto.
 
-Dalla sessione 12 la strada normale e' la **configurazione guidata**: si
-prepara il database, si avvia il server e si apre il browser. Il resto lo
-spiega Aurora, un passo per volta, senza aprire nessun file di testo.
+| Cosa | Numero |
+|---|---|
+| Sessioni di lavoro | 13 su 13, completate |
+| Tabelle del database | 21 |
+| Rotte HTTP | 112, in sei sezioni piu' sei riservate |
+| Test automatici | **717**, tutti superati |
+| Righe di codice | 30.500 in `app/`, 16.100 in `tests/` |
+| Decisioni tecniche annotate | 96 |
+
+---
+
+## Da dove si comincia
+
+| Se devi... | Leggi |
+|---|---|
+| installare Aurora **sul server aziendale** | `docs/INSTALLAZIONE.md` |
+| **tenerla accesa** al posto di chi l'ha scritta | `docs/MANUALE_OPERATIVO.md` |
+| installare una **versione nuova** | `docs/AGGIORNAMENTO.md` |
+| rimettere in piedi qualcosa dopo un guasto | `docs/BACKUP_E_RIPRISTINO.md` |
+| sapere **che cosa manca ancora** | `docs/DA_FARE.md` |
+| **modificare il codice** | `CLAUDE.md`, poi `docs/STATO.md` e `docs/DECISIONI.md` |
+| solo provarla sul tuo computer | qui sotto |
+
+---
+
+## Installazione in sviluppo
+
+> **Sul server aziendale la procedura e' un'altra**, e sta in
+> `docs/INSTALLAZIONE.md`: comprende il certificato per l'https, il servizio di
+> Windows che riparte da solo, le richieste da fare all'ufficio informatico e
+> le verifiche a ogni passo. Questa qui sotto e' per la macchina di chi
+> sviluppa.
+
+La strada normale e' la **configurazione guidata**: si prepara il database, si
+avvia il server e si apre il browser. Il resto lo spiega Aurora, un passo per
+volta, senza aprire nessun file di testo.
 
 1. Preparare PostgreSQL seguendo `scripts/setup_postgres.md` (parte B).
 2. Copiare `.env.example` in `.env` e adattare `DATABASE_URL`.
@@ -213,13 +250,14 @@ nel progetto della versione a cui e' attaccato.
 ## Come sta il sistema
 
 <http://localhost:8000/diagnostica> (serve il ruolo di creatore) risponde alla
-domanda «funziona tutto?» con dieci righe a semaforo. Ogni riga che non e'
+domanda «funziona tutto?» con undici righe a semaforo. Ogni riga che non e'
 verde **dice che cosa fare** - non che cosa e' successo: che cosa fare, con i
 nomi veri delle cose.
 
 | Riga | Che cosa guarda |
 |---|---|
 | database | risponde? in quanti millisecondi? |
+| connessione cifrata | https e cookie protetti vanno d'accordo? |
 | posta | da dove arriva, ultimo controllo riuscito, messaggi in 24 ore |
 | quarantena | quanti messaggi aspettano una persona |
 | copia di sicurezza | quando, com'e' andata, quanto ha copiato |
@@ -229,6 +267,11 @@ nomi veri delle cose.
 | contenuto | documenti, versioni, messaggi, persone attive |
 | segreto della posta | fra quanti giorni scade |
 | errori | quante righe di errore nelle ultime 24 ore |
+
+La riga **«connessione cifrata»** e' della sessione 13 ed e' quella che
+intercetta il difetto piu' probabile di un'installazione nuova: Aurora in http
+funziona benissimo, nessuno si lamenta, e intanto ogni password e ogni gettone
+di sessione attraversano la rete aziendale in chiaro.
 
 Gli stessi dati in forma leggibile da un programma di sorveglianza stanno in
 <http://localhost:8000/salute>, che risponde anche a chi non e' entrato e anche
@@ -292,12 +335,71 @@ Stampa una password nuova, obbliga a cambiarla al primo accesso e chiude tutte
 le sessioni aperte di quell'utente. Funziona con qualunque nome utente, non
 solo `admin`, e sa riattivare un utente disattivato.
 
+## Quanto e' veloce, e come si misura
+
+Le pagine principali rispondono in **meno di un decimo di secondo** su un
+database con 42 prodotti, 64 progetti, 608 documenti e 1024 messaggi. Il
+limite che l'azienda ha chiesto e' due secondi.
+
+Il volume si genera e si misura con due comandi, e sono ripetibili:
+
+```powershell
+python scripts\dati_prova.py     riempie il database di dati finti ma veri
+python scripts\misura_tempi.py   apre le pagine e cronometra
+```
+
+`misura_tempi.py` misura **due volte**: come le vede un amministratore, che
+non ha nessun filtro sui documenti, e come le vede una persona normale, che
+porta con se' le condizioni SQL dei permessi. Sono due interrogazioni diverse
+e possono avere due tempi molto diversi. Le righe oltre il limite sono
+segnalate e il comando esce con un codice diverso da zero, cosi' si puo'
+mettere in una verifica automatica.
+
+> **`dati_prova.py` scrive nel database vero e non cancella niente.** Non va
+> eseguito su un server in esercizio: chiede conferma e dice in quale database
+> sta per scrivere.
+
 ## Da leggere prima di modificare il codice
 
 - `CLAUDE.md` — convenzioni e regole permanenti del progetto
 - `docs/STATO.md` — a che punto e' il lavoro
 - `docs/DECISIONI.md` — le decisioni tecniche prese e il perche'
 - `docs/GUIDA_STILE.md` — palette e componenti, prima di scrivere una pagina
+- `docs/DA_FARE.md` — che cosa resta, in ordine, con quanto ne e' predisposto
 
 I componenti dell'interfaccia si vedono tutti insieme, in tutte le varianti,
 all'indirizzo <http://localhost:8000/stile> (serve il ruolo di creatore).
+
+## In produzione, in breve
+
+Il resto e' in `docs/INSTALLAZIONE.md`; queste sono le quattro cose che
+cambiano rispetto allo sviluppo.
+
+**Aurora si accende con uno script, non con `uvicorn` a mano:**
+
+```powershell
+python scripts\avvia.py
+```
+
+Legge dal `.env` l'indirizzo, la porta e il certificato, e dice come sta
+partendo. E' il programma che il servizio di Windows esegue.
+
+**Il servizio si chiama `Aurora`** e riparte da solo dopo un riavvio del
+server e dopo un guasto (NSSM, `docs/INSTALLAZIONE.md` sezione 9).
+
+**Https si accende da due parametri**, e vanno accesi insieme al terzo:
+
+```
+HTTPS_CERT_FILE=C:\Aurora\certificati\aurora.crt
+HTTPS_KEY_FILE=C:\Aurora\certificati\aurora.key
+COOKIE_SECURE=true
+```
+
+Uno senza l'altro e' un guasto, e la pagina di diagnostica lo dice: con il
+certificato e senza `COOKIE_SECURE` la sessione viaggia anche in chiaro; con
+`COOKIE_SECURE` e senza certificato **non si riesce piu' a entrare**.
+
+**Ogni risposta porta le intestazioni di sicurezza**, compresa una politica dei
+contenuti che vieta gli script scritti dentro le pagine (`script-src 'self'`).
+Si puo' scrivere cosi' stretta soltanto perche' Aurora non carica niente da
+indirizzi esterni: e' la regola 1 di `CLAUDE.md` che diventa una difesa.

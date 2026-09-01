@@ -45,3 +45,14 @@ desktop.ini
 # finestra di anteprima). Non serve a chi usa Aurora e cambia da computer a
 # computer.
 .claude/
+
+# Certificati per l'https (sessione 13). La chiave privata e' il segreto con
+# cui il server dimostra di essere se stesso: chi la copia puo' fingersi
+# Aurora. I percorsi si scrivono in HTTPS_CERT_FILE e HTTPS_KEY_FILE, e in
+# produzione stanno fuori dal progetto; qui si ignora il caso in cui qualcuno
+# li lasci dentro durante una prova.
+certificati/
+*.pem
+*.crt
+*.key
+*.pfx

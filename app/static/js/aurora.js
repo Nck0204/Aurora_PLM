@@ -139,6 +139,41 @@
     });
 
     /* ----------------------------------------------------------------------
+       2-bis. La domanda prima di un'azione
+
+       Un modulo con data-conferma="Testo della domanda" chiede conferma prima
+       di partire. Lo scrive il macro modulo_pulsante di
+       templates/components/pulsanti.html.
+
+       PERCHE' STA QUI E NON DENTRO LA PAGINA. Fino alla sessione 13 ogni
+       pulsante con conferma si portava dietro un <script> scritto dentro
+       l'HTML. La politica dei contenuti introdotta in quella sessione
+       (Content-Security-Policy, app/main.py) vieta gli script in linea: quelli
+       sarebbero stati bloccati dal browser, e la domanda sarebbe sparita senza
+       che nessuno se ne accorgesse. Qui invece e' un file servito da noi, che
+       la politica ammette, ed e' scritto una volta sola invece che una per
+       pulsante.
+
+       L'ascolto e' sul documento e in fase di cattura: cosi' vale anche per i
+       moduli che arrivano dopo dentro un pezzo di pagina sostituito da HTMX,
+       e la domanda si fa prima di qualunque altro gestore dell'invio.
+
+       SENZA JAVASCRIPT LA DOMANDA NON COMPARE E L'AZIONE SI ESEGUE. E' voluto
+       e non e' cambiato: nessuna delle azioni di Aurora e' irreparabile,
+       perche' non si cancella niente (regola 5 di CLAUDE.md).
+       -------------------------------------------------------------------- */
+
+    document.addEventListener("submit", function (evento) {
+        var modulo = evento.target;
+        if (!modulo || !modulo.hasAttribute || !modulo.hasAttribute("data-conferma")) {
+            return;
+        }
+        if (!window.confirm(modulo.getAttribute("data-conferma"))) {
+            evento.preventDefault();
+        }
+    }, true);
+
+    /* ----------------------------------------------------------------------
        3. Area di trascinamento dei file
 
        Il campo <input type="file"> c'e' gia' e funziona da solo. Qui si

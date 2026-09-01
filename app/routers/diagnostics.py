@@ -27,6 +27,7 @@ collegamento a /salute, che invece risponde sempre.
 """
 
 import logging
+import secrets
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from fastapi.responses import JSONResponse, Response
@@ -128,7 +129,15 @@ def salute(
     """
     if settings.HEALTH_TOKEN:
         presentato = intestazione or token
-        if presentato != settings.HEALTH_TOKEN:
+        # compare_digest e non l'uguale, per la stessa ragione scritta in
+        # app/services/csrf.py: l'uguale smette di confrontare al primo
+        # carattere diverso, quindi impiega piu' tempo quando i due valori
+        # hanno un inizio in comune, e misurando i tempi di molte risposte la
+        # parola d'ordine si indovina un carattere per volta. Qui e' un
+        # rischio piu' teorico che altrove - questa rotta la interroga un
+        # programma di sorveglianza, non un browser - ma due modi diversi di
+        # confrontare un segreto nello stesso programma sono uno di troppo.
+        if not secrets.compare_digest(presentato, settings.HEALTH_TOKEN):
             logger.warning("Richiesta a /salute senza la parola d'ordine giusta")
             raise HTTPException(
                 status_code=401,

@@ -2997,3 +2997,293 @@ database. Quindi l'istruzione la porta questa pagina, insieme al collegamento a
 
 **503 e non 500.** Un database spento non e' un errore del programma: e' un
 servizio che non c'e'. Il codice giusto lo dice anche a chi legge solo i codici.
+
+---
+
+## D-091 — Ogni risposta porta le intestazioni di sicurezza, e la politica dei contenuti e' stretta
+
+**Data:** 1 settembre 2026 · **Stato:** attiva
+
+**Decisione.** Un middleware in `app/main.py` aggiunge a **ogni** risposta di
+Aurora cinque intestazioni, e una sesta - `Strict-Transport-Security` - solo
+quando `COOKIE_SECURE` e' acceso. La piu' importante e' la politica dei
+contenuti:
+
+```
+default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline';
+img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none';
+base-uri 'self'; form-action 'self'; frame-ancestors 'none'
+```
+
+**Perche' si puo' scrivere cosi' stretta.** Perche' la regola 1 di CLAUDE.md
+dice che Aurora non carica **niente** da un indirizzo esterno: nessun CSS,
+nessuno script, nessun font, nessuna icona. `default-src 'self'` non e' quindi
+un compromesso fra sicurezza e comodita': e' la **descrizione esatta** di come
+il programma e' fatto. Il giorno in cui qualcuno aggiungesse un collegamento a
+una CDN, la pagina si romperebbe subito e in modo evidente - che e'
+precisamente quello che si vuole, invece di scoprirlo il giorno in cui quella
+CDN non risponde.
+
+**`'unsafe-inline'` su `style-src` si', su `script-src` no**, ed e' la
+differenza che conta. Gli attributi `style=` servono davvero: le larghezze
+calcolate della barra di caricamento e della barra dell'avanzamento non si
+possono scrivere in un foglio di stile, perche' cambiano a ogni richiesta. Uno
+script scritto dentro la pagina invece non serve, ed e' il vettore con cui si
+sfrutta qualunque falla di iniezione: se un giorno finisse dentro un template
+del testo scritto da un utente, con `script-src 'self'` non verrebbe eseguito.
+
+**Ha avuto un costo, e vale la pena saperlo.** Il macro `modulo_pulsante` di
+`components/pulsanti.html` scriveva, per ogni pulsante con conferma, un
+`<script>` dentro la pagina: quella politica lo avrebbe bloccato, la domanda
+di conferma sarebbe sparita **in silenzio** e la consolle del browser si
+sarebbe riempita di segnalazioni. La conferma viaggia adesso come attributo
+`data-conferma` sul modulo, e a farla e' `app/static/js/aurora.js` - che e' un
+file servito da noi e quindi ammesso. Ci si e' guadagnato anche in pulizia:
+prima quello script era scritto una volta per pulsante, adesso una volta sola.
+C'e' un test che legge i template e diventa rosso se ricompare uno script in
+linea.
+
+**Perche' un middleware e non una cosa scritta rotta per rotta.** Stessa
+ragione della protezione CSRF (D-028): una rotta a cui mancassero
+funzionerebbe benissimo, e la mancanza si scoprirebbe il giorno in cui qualcuno
+ne approfitta.
+
+**Conseguenza.** `frame-ancestors 'none'` vieta di mettere Aurora dentro la
+cornice di un'altra pagina. Se un giorno servisse - un cruscotto aziendale che
+mostra una pagina di Aurora dentro di se' - va cambiata quella riga
+consapevolmente, sapendo che riapre la porta ai clic rubati.
+
+---
+
+## D-092 — Un identificativo storto nell'indirizzo risponde 404, come uno che non esiste
+
+**Data:** 1 settembre 2026 · **Stato:** attiva
+
+**Decisione.** Un gestore di `RequestValidationError` in `app/main.py`
+intercetta tutto quello che FastAPI non riesce a leggere. Se l'errore riguarda
+**solo il percorso** - un UUID scritto male in `/prodotti/<qui>` - la risposta
+e' un **404** con la stessa identica frase che riceverebbe chi chiede un
+identificativo ben scritto che non esiste. Per tutto il resto - un campo di
+modulo mancante, un parametro di ricerca che non si converte - e' un **400**.
+Il dettaglio vero finisce nel registro su file.
+
+**Che cosa succedeva prima.** FastAPI rispondeva da solo, anche a un browser:
+
+```json
+{"detail":[{"type":"uuid_parsing","loc":["path","product_id"],
+            "msg":"Input should be a valid UUID, invalid character: found `n` at 1"}]}
+```
+
+Sono tre cose sbagliate insieme, e nessuna si vede finche' non capita: e' in
+**inglese** (regola 3 di CLAUDE.md), e' un **dettaglio tecnico interno**
+mostrato a chi usa il programma, e dice il **nome del parametro della rotta** -
+che a chi guarda non serve e a chi prova gli indirizzi serve eccome.
+
+Non e' un caso di laboratorio: capita con un preferito di sei mesi fa, con un
+collegamento tagliato a meta' da un programma di posta, con un indirizzo
+ribattuto a mano.
+
+**Perche' 404 e non 400 sul percorso.** Perche' e' esattamente quello che e':
+un indirizzo che non porta da nessuna parte. E soprattutto perche' un codice
+diverso sarebbe una **risposta che conferma**: chi prova gli indirizzi
+imparerebbe che la forma era quella giusta, che e' meta' dell'informazione che
+D-052 e' andato a negare. La frase e' la stessa costante, non una simile: due
+frasi scritte in due posti finiscono per differire di una virgola, e quella
+virgola dice tutto.
+
+**Conseguenza.** I campi dei moduli che il programma verifica da se' hanno
+tutti un valore di partenza vuoto, cosi' una casella vuota arriva al **nostro**
+codice invece che alla validazione di FastAPI, e chi la legge trova la frase
+italiana che dice quale campo manca. Era gia' la regola della sessione 5;
+undici campi non l'avevano ancora, e adesso ce l'hanno.
+
+---
+
+## D-093 — La verifica dell'archivio si tiene da parte per cinque minuti
+
+**Data:** 1 settembre 2026 · **Stato:** attiva
+
+**Decisione.** Il controllo «Integrita' dell'archivio» della diagnostica non
+riapre tutte le cartelle dell'archivio a ogni richiesta: `archivio_verificato()`
+tiene il risultato per cinque minuti (`SECONDI_VALIDITA_ARCHIVIO`).
+`verifica_archivio()` resta esatta e senza memoria, perche' la usano
+`scripts/ripristino.py` e i test, che non devono mai vedere una risposta
+vecchia.
+
+**Il problema, misurato.** Con l'archivio di prova della sessione 13 - 6358
+file su 256 cartelle di primo livello - la pagina `/diagnostica` ci metteva
+**1,8 secondi** e `/salute` fino a **2,3**, cioe' oltre il limite che l'azienda
+ha chiesto. Tutti gli altri controlli insieme costavano meno di venti
+millisecondi.
+
+Il costo non e' leggere i file: e' **aprire le cartelle**. L'archivio ha fino a
+65.536 sottocartelle (due livelli da due caratteri esadecimali, D-004), quasi
+tutte con dentro pochi file, e cresce con l'archivio.
+
+**Le due correzioni, e sono diverse.**
+
+1. **La lettura si fa con `os.scandir` e non con `Path.rglob("*")`.** `rglob`
+   costruisce un oggetto `Path` per ogni voce e poi `is_file()` chiede al
+   sistema operativo, una per una, se sia un file: una chiamata di sistema in
+   piu' per ogni voce. `os.scandir` restituisce voci che il tipo se lo portano
+   gia' dietro, perche' Windows lo fornisce insieme al nome. Misurato: da 2,3
+   secondi a 0,6.
+
+2. **Il risultato si tiene da parte**, e questa e' la meta' che risolve il
+   problema vero. Con 0,6 secondi la pagina sarebbe tornata accettabile
+   **oggi**; con centomila file non lo sarebbe piu'. E soprattutto:
+   `/diagnostica` la apre una persona ogni tanto e potrebbe anche aspettare,
+   ma **`/salute` la interroga un programma di sorveglianza**, che la chiama
+   ogni minuto per sempre. Un minuto di lavoro su disco ogni minuto e' una
+   macchina che si tiene occupata da sola.
+
+**Perche' cinque minuti.** Perche' il guasto che questo controllo scopre - dei
+file spariti dall'archivio - non e' un guasto che si risolve in cinque minuti:
+chi lo vede deve fermarsi e ripristinare una copia. Un ritardo di cinque
+minuti nell'accorgersene non cambia niente; una pagina di diagnostica che ci
+mette dieci secondi ad aprirsi, si'.
+
+**Conseguenza.** E' memoria di processo, e i test girano tutti nello stesso
+processo: `tests/conftest.py` ha una fixture automatica che la butta via prima
+di ogni test. Senza, il secondo test che guarda quella riga leggerebbe la
+misura del primo e verificherebbe la memoria invece del programma.
+
+Risultato: `/diagnostica` da 1808 a **100 millisecondi**, `/salute` da 2257 a
+**94**. Nessuna pagina di Aurora supera i cento millisecondi con il volume di
+prova.
+
+---
+
+## D-094 — Aurora si accende con uno script, non con una riga di uvicorn nel servizio
+
+**Data:** 1 settembre 2026 · **Stato:** attiva
+
+**Decisione.** In produzione Aurora si accende con `python scripts/avvia.py`,
+che legge dal `.env` l'indirizzo (`SERVER_HOST`), la porta (`SERVER_PORT`) e i
+due percorsi del certificato (`HTTPS_CERT_FILE`, `HTTPS_KEY_FILE`), e da quelli
+costruisce la chiamata a uvicorn. Il servizio di Windows esegue quello script.
+
+**L'alternativa scartata** era scrivere la riga di uvicorn con le sue sei
+opzioni dentro la configurazione del servizio. Sarebbe stato un file in meno e
+avrebbe messo la configurazione di Aurora in un posto in cui non sta: non e' in
+git, non e' commentata, non si legge senza aprire uno strumento di
+amministrazione, e chi cambia il certificato l'anno prossimo non saprebbe dove
+cercarla. La regola 8 di CLAUDE.md dice che la configurazione vive nel `.env`,
+e questo la fa valere anche per il modo in cui il programma si accende.
+
+Ci guadagna anche l'installazione: `nssm install` vuole un programma e i suoi
+argomenti, e «python scripts\avvia.py» e' molto piu' difficile da sbagliare di
+una riga di uvicorn con sei opzioni.
+
+**Che cosa controlla prima di accendere.** Tre cose, e sono i tre errori che si
+scoprirebbero tardi e male:
+
+- **il certificato indicato esiste davvero.** Senza, uvicorn parte, prova ad
+  aprire il file, non lo trova e muore: il servizio di Windows risulta
+  «avviato e poi arrestato», che non dice niente a nessuno. Questo caso ferma
+  l'avvio con una riga che dice quale file manca;
+- **https e i cookie sono d'accordo.** Con il certificato e senza
+  `COOKIE_SECURE` la sessione viaggia anche in chiaro; con `COOKIE_SECURE` e
+  senza certificato **non si riesce piu' a entrare**, perche' il browser non
+  rimanda mai un cookie Secure su http. Questo caso **non** ferma l'avvio: un
+  server che non si accende e' peggio di un server che si accende male e lo
+  dice, e la pagina di diagnostica lo ripete in rosso proprio perche' il
+  server e' acceso;
+- **si dice a voce alta come si sta accendendo**, con l'indirizzo per esteso.
+  La prima riga del registro di ogni avvio risponde alla domanda «ma questo e'
+  il server di produzione o quello di prova?».
+
+**Un processo solo, ed e' una scelta.** Il blocco che impedisce due controlli
+della posta sovrapposti sta nel processo (D-080): con piu' processi non
+varrebbe piu'. Per qualche decina di utenti in rete locale un processo basta e
+avanza. Se un giorno servissero piu' processi, e' questa decisione e la D-080
+che vanno rifatte insieme.
+
+---
+
+## D-095 — La diagnostica dice se la sessione viaggia in chiaro
+
+**Data:** 1 settembre 2026 · **Stato:** attiva
+
+**Decisione.** Un controllo in piu' nella pagina `/diagnostica`, «Connessione
+cifrata», che guarda la coppia (certificato, `COOKIE_SECURE`) e ne racconta le
+quattro combinazioni:
+
+| Certificato | `COOKIE_SECURE` | Colore | Perche' |
+|---|---|---|---|
+| si | si | **verde** | e' la configurazione di produzione |
+| si | no | **rosso** | la cifratura c'e' e non protegge la sessione |
+| no | si | **giallo** | nessuno entra piu'... **oppure** davanti c'e' un altro server https |
+| no | no | **rosso** | tutto in chiaro: e' lo sviluppo |
+
+**Perche' vale un controllo suo.** E' il difetto piu' probabile di
+un'installazione nuova, ed e' anche quello che **non si vede**: Aurora in http
+funziona perfettamente, le pagine si aprono, nessuno si lamenta - e intanto
+ogni password scritta nel modulo di accesso e ogni gettone di sessione
+attraversano la rete aziendale in chiaro, dove chi ha accesso a uno switch li
+puo' leggere e riusare. E' esattamente la forma di guasto contro cui la pagina
+di diagnostica esiste: quella che nessuno segnala perche' nessuno la vede.
+
+**Perche' il terzo caso e' giallo e non rosso.** «Cookie protetti senza
+certificato» e' anche la configurazione **giusta** di chi ha messo davanti ad
+Aurora un altro server che parla in https, e Aurora non ha modo di saperlo.
+Dare del rosso a una configurazione corretta insegna a ignorare i rossi, che e'
+il modo in cui una pagina di diagnostica smette di servire.
+
+**Conseguenza.** `COOKIE_SECURE` era gia' un parametro dalla sessione 3 e
+D-024 diceva gia' che in produzione deve valere `true`. Fino a ieri quella
+frase era una raccomandazione scritta in un documento; adesso e' una riga rossa
+che compare finche' non e' vera.
+
+---
+
+## D-096 — I dati di prova si generano contro il database vero, e nessun valore unico si inventa
+
+**Data:** 1 settembre 2026 · **Stato:** attiva
+
+**Decisione.** `scripts/dati_prova.py` riempie il database indicato da
+`DATABASE_URL` - cioe' quello vero - passando dagli stessi servizi che chiama
+l'interfaccia, e non cancella mai niente. Tutti i valori unici che scrive
+(codici cliente, codici prodotto, nomi utente, identificativi dei messaggi,
+contenuto dei file) portano una **coda casuale comune a tutto il lotto**.
+
+**Perche' contro il database vero.** Perche' e' l'unico modo di misurare
+qualcosa che valga. Un tempo di risposta misurato su un database finto non dice
+niente del database vero, che ha i suoi indici, la sua cache, le sue
+statistiche e il suo disco. La sessione 13 chiedeva di misurare i tempi con un
+volume realistico e di correggere quello che supera due secondi: senza dati
+veri quella misura non si fa.
+
+**Perche' i valori si generano invece di scriverli.** E' la stessa medicina che
+`tests/conftest.py` applica ai test dalla sessione 3, e per la stessa ragione,
+gia' costata quarantasei test rossi in una volta nella sessione 5: il database
+contiene dati veri lasciati dalle verifiche a mano, e un codice inventato a
+tavolino prima o poi collide con uno di quelli. Quando collide non si rompe la
+generazione, si rompe il vincolo di unicita' **a meta' lavoro**, con il
+database riempito per tre quarti.
+
+**La coda e' di sole lettere, e non e' un dettaglio.** Finisce dentro la sigla
+del modello del codice prodotto, e nell'espressione di scomposizione il modello
+e' il gruppo delle lettere iniziali. La prima esecuzione usava una coda
+esadecimale: i venti prodotti sono nati tutti con `code_parts` vuoto - che per
+D-039 non e' un errore - e meta' della ricerca che si voleva misurare non
+aveva niente da filtrare.
+
+**Perche' passa dai servizi e non scrive le righe a mano.** Costa qualche
+minuto in piu' di esecuzione e restituisce dati **veri**: i codici scomposti
+come li scompone il programma, le righe del registro con la loro catena di
+impronte, i file depositati per impronta con la deduplicazione, i messaggi
+attribuiti dalle stesse quattro regole. Un generatore che scrivesse le righe a
+mano produrrebbe un database che somiglia a quello vero e si comporta in un
+altro modo - a cominciare dal registro, che resterebbe vuoto proprio mentre si
+misura la pagina che lo mostra.
+
+**Conseguenza, e va saputa.** Su un server in esercizio questo script **non si
+esegue**: aggiunge dati finti che poi non si possono togliere, perche' in
+Aurora non si cancella niente (regola 5). Lo dice prima di cominciare,
+nominando il database, e chiede conferma.
+
+Il contenuto dei file e' irripetibile per la stessa ragione per cui lo e' nei
+test: l'archivio deposita per impronta (D-004), e trecento documenti con lo
+stesso contenuto occuperebbero **un** oggetto sul disco - facendo dire alla
+diagnostica una cosa che in produzione non succedera' mai.

@@ -42,6 +42,28 @@ PASSWORD_DI_PROVA = "password-di-prova-1"
 PASSWORD_NUOVA = "una-password-nuova-lunga"
 
 
+@pytest.fixture(autouse=True)
+def archivio_senza_memoria():
+    """Butta via, prima di ogni test, la verifica dell'archivio tenuta da parte.
+
+    Dalla sessione 13 `diagnostics._controllo_archivio()` non riapre tutte le
+    cartelle dell'archivio a ogni richiesta: si tiene il risultato per cinque
+    minuti, perche' /salute la interroga un programma di sorveglianza e quella
+    lettura costa (vedi SECONDI_VALIDITA_ARCHIVIO).
+
+    E' memoria di processo, e i test girano tutti nello stesso processo: senza
+    questa fixture il secondo test che guarda quella riga leggerebbe la misura
+    del primo, e verificherebbe la memoria invece del programma. E' automatica
+    (`autouse`) apposta: e' il genere di precauzione che, lasciata da
+    ricordare, si dimentica proprio nel test che ne aveva bisogno.
+    """
+    from app.services import diagnostics
+
+    diagnostics.dimentica_archivio_verificato()
+    yield
+    diagnostics.dimentica_archivio_verificato()
+
+
 @pytest.fixture(scope="session")
 def database_ready() -> None:
     """Verifica una volta sola che il database sia raggiungibile e migrato."""

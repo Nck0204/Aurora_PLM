@@ -106,9 +106,9 @@ def mostra_nuovo(request: Request) -> Response:
 @router.post("/nuovo")
 def crea_nuovo(
     request: Request,
-    first_name: Annotated[str, Form()],
-    last_name: Annotated[str, Form()],
-    email: Annotated[str, Form()],
+    first_name: Annotated[str, Form()] = "",
+    last_name: Annotated[str, Form()] = "",
+    email: Annotated[str, Form()] = "",
     ruolo: Annotated[str, Form()] = GlobalRole.UTENTE.value,
     creatore: User = Depends(richiedi_creatore),
     db: Session = Depends(get_db),
@@ -210,9 +210,9 @@ def scheda(
 def salva(
     request: Request,
     user_id: uuid.UUID,
-    first_name: Annotated[str, Form()],
-    last_name: Annotated[str, Form()],
-    email: Annotated[str, Form()],
+    first_name: Annotated[str, Form()] = "",
+    last_name: Annotated[str, Form()] = "",
+    email: Annotated[str, Form()] = "",
     creatore: User = Depends(richiedi_creatore),
     db: Session = Depends(get_db),
 ) -> Response:
